@@ -1,5 +1,7 @@
 import type { Options } from 'remark-stringify';
 
+import { parseFrontMatter } from './frontMatter.js';
+
 /**
  * remark-stringify options for the WYSIWYG editor.
  *
@@ -78,4 +80,42 @@ export function wysiwygStringifyOptions(markdown: string): Options {
 		ruleRepetition: 3,
 		ruleSpaces: false,
 	};
+}
+
+/**
+ * The document's leading front matter block, split off so the WYSIWYG editor
+ * can hand Milkdown only the body and re-attach the block verbatim on
+ * serialize.
+ *
+ * The split is `parseFrontMatter`'s rule, not a second one: a leading `---`
+ * block is front matter only when its YAML is a mapping (or empty, or
+ * malformed). A leading thematic break over prose, a bare sequence, an
+ * unclosed block, and TOML `+++` (which the preview does not strip) all stay
+ * with the body, exactly as the preview treats them.
+ *
+ * `frontMatter` is the exact leading bytes — the opening fence, the YAML, the
+ * closing fence and the single blank line after it — so `frontMatter + body`
+ * is `content`, byte for byte, CRLF and all. `lineEnding` is the document's
+ * own, for the serialized body to be written back in.
+ */
+export function splitFrontMatter(content: string): {
+	frontMatter: string;
+	body: string;
+	lineEnding: '\n' | '\r\n';
+} {
+	const { body, lineEnding } = parseFrontMatter(content);
+	return {
+		frontMatter: content.slice(0, content.length - body.length),
+		body,
+		lineEnding,
+	};
+}
+
+/**
+ * Re-end `markdown` — a Milkdown serialization, which always comes back LF —
+ * with the document's own line ending, so an edited CRLF file is not saved as
+ * LF.
+ */
+export function withLineEnding(markdown: string, lineEnding: '\n' | '\r\n'): string {
+	return lineEnding === '\n' ? markdown : markdown.replace(/\r?\n/g, '\r\n');
 }

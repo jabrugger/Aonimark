@@ -34,7 +34,7 @@
 	import { callCommand, getMarkdown, insert, replaceAll } from '@milkdown/kit/utils';
 	import { TextSelection } from '@milkdown/prose/state';
 	import { t, type LanguageCode } from '../utils/i18n.js';
-	import { wysiwygStringifyOptions } from '../utils/wysiwygMarkdown.js';
+	import { splitFrontMatter, withLineEnding, wysiwygStringifyOptions } from '../utils/wysiwygMarkdown.js';
 
 	import '@milkdown/prose/view/style/prosemirror.css';
 	import '@milkdown/prose/tables/style/tables.css';
@@ -85,26 +85,39 @@
 	 * Whether the ProseMirror document has changed since it was last seeded
 	 * (the initial mount, or an external buffer replacement). The teardown
 	 * serialization below is only allowed to report a change when this is set:
-	 * re-serializing a document Milkdown cannot fully represent (front matter,
-	 * tables, maths, …) must not mark the tab dirty on open-and-close.
+	 * re-serializing a document Milkdown cannot fully represent (tables, maths,
+	 * wikilinks, …) must not mark the tab dirty on open-and-close.
 	 */
 	let changed = false;
+
+	// The front matter block hidden from Milkdown and re-attached verbatim on
+	// every report, plus the line ending the serialized body must be written
+	// back in. Fixed for the life of the editor and recomputed only when an
+	// external value replacement re-seeds it.
+	let frontMatter = '';
+	let lineEnding: '\n' | '\r\n' = '\n';
 
 	onMount(() => {
 		// Seed the echo guard before the async create resolves, so the
 		// replace-all effect below does not re-seed (and move the cursor in) a
 		// document the editor already holds.
 		lastEmitted = value;
+		const seed = splitFrontMatter(value);
+		frontMatter = seed.frontMatter;
+		lineEnding = seed.lineEnding;
 		Editor.make()
 			.config((ctx) => {
 				ctx.set(rootCtx, container);
-				ctx.set(defaultValueCtx, value);
+				// Milkdown edits the BODY only: the front matter is split off
+				// before parsing and re-attached verbatim on serialize, so it
+				// survives byte for byte.
+				ctx.set(defaultValueCtx, seed.body);
 				// Serialize back with the markers the document already uses, so an
 				// edited file keeps its formatting and the saved diff stays minimal
 				// (bullet '-', dominant emphasis, backtick fences, `---` rules, …).
 				ctx.update(remarkStringifyOptionsCtx, (prev) => ({
 					...prev,
-					...wysiwygStringifyOptions(value),
+					...wysiwygStringifyOptions(seed.body),
 				}));
 				ctx.update(editorViewOptionsCtx, (prev) => ({
 					...prev,
@@ -128,7 +141,7 @@
 						view.updateState(next);
 						if (tr.docChanged) {
 							changed = true;
-							const markdown = ctx.get(serializerCtx)(view.state.doc);
+							const markdown = frontMatter + withLineEnding(ctx.get(serializerCtx)(view.state.doc), lineEnding);
 							lastEmitted = markdown;
 							handlers.onchange(markdown);
 						}
@@ -153,11 +166,11 @@
 			// A final safety net: `dispatchTransaction` already wrote every change,
 			// so this is normally a no-op — it only fires if a change slipped past
 			// the commit path. It is gated on `changed` so a lossy re-serialization
-			// (a document with front matter, tables, maths, …) never reports an
+			// (a document with tables, maths, wikilinks, …) never reports an
 			// edit the user did not make, which would mark the tab dirty and, on
 			// save, rewrite the file.
 			if (changed) {
-				const markdown = current.action(getMarkdown());
+				const markdown = frontMatter + withLineEnding(current.action(getMarkdown()), lineEnding);
 				if (markdown !== lastEmitted) handlers.onchange(markdown);
 			}
 			void current.destroy();
@@ -175,7 +188,10 @@
 		// The external value is the new baseline: any earlier edits are already
 		// reported, and this replacement is not the user's, so nothing is pending.
 		changed = false;
-		current.action(replaceAll(value, true));
+		const seed = splitFrontMatter(value);
+		frontMatter = seed.frontMatter;
+		lineEnding = seed.lineEnding;
+		current.action(replaceAll(seed.body, true));
 	});
 
 	/** The character offset of a 1-based source line/column, for a best-effort cursor. */
