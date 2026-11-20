@@ -97,3 +97,16 @@ export function rustSourceFiles(): string[] {
 		.sort()
 		.map((name) => `src-tauri/src/${name}`);
 }
+
+/**
+ * Every Markdown fixture in `samples/`, repo-relative and sorted.
+ *
+ * Named rather than listed for the same reason `rustSourceFiles` is: a sample
+ * added later is covered by the round-trip test without an edit to the test.
+ */
+export function sampleFiles(): string[] {
+	return readdirSync('samples')
+		.filter((name) => name.endsWith('.md'))
+		.sort()
+		.map((name) => `samples/${name}`);
+}
