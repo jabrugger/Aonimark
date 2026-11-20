@@ -6,6 +6,7 @@
 		defaultValueCtx,
 		editorViewCtx,
 		editorViewOptionsCtx,
+		remarkStringifyOptionsCtx,
 		serializerCtx,
 		type CmdKey,
 	} from '@milkdown/kit/core';
@@ -33,6 +34,7 @@
 	import { callCommand, getMarkdown, insert, replaceAll } from '@milkdown/kit/utils';
 	import { TextSelection } from '@milkdown/prose/state';
 	import { t, type LanguageCode } from '../utils/i18n.js';
+	import { wysiwygStringifyOptions } from '../utils/wysiwygMarkdown.js';
 
 	import '@milkdown/prose/view/style/prosemirror.css';
 	import '@milkdown/prose/tables/style/tables.css';
@@ -79,6 +81,15 @@
 	/** The markdown last sent upward, so an echo (our own edit) is not re-applied. */
 	let lastEmitted = '';
 
+	/**
+	 * Whether the ProseMirror document has changed since it was last seeded
+	 * (the initial mount, or an external buffer replacement). The teardown
+	 * serialization below is only allowed to report a change when this is set:
+	 * re-serializing a document Milkdown cannot fully represent (front matter,
+	 * tables, maths, …) must not mark the tab dirty on open-and-close.
+	 */
+	let changed = false;
+
 	onMount(() => {
 		// Seed the echo guard before the async create resolves, so the
 		// replace-all effect below does not re-seed (and move the cursor in) a
@@ -88,6 +99,13 @@
 			.config((ctx) => {
 				ctx.set(rootCtx, container);
 				ctx.set(defaultValueCtx, value);
+				// Serialize back with the markers the document already uses, so an
+				// edited file keeps its formatting and the saved diff stays minimal
+				// (bullet '-', dominant emphasis, backtick fences, `---` rules, …).
+				ctx.update(remarkStringifyOptionsCtx, (prev) => ({
+					...prev,
+					...wysiwygStringifyOptions(value),
+				}));
 				ctx.update(editorViewOptionsCtx, (prev) => ({
 					...prev,
 					editable: () => !readOnly,
@@ -109,6 +127,7 @@
 						const next = view.state.apply(tr);
 						view.updateState(next);
 						if (tr.docChanged) {
+							changed = true;
 							const markdown = ctx.get(serializerCtx)(view.state.doc);
 							lastEmitted = markdown;
 							handlers.onchange(markdown);
@@ -133,9 +152,14 @@
 			if (!current) return;
 			// A final safety net: `dispatchTransaction` already wrote every change,
 			// so this is normally a no-op — it only fires if a change slipped past
-			// the commit path.
-			const markdown = current.action(getMarkdown());
-			if (markdown !== lastEmitted) handlers.onchange(markdown);
+			// the commit path. It is gated on `changed` so a lossy re-serialization
+			// (a document with front matter, tables, maths, …) never reports an
+			// edit the user did not make, which would mark the tab dirty and, on
+			// save, rewrite the file.
+			if (changed) {
+				const markdown = current.action(getMarkdown());
+				if (markdown !== lastEmitted) handlers.onchange(markdown);
+			}
 			void current.destroy();
 		};
 	});
@@ -148,6 +172,9 @@
 		if (!current) return;
 		if (value === lastEmitted) return;
 		lastEmitted = value;
+		// The external value is the new baseline: any earlier edits are already
+		// reported, and this replacement is not the user's, so nothing is pending.
+		changed = false;
 		current.action(replaceAll(value, true));
 	});
 
