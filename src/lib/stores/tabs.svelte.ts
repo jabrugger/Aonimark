@@ -123,6 +123,16 @@ export interface Tab {
 	readonly isDirty: boolean;
 	isEditing: boolean;
 	/**
+	 * Which editor the tab's edit pane shows: the Monaco source editor, or the
+	 * WYSIWYG (Milkdown) editor. Per tab, and deliberately not persisted — a
+	 * restored window opens each file in source mode, which is the editor
+	 * nothing can misread. The toggle lives in the editor chrome, not in the
+	 * window snapshot, so it never has to mean anything across a reload.
+	 * Optional so a tab built elsewhere (a cross-window transfer, a test
+	 * fixture) simply defaults to source.
+	 */
+	editorKind?: 'source' | 'wysiwyg';
+	/**
 	 * Back/forward navigation, not undo — despite sitting next to three text
 	 * buffers. The entries are file PATHS this tab has shown (see
 	 * `navigate` below and tabHistory.ts), and `historyIndex` is the current
@@ -370,6 +380,7 @@ function makeTab(fields: TabFields): Tab {
 			return this.rawContent !== this.originalContent;
 		},
 		isEditing: false,
+		editorKind: 'source',
 		editorViewState: null,
 		scrollPercentage: 0,
 		anchorLine: asRendererLine(0),

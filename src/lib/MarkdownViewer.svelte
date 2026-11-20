@@ -16,6 +16,7 @@
 	import DiffOverlay from './components/DiffOverlay.svelte';
 	import Editor from './components/Editor.svelte';
 	import EditorToolbar from './components/EditorToolbar.svelte';
+	import WysiwygEditor from './components/WysiwygEditor.svelte';
 	import Modal from './components/Modal.svelte';
 	import UpdateDialog from './components/UpdateDialog.svelte';
 	import { updateStore } from './stores/update.svelte.js';
@@ -302,6 +303,13 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	let isEditing = $derived(activeTab?.isEditing ?? false);
 	let rawContent = $derived(activeTab?.rawContent ?? '');
 	let isSplit = $derived(activeTab?.isSplit ?? false);
+	/**
+	 * Which editor the edit pane shows. WYSIWYG only replaces the Monaco editor
+	 * in single-pane edit mode: split view keeps Monaco, because its scroll
+	 * sync and shared cursor are built around Monaco's line model.
+	 */
+	let editorKind = $derived(activeTab?.editorKind ?? 'source');
+	let isWysiwyg = $derived(isEditing && !isSplit && editorKind === 'wysiwyg');
 	/**
 	 * Is there an editor on screen? The two flags are independent — split
 	 * view is `isSplit` alone when entered from reading mode — so anything
@@ -1947,6 +1955,26 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		liveMode = !liveMode;
 	}
 
+	/**
+	 * Flip the edit pane between the Monaco source editor and the WYSIWYG
+	 * editor. Content is shared through `rawContent`, so neither direction
+	 * loses text; the WYSIWYG editor re-reads the cursor through
+	 * `viewMode.activeCursor` (see the pane template).
+	 */
+	function toggleEditorKind() {
+		const tab = tabManager.activeTab;
+		if (!tab) return;
+		tab.editorKind = tab.editorKind === 'source' ? 'wysiwyg' : 'source';
+	}
+
+	/** The URL the WYSIWYG link button asks for, through the app's own modal. */
+	function requestLinkUrl(defaultText: string): Promise<string | null> {
+		return promptCustom(t('menu.link', settings.language), {
+			title: t('menu.link', settings.language),
+			initial: defaultText.startsWith('http') ? defaultText : 'https://',
+		});
+	}
+
 	async function saveImageAs(src: string) {
 		await saveImageAsFile(src, {
 			save,
@@ -2888,6 +2916,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 										toolbarHidden={settings.editorToolbarHidden}
 										onaction={(actionId, payload) => editorPane?.runEditorAction(actionId, payload)}
 										ontoggleHide={() => { settings.showEditorToolbar = !settings.showEditorToolbar; }}
+										ontoggleWysiwyg={isSplit ? undefined : toggleEditorKind}
 										onshowTooltip={(e, text, shortcut, align) => {
 											const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
 											tooltip = {
@@ -2904,17 +2933,32 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 										onhideTooltip={() => (tooltip.show = false)} />
 								</div>
 							{/if}
-							<Editor
-								bind:this={editorPane}
-								value={tabManager.activeTab.rawContent}
-								readOnly={editorReadOnly(tabManager.activeTab)}
-								language={editorLanguage}
-								theme={settings.theme}
-								zoomLevel={settings.zoomLevel}
-								oncommand={runViewerCommand}
-								onscrollsync={handleEditorScrollSync}
-								oncursor={handleEditorCursor}
-								sharedCursor={settings.previewCursor ? viewMode.activeCursor : null} />
+							{#if isWysiwyg}
+								{#key tabManager.activeTabId}
+									{@const tabId = tabManager.activeTabId}
+									<WysiwygEditor
+										value={tabManager.activeTab.rawContent}
+										readOnly={editorReadOnly(tabManager.activeTab)}
+										language={settings.language}
+										initialLine={viewMode.activeCursor?.line ?? 1}
+										initialColumn={viewMode.activeCursor?.column ?? 1}
+										onchange={(markdown) => tabManager.updateTabRawContent(tabId ?? '', markdown)}
+										onrequesturl={requestLinkUrl}
+										ontogglesource={toggleEditorKind} />
+								{/key}
+							{:else}
+								<Editor
+									bind:this={editorPane}
+									value={tabManager.activeTab.rawContent}
+									readOnly={editorReadOnly(tabManager.activeTab)}
+									language={editorLanguage}
+									theme={settings.theme}
+									zoomLevel={settings.zoomLevel}
+									oncommand={runViewerCommand}
+									onscrollsync={handleEditorScrollSync}
+									oncursor={handleEditorCursor}
+									sharedCursor={settings.previewCursor ? viewMode.activeCursor : null} />
+							{/if}
 						{/if}
 					</div>
 
