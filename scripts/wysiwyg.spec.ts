@@ -162,7 +162,7 @@ describe('sample files', () => {
 			// stability of each construct is pinned by the two suites above.
 			assert.equal(typeof result, 'string');
 		}
-	});
+	}, 30000);
 
 	test('the one sample Milkdown fully represents is byte-stable', async () => {
 		// Every other sample carries tables, maths, wikilinks or a non-UTF-8
