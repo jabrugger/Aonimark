@@ -11,6 +11,7 @@
 		toolbarHidden = [],
 		onaction,
 		ontoggleHide,
+		ontoggleWysiwyg,
 		onshowTooltip,
 		onhideTooltip,
 	} = $props<{
@@ -19,6 +20,7 @@
 		toolbarHidden?: string[];
 		onaction: (actionId: string, payload?: any) => void;
 		ontoggleHide?: () => void;
+		ontoggleWysiwyg?: () => void;
 		onshowTooltip?: (e: MouseEvent, text: string, shortcut?: string, align?: string) => void;
 		onhideTooltip?: () => void;
 	}>();
@@ -325,6 +327,26 @@
 			</svg>
 		</button>
 	{/if}
+
+	{#if ontoggleWysiwyg}
+		<button
+			type="button"
+			class="toolbar-btn wysiwyg-toggle-btn"
+			aria-label={t('menu.wysiwygMode', settings.language)}
+			onmouseenter={(e) => onshowTooltip?.(e, t('menu.wysiwygMode', settings.language), '', 'below')}
+			onmouseleave={() => onhideTooltip?.()}
+			onfocus={(e) => onshowTooltip?.(e as unknown as MouseEvent, t('menu.wysiwygMode', settings.language), '', 'below')}
+			onblur={() => onhideTooltip?.()}
+			onclick={() => {
+				onhideTooltip?.();
+				ontoggleWysiwyg();
+			}}>
+			<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/>
+				<path d="M19 15l.9 2.4L22 18l-2.1.6L19 21l-.9-2.4L16 18l2.1-.6L19 15z"/>
+			</svg>
+		</button>
+	{/if}
 </div>
 
 <style>
@@ -531,6 +553,10 @@
 
 	.hide-toggle-btn {
 		margin-left: auto;
+		flex-shrink: 0;
+	}
+
+	.wysiwyg-toggle-btn {
 		flex-shrink: 0;
 	}
 
