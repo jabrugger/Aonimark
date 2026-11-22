@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Markpad Neo",
+  "productName": "Aonimark",
   "version": "../package.json",
-  "identifier": "com.jabrugger.markpadneo",
+  "identifier": "com.jabrugger.aonimark",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",

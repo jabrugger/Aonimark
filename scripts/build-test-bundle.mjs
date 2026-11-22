@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 const root = process.cwd();
 const identifier = process.env.MARKPAD_TEST_BUNDLE_ID;
 
-if (!identifier || !identifier.startsWith('dev.') || identifier === 'com.jabrugger.markpadneo') {
+if (!identifier || !identifier.startsWith('dev.') || identifier === 'com.jabrugger.aonimark') {
 	throw new Error('Set MARKPAD_TEST_BUNDLE_ID to a non-production identifier beginning with dev.');
 }
 

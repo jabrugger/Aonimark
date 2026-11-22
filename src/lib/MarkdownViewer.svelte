@@ -2757,7 +2757,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		isScrolled={false}
 		currentFile={''}
 		{liveMode}
-		windowTitle="Markpad Neo"
+		windowTitle="Aonimark"
 		showHome={false}
 		zoomLevel={settings.zoomLevel}
 		onnewFile={handleNewFile}
