@@ -15,7 +15,6 @@
 	import { folderManager, snapshotFolder, type FolderEntry } from './stores/folder.svelte.js';
 	import DiffOverlay from './components/DiffOverlay.svelte';
 	import Editor from './components/Editor.svelte';
-	import EditorToolbar from './components/EditorToolbar.svelte';
 	import WysiwygEditor from './components/WysiwygEditor.svelte';
 	import Modal from './components/Modal.svelte';
 	import UpdateDialog from './components/UpdateDialog.svelte';
@@ -381,9 +380,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	 * hidden or the tab returned to preview.
 	 */
 	let editorToolbarHeight = $state(0);
-	let paneTopChrome = $derived(
-		hasEditorPane && settings.showEditorToolbar ? editorToolbarHeight : 0,
-	);
+	let paneTopChrome = $derived(editorToolbarHeight);
 	let previewAppearance = $derived(previewAppearanceFrom(settings));
 	// Content zoom by font size, as Zed and JetBrains do it: nothing on screen carries a CSS zoom (#1071).
 	let contentZoom = $derived(settings.zoomLevel / 100);
@@ -820,10 +817,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		followPreviewScroll,
 		syncEditorToPreviewScroll,
 		toggleEdit,
-		toggleEditView,
 		editSourceRangeAt,
-		toggleSplitView,
-		setViewMode,
 	} = viewMode;
 
 	// Persisted through Rust, not localStorage: setItem is an async message
@@ -1955,18 +1949,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		liveMode = !liveMode;
 	}
 
-	/**
-	 * Flip the edit pane between the Monaco source editor and the WYSIWYG
-	 * editor. Content is shared through `rawContent`, so neither direction
-	 * loses text; the WYSIWYG editor re-reads the cursor through
-	 * `viewMode.activeCursor` (see the pane template).
-	 */
-	function toggleEditorKind() {
-		const tab = tabManager.activeTab;
-		if (!tab) return;
-		tab.editorKind = tab.editorKind === 'source' ? 'wysiwyg' : 'source';
-	}
-
 	/** The URL the WYSIWYG link button asks for, through the app's own modal. */
 	function requestLinkUrl(defaultText: string): Promise<string | null> {
 		return promptCustom(t('menu.link', settings.language), {
@@ -2289,9 +2271,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		openNewWindow,
 		selectFile,
 		appExit,
-		toggleSplitView,
 		toggleLiveMode,
-		toggleEditView,
 		saveContentAs,
 		saveActiveTab,
 		handleUndoCloseTab,
@@ -2323,12 +2303,10 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		void menuRevision;
 		const model = buildMenuModel({
 			language: settings.language,
-			viewMode: activeTab ? viewModeOf(activeTab) : null,
 			liveMode,
 			hasEditorPane,
 			showToc: settings.showToc,
 			showTabs: settings.showTabs,
-			showEditorToolbar: settings.showEditorToolbar,
 			previewFullWidth: settings.previewFullWidth,
 		});
 		void installAppMenu(model, runMenuAction, () => isFocused);
@@ -2353,9 +2331,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 				return void exportAsHtml();
 			case 'toggle-toc':
 				settings.showToc = !settings.showToc;
-				return;
-			case 'toggle-editor-toolbar':
-				settings.showEditorToolbar = !settings.showEditorToolbar;
 				return;
 			case 'toggle-full-width':
 				settings.previewFullWidth = !settings.previewFullWidth;
@@ -2774,9 +2749,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		ontoggleHome={toggleHome}
 		ononpenFileLocation={openFileLocation}
 		ontoggleLiveMode={toggleLiveMode}
-		onsetViewMode={setViewMode}
-		onswapPanes={() => settings.toggleSplitEditorSide()}
-		{isEditing}
 		ontabclick={() => (showHome = false)}
 		onresetZoom={() => settings.resetZoom()}
 		isFullWidth={settings.previewFullWidth}
@@ -2815,14 +2787,8 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		ontoggleHome={toggleHome}
 		ononpenFileLocation={openFileLocation}
 		ontoggleLiveMode={toggleLiveMode}
-		ontoggleEditorToolbar={() => { settings.showEditorToolbar = !settings.showEditorToolbar; }}
-		onsetViewMode={setViewMode}
-		onswapPanes={() => settings.toggleSplitEditorSide()}
-		{isEditing}
 		ontabclick={() => (showHome = false)}
 		onresetZoom={() => settings.resetZoom()}
-		{isScrollSynced}
-		ontoggleSync={() => tabManager.activeTabId && tabManager.toggleScrollSync(tabManager.activeTabId)}
 		isFullWidth={settings.previewFullWidth}
 		ontoggleFullWidth={() => { settings.previewFullWidth = !settings.previewFullWidth; }}
 		theme={settings.theme}
@@ -2908,31 +2874,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 					<!-- Editor Pane -->
 					<div bind:this={editorPaneEl} class="pane editor-pane" style:flex={isSplit ? tabManager.activeTab.splitRatio : null}>
 						{#if hasEditorPane}
-							{#if settings.showEditorToolbar}
-								<div bind:clientHeight={editorToolbarHeight} transition:slide={{ duration: 150 }}>
-									<EditorToolbar
-										modifier={modifierFor(settings.osType)}
-										toolbarOrder={settings.editorToolbarOrder}
-										toolbarHidden={settings.editorToolbarHidden}
-										onaction={(actionId, payload) => editorPane?.runEditorAction(actionId, payload)}
-										ontoggleHide={() => { settings.showEditorToolbar = !settings.showEditorToolbar; }}
-										ontoggleWysiwyg={isSplit ? undefined : toggleEditorKind}
-										onshowTooltip={(e, text, shortcut, align) => {
-											const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-											tooltip = {
-												show: true,
-												text,
-												shortcut: shortcut || '',
-												html: '',
-												isFootnote: false,
-												x: align === 'right' ? rect.right + 8 : (align === 'left' ? rect.left - 8 : rect.left + rect.width / 2),
-												y: align === 'below' ? rect.bottom + 8 : rect.top - 8,
-												align: (align as any) || 'below'
-											};
-										}}
-										onhideTooltip={() => (tooltip.show = false)} />
-								</div>
-							{/if}
 							{#if isWysiwyg}
 								{#key tabManager.activeTabId}
 									{@const tabId = tabManager.activeTabId}
@@ -2944,7 +2885,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 										initialColumn={viewMode.activeCursor?.column ?? 1}
 										onchange={(markdown) => tabManager.updateTabRawContent(tabId ?? '', markdown)}
 										onrequesturl={requestLinkUrl}
-										ontogglesource={toggleEditorKind} />
+										bind:toolbarHeight={editorToolbarHeight} />
 								{/key}
 							{:else}
 								<Editor

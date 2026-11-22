@@ -113,9 +113,6 @@ describe('window state restore', () => {
 	test('a restored tab comes back clean, empty and in its old place', () => {
 		tabManager.closeAll();
 		tabManager.addTab('/notes/a.md', 'on disk');
-		const first = tabManager.activeTab!;
-		first.isSplit = true;
-		first.splitRatio = 0.3;
 		tabManager.addTab('/notes/b.md', 'b on disk');
 		const second = tabManager.activeTab!;
 		tabManager.updateTabRawContent(second.id, 'unsaved');
@@ -130,8 +127,6 @@ describe('window state restore', () => {
 			assert.equal(tab.rawContent, '', 'content is read from disk afterwards, not from the snapshot');
 			assert.equal(tab.isDirty, false, 'and a restored tab is never dirty on arrival');
 		}
-		assert.equal(tabManager.tabs[0].isSplit, true, 'per-tab layout survives the round trip');
-		assert.equal(tabManager.tabs[0].splitRatio, 0.3);
 	});
 
 	test('a snapshot naming a tab that no longer exists still opens something', () => {

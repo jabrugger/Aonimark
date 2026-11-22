@@ -647,23 +647,10 @@ describe('title bar toolbar', () => {
 		hasActiveTab: true,
 		showHome: false,
 		currentFile: '/notes/a.md',
-		isSplit: false,
-		isEditing: false,
 	};
 
-	test('Auto-Reload is offered in every mode that has a file on disk', () => {
-		// An external writer can surprise all three equally: what varies between
-		// them is which pane is on screen, not whether the file can change.
-		for (const mode of [
-			{ label: 'preview' },
-			{ label: 'edit', isEditing: true },
-			{ label: 'split', isSplit: true },
-		]) {
-			assert.ok(
-				visibleTitlebarActionIds({ ...documentContext, ...mode }).includes('live'),
-				`Auto-Reload was missing in ${mode.label} mode`,
-			);
-		}
+	test('Auto-Reload is offered for a file on disk', () => {
+		assert.ok(visibleTitlebarActionIds(documentContext).includes('live'));
 	});
 
 	test('Auto-Reload needs a file on disk to watch', () => {
@@ -672,30 +659,18 @@ describe('title bar toolbar', () => {
 		);
 	});
 
-	test('the rest of the toolbar still answers to the mode it is in', () => {
-		const view = visibleTitlebarActionIds(documentContext);
-		const edit = visibleTitlebarActionIds({ ...documentContext, isEditing: true });
-		const split = visibleTitlebarActionIds({ ...documentContext, isSplit: true });
-
-		// Find stays in every mode: in pure edit it opens Monaco's find, as Mod+F does.
-		assert.deepEqual([view, edit, split].map((ids) => ids.includes('find')), [true, true, true]);
-		// The formatting toolbar is the mirror image: only where a pane can write.
-		assert.deepEqual([view, edit, split].map((ids) => ids.includes('editorToolbar')), [false, true, true]);
-		// Sync Scroll and Swap Panes both need two panes. The mode buttons stay in
-		// every mode, so switching never makes them jump (#806).
-		assert.deepEqual([view, edit, split].map((ids) => ids.includes('sync')), [false, false, true]);
-		assert.deepEqual([view, edit, split].map((ids) => ids.includes('swap')), [false, false, true]);
-		assert.deepEqual([view, edit, split].map((ids) => ids.includes('viewMode')), [true, true, true]);
+	test('Find is offered for a Markdown document', () => {
+		assert.ok(visibleTitlebarActionIds(documentContext).includes('find'));
 	});
 
 	test('a non-Markdown file gets none of the Markdown actions', () => {
 		// `.txt` would not do here: it is in MARKDOWN_LINK_EXTENSIONS.
 		const ids = visibleTitlebarActionIds({ ...documentContext, currentFile: '/notes/data.json' });
-		for (const id of ['toc', 'fullWidth', 'live', 'viewMode', 'find']) {
+		for (const id of ['toc', 'fullWidth', 'live', 'find']) {
 			assert.ok(!ids.includes(id), `${id} was offered for a .json file`);
 		}
 		// An unsaved buffer has no extension to read and is treated as Markdown.
-		assert.ok(visibleTitlebarActionIds({ ...documentContext, currentFile: '' }).includes('viewMode'));
+		assert.ok(visibleTitlebarActionIds({ ...documentContext, currentFile: '' }).includes('find'));
 	});
 
 	test('the home screen offers only the actions that are not about a document', () => {
@@ -717,44 +692,6 @@ describe('title bar toolbar', () => {
 		assert.ok(visibleTitlebarActionIds({ ...documentContext, zoomLevel: 125 }).includes('zoom'));
 	});
 
-	/* #806: Split and Edit became one three-mode control. */
-
-	const legacyDefaultOrder = [
-		'back', 'forward', 'reload', 'toc', 'fullWidth', 'live', 'sync', 'swap', 'split', 'edit',
-		'editorToolbar', 'find', 'zen', 'tabs', 'zoom', 'theme', 'settings',
-	];
-
-	test('a never-reordered toolbar moves to the new default', () => {
-		assert.deepEqual(normalizeTitlebarToolbarOrder(legacyDefaultOrder), DEFAULT_TITLEBAR_TOOLBAR_ORDER);
-	});
-
-	test('the mode group sits right of every bar button that comes and goes with the mode', () => {
-		// The bar is right-aligned, so only what is to the right of it can move it.
-		const order = DEFAULT_TITLEBAR_TOOLBAR_ORDER;
-		for (const id of ['sync', 'swap', 'editorToolbar', 'reload', 'live']) {
-			assert.ok(order.indexOf(id) < order.indexOf('viewMode'), id);
-		}
-	});
-
-	test('a reordered toolbar puts the group where Edit was', () => {
-		const order = normalizeTitlebarToolbarOrder(['edit', 'settings', 'split', 'back']);
-		assert.deepEqual(order.slice(0, 3), ['viewMode', 'settings', 'back']);
-		assert.ok(!order.includes('edit') && !order.includes('split'));
-	});
-
-	test('the group is hidden only if both old buttons were', () => {
-		assert.deepEqual(normalizeTitlebarToolbarHidden(['split', 'edit', 'find']), ['find', 'viewMode']);
-		assert.deepEqual(normalizeTitlebarToolbarHidden(['split', 'find']), ['find']);
-		assert.deepEqual(normalizeTitlebarToolbarHidden(['viewMode']), ['viewMode']);
-	});
-
-	test('the group inherits Split View placement, and a stored one wins', () => {
-		assert.equal(normalizeTitlebarToolbarPlacement({ split: 'menu', edit: 'bar' }).viewMode, 'menu');
-		assert.equal(normalizeTitlebarToolbarPlacement({ edit: 'menu' }).viewMode, 'menu');
-		assert.equal(normalizeTitlebarToolbarPlacement({ split: 'menu', viewMode: 'bar' }).viewMode, 'bar');
-		assert.equal(normalizeTitlebarToolbarPlacement({}).viewMode, 'bar');
-	});
-
 	test('the mode is read off the two tab flags, split first', () => {
 		assert.equal(viewModeOf({ isEditing: false, isSplit: false }), 'preview');
 		assert.equal(viewModeOf({ isEditing: true, isSplit: false }), 'edit');
@@ -764,16 +701,12 @@ describe('title bar toolbar', () => {
 
 	test('Settings gives a condition to exactly the buttons that can go missing in a Markdown document', () => {
 		const contexts = [
-			{ isEditing: false, isSplit: false },
-			{ isEditing: true, isSplit: false },
-			{ isEditing: true, isSplit: true },
+			{},
 			{ currentFile: '' },
 			{ zoomLevel: 150 },
 		].map((context) => visibleTitlebarActionIds({ ...documentContext, zoomLevel: 100, ...context }));
 
 		for (const action of getTitlebarToolbarActions(null)) {
-			// Its note lists the three modes rather than a condition.
-			if (action.id === 'viewMode') continue;
 			const alwaysThere = contexts.every((ids) => ids.includes(action.id));
 			assert.equal(!action.hintKey, alwaysThere, action.id);
 		}

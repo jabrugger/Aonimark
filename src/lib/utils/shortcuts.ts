@@ -353,14 +353,6 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 
 	// ---------------------------------------------------------------- view
 	{
-		id: 'view-toggle-edit',
-		labelKey: 'menu.editMode',
-		chords: ['Mod+E'],
-		group: 'view',
-		editorAction: true,
-		documentCommands: ['toggle-edit-view'],
-	},
-	{
 		id: 'view-toggle-live',
 		labelKey: 'menu.autoReload',
 		chords: ['Mod+L'],
@@ -371,17 +363,6 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 		// no Monaco to register anything on.
 		editorAction: true,
 		documentCommands: ['toggle-live-mode'],
-	},
-	{
-		id: 'view-toggle-split',
-		labelKey: 'menu.splitView',
-		// Also bound to OEM_102, the extra backslash key on ISO keyboards. That is
-		// the same physical gesture rather than a second chord a user could be
-		// told about, so it is not displayed.
-		chords: ['Mod+\\'],
-		group: 'view',
-		editorAction: true,
-		documentCommands: ['toggle-split-view'],
 	},
 	{
 		id: 'toggle-zen-mode',

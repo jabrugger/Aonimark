@@ -306,72 +306,6 @@ describe('view mode without saving', () => {
 
 	// ------------------------------------------- entering an editable pane (#379)
 
-	test('entering the editor reads the fidelity and stores it', async () => {
-		// The buffer is about to be handed to the editor, which arms auto-save:
-		// the tab must carry the verdict of this read, not one a load left behind.
-		const tab = readingTab('# stale\n');
-		tabManager.setTabDecodedLossy(tab.id, false);
-		const fakes = freshFakes();
-		fakes.disk.set(tab.path, '# caf�\n');
-		fakes.lossy = true;
-		fakes.encoding = 'windows-1252';
-
-		await buildViewMode(fakes).toggleEdit();
-
-		assert.deepEqual(fakes.readCalls, [tab.path]);
-		assert.equal(tab.isEditing, true);
-		assert.equal(tab.hasReplacementChars, true, 'the lossy decode was not recorded on the tab');
-		assert.equal(tab.encoding, 'windows-1252');
-		assert.equal(tab.rawContent, '# caf�\n');
-	});
-
-	test('entering split view reads the fidelity and stores it', async () => {
-		// An empty buffer (a restored tab not read yet) is read before the split
-		// opens, and that read decides the flag too.
-		const tab = readingTab('');
-		tabManager.setTabDecodedLossy(tab.id, false);
-		const fakes = freshFakes();
-		fakes.disk.set(tab.path, '# caf�\n');
-		fakes.lossy = true;
-		fakes.encoding = 'windows-1252';
-
-		await buildViewMode(fakes).toggleSplitView(tab.id);
-
-		assert.deepEqual(fakes.readCalls, [tab.path]);
-		assert.equal(tab.isSplit, true);
-		assert.equal(tab.hasReplacementChars, true, 'the lossy decode was not recorded on the tab');
-		assert.equal(tab.encoding, 'windows-1252');
-		assert.equal(tab.rawContent, '# caf�\n');
-	});
-
-	test('entering split view completes a partial buffer instead of trusting it', async () => {
-		// The old guard was `!tab.rawContent`, which a partial buffer satisfies:
-		// split view opened on the truncated text, the first keystroke made it
-		// dirty, and auto-save wrote it back 1.5s later.
-		const partial = readingTab('# the first 50KB\n');
-		const fakes = freshFakes();
-		fakes.fullContent = false;
-
-		await buildViewMode(fakes).toggleSplitView(partial.id);
-
-		assert.equal(partial.isSplit, false, 'split view opened over a buffer that could not be completed');
-		assert.deepEqual(fakes.toasts, ['toast.partialDocument']);
-
-		// The empty-buffer read goes through the store, so a tab restored empty
-		// and flagged partial stops being flagged once the file is in.
-		const unread = readingTab('');
-		tabManager.markTabContentUnavailable(unread.id);
-		assert.equal(unread.isTruncated, true, 'precondition: an unread tab is partial');
-		const reads = freshFakes();
-		reads.disk.set(unread.path, '# whole file\n');
-
-		await buildViewMode(reads).toggleSplitView(unread.id);
-
-		assert.equal(unread.isSplit, true);
-		assert.equal(unread.rawContent, '# whole file\n');
-		assert.equal(unread.isTruncated, false, 'the read left the tab flagged partial');
-	});
-
 	// ------------------------------------------------ where the reader lands (#799)
 
 	test('Ctrl+E hands each pane the line the other one was showing', async () => {
@@ -584,46 +518,6 @@ describe('view mode without saving', () => {
 		assert.equal(viewMode.tocActiveLine, 57, 'the placed preview decides');
 		viewMode.followToc('preview', 60 as never);
 		assert.equal(viewMode.tocActiveLine, 60, 'and keeps deciding once placed');
-	});
-
-	test('reading with a cursor placed, the outline stays on it only while the preview draws it', () => {
-		/** A reading tab whose editor left its cursor on buffer line 20. */
-		const withCursor = () => {
-			tabManager.closeAll();
-			tabManager.addTab('/notes/note.md');
-			const tab = tabManager.activeTab!;
-			tab.isEditing = true;
-			const viewMode = buildViewMode(freshFakes());
-			viewMode.handleEditorCursor(20 as never, 3);
-			tab.isEditing = false;
-			return viewMode;
-		};
-		settings.tocFollows = 'cursor';
-		try {
-			settings.previewCursor = true;
-			const drawn = withCursor();
-			drawn.followToc('cursor', 17 as never);
-			drawn.followToc('preview', 90 as never);
-			assert.equal(drawn.tocActiveLine, 17, 'the preview scroll moved the outline off the drawn cursor');
-
-			// Off, the editor's last cursor is still there for Ctrl+E, but the
-			// preview shows nothing, so an outline pinned to it would look stuck.
-			settings.previewCursor = false;
-			const hidden = withCursor();
-			hidden.followToc('cursor', 17 as never);
-			hidden.followToc('preview', 90 as never);
-			assert.equal(hidden.tocActiveLine, 90, 'the outline stayed on a cursor the preview does not show');
-
-			settings.previewCursor = true;
-			tabManager.closeAll();
-			tabManager.addTab('/notes/note.md');
-			const without = buildViewMode(freshFakes());
-			without.followToc('preview', 90 as never);
-			assert.equal(without.tocActiveLine, 90, 'with no cursor yet, the outline follows the scroll');
-		} finally {
-			settings.tocFollows = 'scroll';
-			settings.previewCursor = false;
-		}
 	});
 
 	test('a click in the preview places the cursor only with its setting on, whatever the outline follows', () => {

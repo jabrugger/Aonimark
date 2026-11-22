@@ -3,7 +3,6 @@ import { CheckMenuItem, Menu, MenuItem, Submenu, type PredefinedMenuItemOptions 
 
 import { t, type LanguageCode } from './i18n.js';
 import { SHORTCUTS } from './shortcuts.js';
-import type { ViewMode } from './titlebarToolbar.js';
 import type { ViewerCommand } from './viewerKeymap.js';
 
 /*
@@ -29,7 +28,6 @@ export type AppMenuCommand =
 	| 'close-folder'
 	| 'export-html'
 	| 'toggle-toc'
-	| 'toggle-editor-toolbar'
 	| 'toggle-full-width'
 	| 'merge-windows'
 	| 'set-window-tag';
@@ -50,14 +48,11 @@ export type MenuNode =
 
 export type MenuState = {
 	readonly language: LanguageCode;
-	/** The active tab's mode, or null with no tab open. */
-	readonly viewMode: ViewMode | null;
 	readonly liveMode: boolean;
 	/** The editor is on screen, so the Format items have somewhere to act. */
 	readonly hasEditorPane: boolean;
 	readonly showToc: boolean;
 	readonly showTabs: boolean;
-	readonly showEditorToolbar: boolean;
 	readonly previewFullWidth: boolean;
 };
 
@@ -102,8 +97,6 @@ export function buildMenuModel(state: MenuState): MenuNode[] {
 		enabled,
 		...(shortcutId ? { accelerator: acceleratorOf(shortcutId) } : {}),
 	});
-	const split = state.viewMode === 'split';
-
 	return [
 		{
 			kind: 'submenu',
@@ -190,14 +183,10 @@ export function buildMenuModel(state: MenuState): MenuNode[] {
 			kind: 'submenu',
 			text: t('menu.view', lang),
 			items: [
-				// ⌘E does nothing in split view (`toggleEditView`), so neither does this.
-				check(t('menu.editMode', lang), { viewer: 'toggle-edit-view' }, split || state.viewMode === 'edit', 'view-toggle-edit', !split),
-				check(t('menu.splitView', lang), { viewer: 'toggle-split-view' }, split, 'view-toggle-split'),
 				check(t('menu.autoReload', lang), { viewer: 'toggle-live-mode' }, state.liveMode, 'view-toggle-live'),
 				separator,
 				check(t('menu.tableOfContents', lang), { app: 'toggle-toc' }, state.showToc),
 				check(t('menu.tabBar', lang), { viewer: 'toggle-tabs' }, state.showTabs, 'toggle-tabs'),
-				check(t('tooltip.editorToolbar', lang), { app: 'toggle-editor-toolbar' }, state.showEditorToolbar),
 				check(t('menu.fullWidth', lang), { app: 'toggle-full-width' }, state.previewFullWidth),
 				// ⌘⌥[ and ⌘⌥] stay text-field keys inside a field, where the page
 				// lets them through; an accelerator here would catch them there.

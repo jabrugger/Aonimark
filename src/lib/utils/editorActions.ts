@@ -485,27 +485,10 @@ export function editorActions(deps: EditorActionDeps, lang: LanguageCode): Monac
 		},
 
 		{
-			id: "view-toggle-edit",
-			label: t('menu.editMode', lang),
-			keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyE],
-			run: () => oncommand?.("toggle-edit-view"),
-		},
-
-		{
 			id: "view-toggle-live",
 			label: t('menu.autoReload', lang),
 			keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyL],
 			run: () => oncommand?.("toggle-live-mode"),
-		},
-
-		{
-			id: "view-toggle-split",
-			label: t('menu.toggleSplitView', lang),
-			keybindings: [
-				monaco.KeyMod.CtrlCmd | monaco.KeyCode.Backslash,
-				monaco.KeyMod.CtrlCmd | monaco.KeyCode.IntlBackslash,
-			],
-			run: () => oncommand?.("toggle-split-view"),
 		},
 
 		{

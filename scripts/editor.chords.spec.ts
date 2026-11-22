@@ -273,12 +273,6 @@ describe('Monaco chord ownership', () => {
 			why: "GitHub's blockquote chord, and Shift+. IS the `>` marker. Argued at the binding itself in Editor.svelte; `inPlaceReplace` cycles enum-ish words in code and has nothing to cycle in prose.",
 		},
 		{
-			action: 'view-toggle-edit',
-			chords: { macOS: 'Meta+E' },
-			monaco: 'actions.findWithSelection',
-			why: 'Cmd+E for edit/read is the mainstream Markdown reading (Obsidian, Mark Text). `findWithSelection` is a mac-only Monaco binding of the macOS "use selection for find" convention; this app has no find bar of its own for it to seed, and Cmd+F opens find with or without it.',
-		},
-		{
 			action: 'view-toggle-live',
 			chords: { macOS: 'Meta+L', Windows: 'Ctrl+L', Linux: 'Ctrl+L' },
 			monaco: 'expandLineSelection',

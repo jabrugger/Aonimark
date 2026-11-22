@@ -344,26 +344,6 @@ describe('document session', () => {
 
 	// --- open file mode (#183) ----------------------------------------------------
 
-	test('opening a document applies the choice, split through the same door the toggle uses', async () => {
-		// Split carries the scroll-sync preference the toggle would have given
-		// it; a fresh tab is created with sync off and would drop it.
-		const session = makeSession();
-		settings.openFileMode = 'split';
-		settings.splitScrollSync = true;
-		disk.set('/notes/a.md', { body: '# a' });
-		await session.loadMarkdown('/notes/a.md');
-		const tab = tabManager.activeTab!;
-		assert.equal(tab.isSplit, true);
-		assert.equal(tab.isEditing, false);
-		assert.equal(tab.isScrollSynced, true);
-
-		settings.openFileMode = 'editor';
-		disk.set('/notes/b.md', { body: '# b' });
-		await session.loadMarkdown('/notes/b.md');
-		assert.equal(tabManager.activeTab!.isEditing, true);
-		assert.equal(tabManager.activeTab!.isSplit, false);
-	});
-
 	test('the choice is applied before the load decides how much of the file to read', async () => {
 		// An editor bound to the preview slice is one keystroke away from
 		// auto-saving it back over the whole file.
@@ -382,59 +362,7 @@ describe('document session', () => {
 		}
 	});
 
-	test('it applies to a newly opened document only', async () => {
-		// Not to a file already open in a tab, and not to a reload preserving
-		// the mode: reopening a document must not flip the mode the reader chose.
-		const session = makeSession();
-		disk.set('/notes/a.md', { body: '# a' });
-		await session.loadMarkdown('/notes/a.md');
-		const tab = tabManager.activeTab!;
-		assert.equal(tab.isEditing, false);
-
-		settings.openFileMode = 'editor';
-		await session.loadMarkdown('/notes/a.md');
-		assert.equal(tabManager.tabs.length, 1);
-		assert.equal(tab.isEditing, false, 'reopening an open file kept its mode');
-
-		await session.loadMarkdown('/notes/a.md', { skipTabManagement: true, preserveEditState: true });
-		assert.equal(tab.isEditing, false, 'a reload kept its mode');
-	});
-
-	test('a new empty document keeps its own preference', () => {
-		// Ctrl+N answers what an empty buffer opens as with `newFileDefaultMode`.
-		settings.openFileMode = 'split';
-		for (const preference of [true, false]) {
-			settings.newFileDefaultMode = preference;
-			tabManager.addNewTab();
-			assert.equal(tabManager.activeTab!.isEditing, preference);
-			assert.equal(tabManager.activeTab!.isSplit, false);
-		}
-	});
-
 	// --- reads that land later ----------------------------------------------------
-
-	test('large-file completion requires the current clean load revision and unchanged view mode', async () => {
-		// The background full read is not applied after the user switched mode:
-		// the pane that now shows the buffer was entered with its own read.
-		const session = makeSession();
-		disk.set('/notes/big.md', { body: 'the whole file' });
-		let finishFull!: () => void;
-		override = (cmd) => {
-			if (cmd === 'open_markdown_preview') return ['the whole', false, false, 'UTF-8'];
-			if (cmd === 'read_file_content_checked') {
-				return new Promise((resolve) => (finishFull = () => resolve(['the whole file', false, 'UTF-8'])));
-			}
-			return undefined;
-		};
-		await session.loadMarkdown('/notes/big.md');
-		const tab = tabManager.activeTab!;
-		assert.equal(tab.rawContent, 'the whole');
-
-		tab.isEditing = true;
-		finishFull();
-		await new Promise((resolve) => setTimeout(resolve, 300));
-		assert.equal(tab.rawContent, 'the whole', 'the completion landed in a pane it was not read for');
-	});
 
 	test('it is marked before anything can be awaited', async () => {
 		// The preview render effect compares `previewedRawContent` with the

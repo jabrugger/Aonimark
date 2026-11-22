@@ -578,23 +578,12 @@ export function createDocumentSession(options: DocumentSessionOptions) {
 
 			if (isMarkdown) {
 				if (tab && !loadOptions.preserveEditState && !existing) {
-					// #183: the reporter turns split view on for every file he
-					// opens, so what a picked file opens as is one preference with
-					// three answers (`openFileMode.ts`).
-					//
-					// Split goes through `setSplitEnabled` rather than assigning
-					// the flag, so the tab carries the scroll-sync preference the
-					// toggle would have given it — a fresh tab is created
-					// `isScrollSynced: false` and would otherwise silently drop it.
-					//
-					// And both are applied BEFORE `initialIsSplit` is read, so a
-					// document opening into either editable mode takes the
-					// full-read branch below: those panes can write, and an editor
-					// bound to the 5MB preview slice is one keystroke away from
-					// auto-saving it back over the whole file.
-					const openFileMode = loadOptions.openFileMode ?? settings.openFileMode;
-					tab.isEditing = openFileMode === 'editor';
-					if (openFileMode === 'split') tabManager.setSplitEnabled(tab.id, true);
+					// Every document opens editable, and this is applied BEFORE
+					// `initialIsEditing` is read, so it takes the full-read branch
+					// below: the editor can write, and an editor bound to the 5MB
+					// preview slice is one keystroke away from auto-saving it back
+					// over the whole file.
+					tab.isEditing = true;
 				}
 				const initialIsEditing = tab?.isEditing ?? false;
 				const initialIsSplit = tab?.isSplit ?? false;
@@ -1094,8 +1083,7 @@ export function createDocumentSession(options: DocumentSessionOptions) {
 		const id = tabManager.addTab(filePath, '', pathKey, false);
 		const tab = tabManager.tabs.find((item) => item.id === id);
 		if (tab) {
-			tab.isEditing = settings.openFileMode === 'editor';
-			if (settings.openFileMode === 'split') tabManager.setSplitEnabled(id, true);
+			tab.isEditing = true;
 			if (anchor) tab.pendingAnchor = anchor;
 			tab.recordRecent = true;
 		}
@@ -1115,11 +1103,7 @@ export function createDocumentSession(options: DocumentSessionOptions) {
 		const tab = tabManager.activeTab;
 		if (tab && !existing) {
 			tab.createsFile = filePath;
-			const openFileMode = !hasMarkdownLinkExtension(filePath)
-				? 'editor'
-				: (mode ?? (settings.newFileDefaultMode ? 'editor' : 'preview'));
-			tab.isEditing = openFileMode === 'editor';
-			if (openFileMode === 'split') tabManager.setSplitEnabled(tab.id, true);
+			tab.isEditing = true;
 		}
 		await options.afterLoad();
 	}

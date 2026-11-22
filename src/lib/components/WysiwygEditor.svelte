@@ -47,7 +47,7 @@
 		initialColumn = 1,
 		onchange,
 		onrequesturl,
-		ontogglesource,
+		toolbarHeight = $bindable(0),
 	} = $props<{
 		value: string;
 		readOnly?: boolean;
@@ -56,7 +56,7 @@
 		initialColumn?: number;
 		onchange: (markdown: string) => void;
 		onrequesturl: (defaultText: string) => Promise<string | null>;
-		ontogglesource: () => void;
+		toolbarHeight?: number;
 	}>();
 
 	let container = $state<HTMLDivElement>();
@@ -122,15 +122,6 @@
 				ctx.update(editorViewOptionsCtx, (prev) => ({
 					...prev,
 					editable: () => !readOnly,
-					// Ctrl/Cmd+E is Markpad's "toggle edit view" chord. Milkdown's
-					// commonmark preset binds it to inline code, which would swallow
-					// the navigation chord while the caret is here. Consume it (so the
-					// keymap never runs) and let it bubble to the document handler.
-					handleKeyDown: (_view, event) =>
-						(event.ctrlKey || event.metaKey) &&
-						!event.shiftKey &&
-						!event.altKey &&
-						event.key.toLowerCase() === 'e',
 					// Commit every transaction ourselves so a document change reaches
 					// the tab synchronously. Milkdown's `listener` plugin debounces
 					// 200ms, which is a window where a tab switch or close could drop
@@ -267,7 +258,7 @@
 </script>
 
 <div class="wysiwyg-root">
-	<div class="wysiwyg-toolbar" role="toolbar" aria-label={t('menu.editor', language)}>
+	<div class="wysiwyg-toolbar" role="toolbar" aria-label={t('menu.editor', language)} bind:clientHeight={toolbarHeight}>
 		<div class="wysiwyg-tools">
 			{#each tools as tool (tool.id)}
 				<button
@@ -281,18 +272,6 @@
 				</button>
 			{/each}
 		</div>
-		<button
-			type="button"
-			class="wysiwyg-btn wysiwyg-toggle-source"
-			aria-label={t('menu.sourceMode', language)}
-			title={t('menu.sourceMode', language)}
-			onmousedown={(e) => e.preventDefault()}
-			onclick={ontogglesource}>
-			<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-				<polyline points="16 18 22 12 16 6"></polyline>
-				<polyline points="8 6 2 12 8 18"></polyline>
-			</svg>
-		</button>
 	</div>
 	<div class="wysiwyg-surface" bind:this={container}></div>
 </div>
@@ -390,11 +369,6 @@
 	.wysiwyg-btn:focus-visible {
 		outline: 2px solid var(--color-accent-fg);
 		outline-offset: 1px;
-	}
-
-	.wysiwyg-toggle-source {
-		margin-left: auto;
-		flex-shrink: 0;
 	}
 
 	.wysiwyg-surface {

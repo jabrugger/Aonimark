@@ -304,22 +304,3 @@ describe('preview scroll sync across the front matter', async () => {
 		assert.equal(getPreviewScrollAnchor(preview(300 - PREVIEW_ANCHOR_OFFSET), measure), 5);
 	});
 });
-
-describe('edit view toggle', () => {
-	test('one function owns what ⌘E means, and every entry point uses it', () => {
-		// The hotkey, the toolbar, the title bar and Monaco's own command all route
-		// to `toggleEditView`, so the chord cannot mean one thing with the caret in
-		// the editor and another with it in the preview. The title bar's Edit button
-		// runs in navigation.viewMode.spec.ts. The viewer passing `runViewerCommand`
-		// as the editor's `oncommand` prop is not tested: it needs MarkdownViewer
-		// mounted.
-		assert.equal(
-			viewerCommandFor(
-				{ key: 'e', code: 'KeyE', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false },
-				{ mode: 'app', osType: 'windows', isSplit: false, overlayOpen: false, dialogOpen: false, isEditing: false, editorHasFocus: false },
-			),
-			'toggle-edit-view',
-		);
-		assert.deepEqual(viewerCommandCalls()['toggle-edit-view'], ['toggleEditView']);
-	});
-});

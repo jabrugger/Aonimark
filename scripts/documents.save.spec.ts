@@ -901,17 +901,6 @@ describe('untitled first save writes', () => {
 		assert.equal(disk.get('/notes/draft.md'), 'theirs');
 	});
 
-	test('a command line view replaces the setting for the tab it opens', async () => {
-		reset();
-		const session = makeSession();
-		settings.openFileMode = 'preview';
-		disk.set('/notes/a.md', 'text');
-		await session.loadMarkdown('/notes/a.md', { openFileMode: 'editor' });
-		assert.equal(tabManager.activeTab!.isEditing, true);
-		disk.set('/notes/b.md', 'text');
-		await session.loadMarkdown('/notes/b.md');
-		assert.equal(tabManager.activeTab!.isEditing, false, 'the next file follows the setting again');
-	});
 });
 
 /*

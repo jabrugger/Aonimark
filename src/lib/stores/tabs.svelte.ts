@@ -379,8 +379,8 @@ function makeTab(fields: TabFields): Tab {
 		get isDirty() {
 			return this.rawContent !== this.originalContent;
 		},
-		isEditing: false,
-		editorKind: 'source',
+		isEditing: true,
+		editorKind: 'wysiwyg',
 		editorViewState: null,
 		scrollPercentage: 0,
 		anchorLine: asRendererLine(0),
@@ -543,7 +543,7 @@ class TabManager {
 						title: typeof saved.title === 'string' && saved.title !== '' ? saved.title : filename,
 						...createFileHistory(saved.path),
 						scrollTop: typeof saved.scrollTop === 'number' ? saved.scrollTop : 0,
-						isEditing: saved.isEditing === true,
+						isEditing: true,
 						scrollPercentage: typeof saved.scrollPercentage === 'number' ? saved.scrollPercentage : 0,
 						// The brand is phantom, so nothing of it survives JSON — which is
 						// exactly why the read side has to re-declare what came back.
@@ -551,7 +551,7 @@ class TabManager {
 						anchorLine: asRendererLine(typeof saved.anchorLine === 'number' ? saved.anchorLine : 0),
 						// `scrollHistory`, `scrollFuture` and `foldOverrides` start empty:
 						// not persisted — see serializeState.
-						isSplit: saved.isSplit === true,
+						isSplit: false,
 						splitRatio: typeof saved.splitRatio === 'number' ? saved.splitRatio : 0.5,
 						isScrollSynced: saved.isScrollSynced === true,
 						hasReplacementChars: false,
@@ -701,7 +701,7 @@ class TabManager {
 					this.tabs.map((tab) => tab.title),
 					t('tabs.untitled', settings.language),
 				),
-				isEditing: settings.newFileDefaultMode,
+				isEditing: true,
 				// Empty, as `addHomeTab` below already had it. This used to be
 				// `[content]` — a PATH list seeded with the new buffer's text, which
 				// is `''` and so looked harmless, and was not: see

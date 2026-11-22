@@ -24,9 +24,7 @@ export type ViewerCommandHost = {
 	openNewWindow(): Promise<unknown>;
 	selectFile(): unknown;
 	appExit(): unknown;
-	toggleSplitView(tabId: string): unknown;
 	toggleLiveMode(): unknown;
-	toggleEditView(): unknown;
 	saveContentAs(): unknown;
 	saveActiveTab(): unknown;
 	handleUndoCloseTab(): unknown;
@@ -59,15 +57,11 @@ export function viewerCommandTable(host: ViewerCommandHost): Record<ViewerComman
 		'new-window': () => void host.openNewWindow().catch(console.error),
 		'open-file': () => void host.selectFile(),
 		'app-exit': () => void host.appExit(),
-		'toggle-split-view': () => {
-			if (tabManager.activeTabId) host.toggleSplitView(tabManager.activeTabId);
-		},
 		'toggle-live-mode': () => void host.toggleLiveMode(),
 		'toggle-zen-mode': () => settings.toggleZenMode(),
 		'toggle-tabs': () => {
 			settings.showTabs = !settings.showTabs;
 		},
-		'toggle-edit-view': () => void host.toggleEditView(),
 		'save-as': () => void host.saveContentAs(),
 		// Save from any mode; see `saveActiveTab`.
 		save: () => void host.saveActiveTab(),

@@ -6,7 +6,6 @@ import ts from 'typescript';
 import { buildMenuModel, type MenuNode, type MenuState } from '../src/lib/utils/appMenu.js';
 import { getSupportedLanguages, type LanguageCode, t, type Translation } from '../src/lib/utils/i18n.js';
 import { formatChord, modifierFor, SHORTCUT_GROUPS, type ShortcutEntry, shortcutLabel, SHORTCUTS, shortcutSections } from '../src/lib/utils/shortcuts.js';
-import type { ViewMode } from '../src/lib/utils/titlebarToolbar.js';
 import type { ViewerCommand } from '../src/lib/utils/viewerKeymap.js';
 import { tabListMenuItems, tabMenuItems } from '../src/lib/utils/tabContextMenu.js';
 import { translations } from './allTranslations.js';
@@ -121,7 +120,7 @@ describe('shortcut registry', () => {
 	function menuAccelerators(): Array<{ text: string; accelerator: string; action: MenuNode & { kind: 'item' | 'check' } }> {
 		const flatten = (nodes: readonly MenuNode[]): MenuNode[] =>
 			nodes.flatMap((node) => (node.kind === 'submenu' ? flatten(node.items) : [node]));
-		return flatten(buildMenuModel({ language: 'en', viewMode: 'edit', liveMode: true, hasEditorPane: true, showToc: true, showTabs: true, showEditorToolbar: true, previewFullWidth: false })).flatMap((node) =>
+		return flatten(buildMenuModel({ language: 'en', liveMode: true, hasEditorPane: true, showToc: true, showTabs: true, previewFullWidth: false })).flatMap((node) =>
 			(node.kind === 'item' || node.kind === 'check') && node.accelerator
 				? [{ text: node.text, accelerator: node.accelerator, action: node }]
 				: [],
@@ -592,9 +591,6 @@ describe('shortcut registry', () => {
 			'The macOS tab-cycling gesture (Cmd+Alt+arrow), kept for Mac users whose fingers expect it. Advertising ' +
 			'it would give tab-prev a platform-specific second row that is wrong on the other two platforms.',
 		'Meta+Alt+Right': 'The tab-next half of the same pair as Meta+Alt+Left.',
-		'Mod+OEM_102':
-			'The extra backslash key on ISO keyboards, the same physical gesture as view-toggle-split\'s Mod+\\. ' +
-			"The registry's own note on that row says why it is not shown as a second chord.",
 		'Meta+Tab':
 			'The Cmd twin of tab-next, which is spelled with a literal Ctrl precisely because Cmd+Tab is the macOS ' +
 			'application switcher and never reaches the app. Reachable in the handler, unreachable in practice.',
@@ -659,7 +655,7 @@ describe('formatting shortcuts keymap', () => {
 		// above both layers above, and neither of them could see it.
 		const flatten = (nodes: readonly MenuNode[]): MenuNode[] =>
 			nodes.flatMap((node) => (node.kind === 'submenu' ? flatten(node.items) : [node]));
-		const claims = flatten(buildMenuModel({ language: 'en', viewMode: 'edit', liveMode: true, hasEditorPane: true, showToc: true, showTabs: true, showEditorToolbar: true, previewFullWidth: false })).flatMap(
+		const claims = flatten(buildMenuModel({ language: 'en', liveMode: true, hasEditorPane: true, showToc: true, showTabs: true, previewFullWidth: false })).flatMap(
 			(node) =>
 				(node.kind === 'item' || node.kind === 'check') && /^CmdOrCtrl\+[TN]$/.test(node.accelerator ?? '')
 					? [[node.accelerator, node.action]]
@@ -677,12 +673,10 @@ describe('macOS app menu', () => {
 
 	const base: MenuState = {
 		language: 'en',
-		viewMode: 'preview',
 		liveMode: true,
 		hasEditorPane: false,
 		showToc: true,
 		showTabs: true,
-		showEditorToolbar: true,
 		previewFullWidth: false,
 	};
 
@@ -721,34 +715,11 @@ describe('macOS app menu', () => {
 		return node;
 	}
 
-	test('Edit Mode is checked while the editor shows, and disabled in split where ⌘E does nothing', () => {
-		for (const [viewMode, checked, enabled] of [
-			['preview', false, true],
-			['edit', true, true],
-			['split', true, false],
-			[null, false, true],
-		] as const) {
-			const item = check({ ...base, viewMode }, 'Edit Mode');
-			assert.equal(item.checked, checked, `${viewMode}: checked`);
-			assert.equal(item.enabled ?? true, enabled, `${viewMode}: enabled`);
-			assert.deepEqual(item.action, { viewer: 'toggle-edit-view' });
-		}
-	});
-
-	test('Split View is checked exactly in split', () => {
-		for (const viewMode of ['preview', 'edit', 'split', null] as (ViewMode | null)[]) {
-			const item = check({ ...base, viewMode }, 'Split View');
-			assert.equal(item.checked, viewMode === 'split');
-			assert.deepEqual(item.action, { viewer: 'toggle-split-view' });
-		}
-	});
-
 	test('each View toggle is a check item that follows its own state', () => {
 		const toggles = [
 			['Auto-Reload', 'liveMode'],
 			['Table of Contents', 'showToc'],
 			['Tab Bar', 'showTabs'],
-			['Editor Toolbar', 'showEditorToolbar'],
 			['Full Width', 'previewFullWidth'],
 		] as const;
 		for (const [text, key] of toggles) {
@@ -756,11 +727,9 @@ describe('macOS app menu', () => {
 		}
 	});
 
-	test('Edit Mode, Split View and Tab Bar carry the registry chords', () => {
+	test('Tab Bar carries the registry chord', () => {
 		const model = buildMenuModel(base);
 		for (const [text, id] of [
-			['Edit Mode', 'view-toggle-edit'],
-			['Split View', 'view-toggle-split'],
 			['Tab Bar', 'toggle-tabs'],
 		] as const) {
 			const item = find(model, text);
@@ -771,15 +740,14 @@ describe('macOS app menu', () => {
 
 	test('the View toggles read as state names in Chinese', () => {
 		const zh = { ...base, language: 'zh-CN' } as const;
-		for (const text of ['编辑模式', '分屏视图', '自动重载', '目录', '标签栏', '编辑器工具栏', '全宽']) check(zh, text);
+		for (const text of ['自动重载', '目录', '标签栏', '全宽']) check(zh, text);
 	});
 
 	test('View has no radio group of modes left', () => {
 		const view = buildMenuModel(base)[3];
 		assert.ok(view.kind === 'submenu');
 		const checks = view.items.flatMap((node) => (node.kind === 'check' ? [node.text] : []));
-		assert.deepEqual(checks, ['Edit Mode', 'Split View', 'Auto-Reload', 'Table of Contents', 'Tab Bar', 'Editor Toolbar', 'Full Width']);
-		assert.ok(flatten(buildMenuModel(base)).every((node) => !('action' in node) || !('viewMode' in node.action)));
+		assert.deepEqual(checks, ['Auto-Reload', 'Table of Contents', 'Tab Bar', 'Full Width']);
 	});
 
 	test('Format acts on the editor, so it is disabled without one', () => {

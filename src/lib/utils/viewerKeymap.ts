@@ -57,8 +57,6 @@ export type ViewerCommand =
 	| 'new-window'
 	| 'open-file'
 	| 'app-exit'
-	| 'toggle-split-view'
-	| 'toggle-edit-view'
 	| 'toggle-live-mode'
 	| 'toggle-zen-mode'
 	| 'toggle-tabs'
@@ -259,8 +257,6 @@ export function viewerCommandFor(e: KeyStroke, context: KeyContext): ViewerComma
 	if (modShift && key === 'n') return 'new-window';
 	if (mod && key === 'o') return 'open-file';
 	if (mod && key === 'q') return 'app-exit';
-	if (mod && (code === 'Backslash' || code === 'IntlBackslash')) return 'toggle-split-view';
-	if (mod && key === 'e') return 'toggle-edit-view';
 	// Mod+L had only the Monaco half (`editorAction` in shortcuts.ts), so it
 	// fired in the editor and in split view and did nothing in the preview —
 	// the exact inverse of where the Auto-Reload button was drawn (#692). The

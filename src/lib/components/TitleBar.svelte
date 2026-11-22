@@ -8,7 +8,7 @@
 	import { tabManager } from '../stores/tabs.svelte.js';
 	import { settings } from '../stores/settings.svelte.js';
 	import { t } from '../utils/i18n.js';
-	import { getConfiguredTitlebarToolbarIds, visibleTitlebarActionIds, type ViewMode, viewModeOf } from '../utils/titlebarToolbar.js';
+	import { getConfiguredTitlebarToolbarIds, visibleTitlebarActionIds } from '../utils/titlebarToolbar.js';
 	import { shortcutLabel } from '../utils/shortcuts.js';
 	import { TitleBarPlatform } from '../stores/titleBarPlatform.svelte.js';
 	import { canExportTab } from '../utils/tabFileActions.js';
@@ -45,16 +45,10 @@
 		canGoBack = false,
 		canGoForward = false,
 
-		ontoggleEditorToolbar,
-		onsetViewMode,
-		onswapPanes,
-		isEditing,
 		ontabclick,
 		zoomLevel,
 		onresetZoom,
 		oncloseTab,
-		isScrollSynced,
-		ontoggleSync,
 		isFullWidth,
 		ontoggleFullWidth,
 		theme = 'system',
@@ -88,17 +82,11 @@
 		canGoBack?: boolean;
 		canGoForward?: boolean;
 
-		ontoggleEditorToolbar?: () => void;
-		onsetViewMode: (mode: ViewMode) => void;
-		onswapPanes?: () => void;
-		isEditing: boolean;
 		ontabclick?: () => void;
 		zoomLevel?: number;
 		onresetZoom?: () => void;
 
 		oncloseTab?: (id: string) => void;
-		isScrollSynced?: boolean;
-		ontoggleSync?: () => void;
 
 		isFullWidth?: boolean;
 		ontoggleFullWidth?: () => void;
@@ -223,23 +211,9 @@
 			hasActiveTab: Boolean(tabManager.activeTab),
 			showHome,
 			currentFile,
-			isSplit: Boolean(tabManager.activeTab?.isSplit),
-			isEditing,
 			zoomLevel,
 		}),
 	);
-
-	// Edit and preview sit on the sides their panes take in split view (#1041).
-	let viewModes = $derived.by(() => {
-		const modes: { id: ViewMode; label: string; shortcut?: string }[] = [
-			{ id: 'edit', label: t('menu.editor', currentLanguage), shortcut: 'view-toggle-edit' },
-			{ id: 'split', label: t('menu.splitView', currentLanguage), shortcut: 'view-toggle-split' },
-			{ id: 'preview', label: t('settings.preview', currentLanguage) },
-		];
-		return settings.splitEditorSide === 'right' ? modes.reverse() : modes;
-	});
-
-	let currentViewMode = $derived(viewModeOf({ isEditing, isSplit: Boolean(tabManager.activeTab?.isSplit) }));
 
 	let configuredActionIds = $derived.by(() =>
 		getConfiguredTitlebarToolbarIds(
@@ -789,63 +763,6 @@
 							></svg>
 						<span class="action-label">{t('menu.openFileLocation', currentLanguage)}</span>
 					</button>
-				{:else if id === 'viewMode'}
-					<div class="view-mode-group" role="group" aria-label={t('menu.view', currentLanguage)} transition:fly={{ x: 10, duration: 200 }}>
-						{#each viewModes as mode (mode.id)}
-							<button
-								class="title-action-btn {currentViewMode === mode.id ? 'active' : ''}"
-								aria-pressed={currentViewMode === mode.id}
-								onclick={() => {
-									hideTooltip();
-									popovers.kebabMenuOpen = false;
-									onsetViewMode(mode.id);
-								}}
-								aria-label={mode.label}
-								onmouseenter={(e) => showTooltip(e, mode.label, mode.shortcut ? shortcutLabel(mode.shortcut, modifier) : '')}
-								onmousedown={(e) => e.preventDefault()}
-								onmouseleave={hideTooltip}>
-								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-									{#if mode.id === 'preview'}
-										<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>
-									{:else if mode.id === 'split'}
-										<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="12" y1="3" x2="12" y2="21"></line>
-									{:else}
-										<path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-									{/if}
-								</svg>
-								<span class="action-label">{mode.label}</span>
-								{#if mode.shortcut}<span class="menu-shortcut">{shortcutLabel(mode.shortcut, modifier)}</span>{/if}
-							</button>
-						{/each}
-					</div>
-				{:else if id === 'swap'}
-					<button
-						class="title-action-btn"
-						onclick={() => onswapPanes?.()}
-						aria-label={t('tooltip.swapPanes', currentLanguage)}
-											onmouseenter={(e) => showTooltip(e, t('tooltip.swapPanes', currentLanguage))}
-						onmousedown={(e) => e.preventDefault()}
-						onmouseleave={hideTooltip}
-						transition:fly={{ x: 10, duration: 200 }}>
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-							><rect x="3" y="11" width="7" height="10" rx="1"></rect><rect x="14" y="11" width="7" height="10" rx="1"></rect><path
-								d="M6.5 8C6.5 3.5 17.5 3.5 17.5 8"></path><polyline points="4.5 6 6.5 8.4 8.5 6"></polyline><polyline points="15.5 6 17.5 8.4 19.5 6"></polyline
-							></svg>
-						<span class="action-label">{t('menu.swapPanes', currentLanguage)}</span>
-					</button>
-				{:else if id === 'sync'}
-					<button
-						class="title-action-btn {isScrollSynced ? 'active' : ''}"
-						onclick={() => ontoggleSync?.()}
-						aria-label={t('tooltip.toggleScrollSync', currentLanguage)}
-											onmouseenter={(e) => showTooltip(e, t('tooltip.scrollSync', currentLanguage))}
-						onmousedown={(e) => e.preventDefault()}
-						onmouseleave={hideTooltip}
-						transition:fly={{ x: 10, duration: 200 }}>
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-							><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-						<span class="action-label">{t('menu.syncScroll', currentLanguage)}</span>
-					</button>
 				{:else if id === 'fullWidth'}
 					<button
 						class="title-action-btn {isFullWidth ? 'active' : ''}"
@@ -891,19 +808,6 @@
 								d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path
 							></svg>
 						<span class="action-label">{t('menu.autoReload', currentLanguage)}</span>
-					</button>
-				{:else if id === 'editorToolbar'}
-					<button
-						class="title-action-btn {settings.showEditorToolbar ? 'active' : ''}"
-						onclick={ontoggleEditorToolbar}
-						aria-label={t('tooltip.editorToolbar', currentLanguage)}
-						onmouseenter={(e) => showTooltip(e, t('tooltip.editorToolbar', currentLanguage))}
-						onmousedown={(e) => e.preventDefault()}
-						onmouseleave={hideTooltip}>
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/>
-						</svg>
-						<span class="action-label">{t('settings.editorToolbar', currentLanguage)}</span>
 					</button>
 				{:else if id === 'theme'}
 					<div class="theme-dropdown-container">
@@ -1284,32 +1188,6 @@
 	.title-action-btn.active {
 		color: var(--color-accent-fg);
 		background: var(--color-canvas-subtle);
-	}
-
-	/* One bordered control, so the three modes read as a set (#806). */
-	.view-mode-group {
-		display: flex;
-		align-items: center;
-		gap: 1px;
-		padding: 1px;
-		border: 1px solid var(--color-border-default);
-		border-radius: 6px;
-	}
-
-	.view-mode-group .title-action-btn {
-		width: 26px;
-		height: 24px;
-	}
-
-	.title-actions.show-dropdown .view-mode-group {
-		flex-direction: column;
-		align-items: stretch;
-		margin: 2px 0;
-	}
-
-	.title-actions.show-dropdown .view-mode-group .title-action-btn {
-		width: 100%;
-		height: auto;
 	}
 
 	.title-action-btn:hover {

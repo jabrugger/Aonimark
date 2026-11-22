@@ -104,7 +104,7 @@ describe('shortcut registry', () => {
 
 	test('the editor command palette names the commands the way the panel does', () => {
 		const { actions } = registeredActions(false);
-		for (const id of ['file-reveal', 'view-toggle-edit', 'view-toggle-live']) {
+		for (const id of ['file-reveal', 'view-toggle-live']) {
 			const labelKey = SHORTCUTS.find((entry) => entry.id === id)?.labelKey;
 			assert.ok(labelKey, `${id} is in the registry`);
 			assert.equal(actions.find((action) => action.id === id)?.label, t(labelKey, 'en'), `${id} in the palette`);
@@ -485,8 +485,6 @@ describe('formatting shortcuts keymap', () => {
 			'file-open': 'open-file',
 			'file-save': 'save',
 			'file-close': 'close-file',
-			'view-toggle-edit': 'toggle-edit-view',
-			'view-toggle-split': 'toggle-split-view',
 			'tab-undo-close': 'undo-close-tab',
 		};
 
