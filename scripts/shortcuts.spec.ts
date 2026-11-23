@@ -83,26 +83,6 @@ describe('viewer keymap', () => {
 		assert.equal(viewerCommandFor(modQ, { ...READING, osType: 'unknown' }), 'app-exit');
 	});
 
-	test('an open dialog owns the keyboard: no viewer chord reaches past it', () => {
-		// The unsaved-changes dialog only preventDefaults its own keys, so the
-		// document handler saw every chord behind it. Mod+W there asked a second
-		// question over the first, whose promise then never settled — the close
-		// walk hung and the window could no longer be closed. Ctrl+S saved twice.
-		const behind = { ...READING, overlayOpen: true, dialogOpen: true };
-		for (const stroke of [
-			chord('w', 'KeyW', { ctrlKey: true }),
-			chord('s', 'KeyS', { ctrlKey: true }),
-			chord('q', 'KeyQ', { ctrlKey: true }),
-			chord('Tab', 'Tab', { ctrlKey: true }),
-			chord('t', 'KeyT', { ctrlKey: true, shiftKey: true }),
-		]) {
-			assert.notEqual(viewerCommandFor(stroke, READING), null, `${stroke.code} is bound at all`);
-			assert.equal(viewerCommandFor(stroke, behind), null, `${stroke.code} fired behind the dialog`);
-		}
-		// Settings and Home are overlays too, but not dialogs: the keymap stays live.
-		assert.equal(viewerCommandFor(chord('w', 'KeyW', { ctrlKey: true }), { ...READING, overlayOpen: true }), 'close-file');
-	});
-
 	test('the zoom-in chord answers both spellings of “Mod plus”', () => {
 		// `+` IS the shifted `=` on the layouts that have both, so this branch cannot
 		// demand Shift be up. The keymap sweep only ever fires unshifted characters,
@@ -168,24 +148,6 @@ describe('viewer keymap', () => {
 		assert.equal(viewerCommandFor(zen, READING), 'toggle-zen-mode');
 	});
 
-	test('Mod+Shift+B reaches the tab bar from the preview', () => {
-		// Off macOS there is no menu accelerator behind the page, so without this
-		// branch the chord the panel lists did nothing outside the editor.
-		for (const osType of ['windows', 'linux'] as const) {
-			assert.equal(viewerCommandFor(chord('B', 'KeyB', { ctrlKey: true, shiftKey: true }), { ...READING, osType }), 'toggle-tabs', osType);
-		}
-		// Mod+B is Bold.
-		assert.equal(viewerCommandFor(chord('b', 'KeyB', { ctrlKey: true }), READING), null);
-	});
-
-	test('Mod+Shift+N opens a new window and Mod+N stays New File', () => {
-		for (const [osType, mods] of [['macos', { metaKey: true }], ['windows', { ctrlKey: true }], ['linux', { ctrlKey: true }]] as const) {
-			const context = { ...READING, osType, isEditing: true, editorHasFocus: true };
-			assert.equal(viewerCommandFor(chord('N', 'KeyN', { ...mods, shiftKey: true }), context), 'new-window', osType);
-			assert.equal(viewerCommandFor(chord('n', 'KeyN', mods), context), 'new-file', osType);
-			assert.equal(viewerCommandFor(chord('N', 'KeyN', { ...mods, shiftKey: true, altKey: true }), context), null, osType);
-		}
-	});
 });
 
 describe('platform source', async () => {

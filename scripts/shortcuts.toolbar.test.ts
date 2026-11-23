@@ -562,36 +562,36 @@ describe('title bar toolbar', () => {
 			zen: 'bar',
 			settings: 'bar',
 			unknown: 'bar',
-			tabs: 'hidden',
+			theme: 'hidden',
 		});
 
 		assert.equal(placement.reload, 'menu');
 		assert.equal(placement.zen, 'bar');
 		assert.equal(placement.settings, 'bar');
-		assert.equal(placement.tabs, 'menu');
+		assert.equal(placement.theme, 'menu');
 		assert.equal('unknown' in placement, false);
 	});
 
 	test('getConfiguredTitlebarToolbarIds applies context, order, hidden ids, and placement', () => {
 		const configured = getConfiguredTitlebarToolbarIds(
-			['home', 'zen', 'reload', 'tabs', 'settings', 'open_loc'],
-			['settings', 'tabs', 'reload', 'home', 'zen'],
+			['live', 'zen', 'reload', 'theme', 'settings', 'open_loc'],
+			['settings', 'theme', 'reload', 'live', 'zen'],
 			['zen'],
-			{ tabs: 'bar', reload: 'menu', settings: 'menu' },
+			{ theme: 'bar', reload: 'menu', settings: 'menu' },
 		);
 
-		assert.deepEqual(configured.visibleIds, ['settings', 'tabs', 'reload', 'home']);
-		assert.deepEqual(configured.barIds, ['tabs', 'home']);
+		assert.deepEqual(configured.visibleIds, ['settings', 'theme', 'reload', 'live']);
+		assert.deepEqual(configured.barIds, ['theme', 'live']);
 		assert.deepEqual(configured.menuIds, ['settings', 'reload']);
 	});
 
 	test('titlebar toolbar reorder helpers resolve drag and keyboard moves', () => {
-		const order = ['home', 'reload', 'settings'];
+		const order = ['live', 'reload', 'settings'];
 
-		assert.deepEqual(getTitlebarToolbarReorderMove(order, 'settings', 'home'), { fromIndex: 2, toIndex: 0 });
+		assert.deepEqual(getTitlebarToolbarReorderMove(order, 'settings', 'live'), { fromIndex: 2, toIndex: 0 });
 		assert.deepEqual(getTitlebarToolbarAdjacentMove(order, 'reload', 'down'), { fromIndex: 1, toIndex: 2 });
-		assert.equal(getTitlebarToolbarReorderMove(order, 'home', 'home'), null);
-		assert.equal(getTitlebarToolbarAdjacentMove(order, 'home', 'up'), null);
+		assert.equal(getTitlebarToolbarReorderMove(order, 'live', 'live'), null);
+		assert.equal(getTitlebarToolbarAdjacentMove(order, 'live', 'up'), null);
 	});
 
 	/*
@@ -634,19 +634,6 @@ describe('title bar toolbar', () => {
 		for (const id of ['live']) {
 			assert.ok(!ids.includes(id), `${id} was offered for a .json file`);
 		}
-	});
-
-	test('the home screen offers only the actions that are not about a document', () => {
-		// Home over a tab keeps its own toggle, so the tab underneath is one click back.
-		assert.deepEqual(visibleTitlebarActionIds({ ...documentContext, showHome: true }), [
-			'home',
-			'theme',
-			'settings',
-		]);
-		assert.deepEqual(visibleTitlebarActionIds({ ...documentContext, hasActiveTab: false }), [
-			'theme',
-			'settings',
-		]);
 	});
 
 	test('Reset Zoom appears only away from 100%', () => {

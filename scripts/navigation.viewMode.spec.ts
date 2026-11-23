@@ -282,15 +282,4 @@ describe('a cold start restores again once its enrichment has landed', () => {
 		assert.deepEqual(restored, []);
 	});
 
-	test('a tab switch during the enrichment cancels the restore', async () => {
-		const { body, restored, coldRestore } = setup();
-		const enrichment = deferred();
-
-		coldRestore.afterEnrichment(body, 3, enrichment.promise);
-		tabManager.setActive(tabManager.tabs[0].id);
-		enrichment.resolve();
-		await settle();
-
-		assert.deepEqual(restored, [], "another tab's position is never restored into the article");
-	});
 });

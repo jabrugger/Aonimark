@@ -663,6 +663,10 @@ class TabManager {
 			}
 		}
 
+		// A window holds one document: the caller has already settled the one
+		// being replaced (saved it, or been told to discard it).
+		this.tabs = [];
+
 		const id = crypto.randomUUID();
 		const filename =
 			basename(path) ||
@@ -689,6 +693,7 @@ class TabManager {
 	}
 
 	addNewTab() {
+		this.tabs = [];
 		const id = crypto.randomUUID();
 
 		this.tabs.push(

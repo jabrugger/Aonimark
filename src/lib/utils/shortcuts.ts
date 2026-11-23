@@ -118,13 +118,6 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 		documentCommands: ['new-file'],
 	},
 	{
-		id: 'file-new-window',
-		labelKey: 'menu.newWindow',
-		chords: ['Mod+Shift+N'],
-		group: 'file',
-		documentCommands: ['new-window'],
-	},
-	{
 		id: 'file-open',
 		labelKey: 'menu.openFile',
 		chords: ['Mod+O'],
@@ -207,62 +200,17 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 		documentCommands: ['toggle-zen-mode'],
 	},
 	{
-		id: 'toggle-tabs',
-		labelKey: 'menu.toggleShowTabs',
-		chords: ['Mod+Shift+B'],
-		group: 'view',
-		documentCommands: ['toggle-tabs'],
-	},
-	{
 		id: 'app-settings',
 		labelKey: 'menu.settings',
 		chords: ['Mod+,'],
 		group: 'view',
 		documentCommands: ['open-settings'],
 	},
-	{
-		id: 'app-home',
-		labelKey: 'menu.home',
-		// Shift+Cmd+H is Home in Finder and Safari. Monaco binds nothing to it.
-		chords: ['Mod+Shift+H'],
-		group: 'view',
-		documentCommands: ['toggle-home'],
-	},
 	{ id: 'view-zoom-in', labelKey: 'menu.zoomIn', chords: ['Mod+='], group: 'view', documentCommands: ['zoom-in'] },
 	{ id: 'view-zoom-out', labelKey: 'menu.zoomOut', chords: ['Mod+-'], group: 'view', documentCommands: ['zoom-out'] },
 	{ id: 'view-zoom-reset', labelKey: 'menu.resetZoom', chords: ['Mod+0'], group: 'view', documentCommands: ['zoom-reset'] },
 
 	// -------------------------------------------------------------- window
-	{
-		id: 'tab-next',
-		labelKey: 'menu.nextTab',
-		// A literal Ctrl on every platform, macOS included: Cmd+Tab is the system
-		// application switcher and never reaches the app.
-		chords: ['Ctrl+Tab'],
-		group: 'window',
-		documentCommands: ['next-tab'],
-	},
-	{
-		id: 'tab-prev',
-		labelKey: 'menu.previousTab',
-		chords: ['Ctrl+Shift+Tab'],
-		group: 'window',
-		documentCommands: ['previous-tab'],
-	},
-	{
-		id: 'tab-undo-close',
-		labelKey: 'menu.undoCloseTab',
-		chords: ['Mod+Shift+T'],
-		group: 'window',
-		documentCommands: ['undo-close-tab'],
-	},
-	{
-		id: 'tab-move-window',
-		labelKey: 'menu.moveToNextWindow',
-		chords: ['Mod+Shift+M'],
-		group: 'window',
-		documentCommands: ['move-tab-to-next-window'],
-	},
 ];
 
 /**

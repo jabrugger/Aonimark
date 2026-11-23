@@ -265,16 +265,6 @@ describe('wikilink file targets', () => {
 	});
 });
 
-/*
- * Issue #604: the condition the app DECLARES for Enter, Tab and Shift+Tab — the
- * `when` expression `editorKeyCommands` hands Monaco — because an Enter binding
- * that forgets `!suggestWidgetVisible` breaks the completion popup silently.
- */
-describe('list keys in the editor', () => {
-	// ------------------------------------------------------------- the when clauses
-
-});
-
 // #675: Monaco draws the find widget's button tooltips into a `.context-view`
 // it appends beside the editor, above the target, and the widget sits at the
 // top edge of the editor pane, so the tooltip lands in the strip the pane and

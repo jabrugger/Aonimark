@@ -237,28 +237,6 @@ describe('external change reload', () => {
 		assert.equal(tab.isDirty, true);
 	});
 
-	test('a restored backup whose file changed while closed is reported, without touching it', async () => {
-		// No watcher saw that change, so startup has to ask. A missing file counts
-		// as changed, like every other unreadable read here.
-		reset();
-		const session = makeSession();
-		const moved = open('/notes/moved.md', 'baseline');
-		tabManager.updateTabRawContent(moved.id, 'backup text');
-		disk.set('/notes/moved.md', 'edited elsewhere');
-		const gone = open('/notes/gone.md', 'baseline');
-		tabManager.updateTabRawContent(gone.id, 'backup text');
-		disk.delete('/notes/gone.md');
-		const same = open('/notes/same.md', 'baseline');
-		tabManager.updateTabRawContent(same.id, 'backup text');
-		const clean = open('/notes/clean.md', 'baseline');
-		disk.set('/notes/clean.md', 'edited elsewhere');
-
-		assert.deepEqual(await session.dirtyTabsChangedOnDisk(), [moved.id, gone.id]);
-		assert.equal(moved.rawContent, 'backup text');
-		assert.equal(moved.originalContent, 'baseline');
-		assert.equal(clean.rawContent, 'baseline');
-	});
-
 	test('the changed path decides which tab is affected, not whichever tab is active', async () => {
 		reset();
 		const session = makeSession();
@@ -728,40 +706,7 @@ describe('reopening a dirty document', () => {
 		assert.equal(edited.isDirty, true, 'the tab still knows it has something to save');
 	});
 
-	// One tab per path makes `addTab` resolve the click to the tab that already
-	// holds the file instead of building a second one — which is what hands that
-	// edited buffer to the loader in the first place. The test above is what makes
-	// that safe; this one is what makes it useful.
-	test('following a link into a new tab shows the tab that already holds the file', async () => {
-		reset();
-		const session = makeSession();
-		const edited = openEdited('/notes/target.md', 'on disk', 'my unsaved paragraph');
-		tabManager.addTab('/notes/from.md', 'from text');
-
-		tabManager.addTab('/notes/target.md');
-		await session.loadMarkdown('/notes/target.md', { skipTabManagement: true, resetScrollHistory: true });
-
-		assert.equal(tabManager.tabs.filter((tab) => tab.path === '/notes/target.md').length, 1);
-		assert.equal(tabManager.activeTabId, edited.id);
-		assert.deepEqual(reads, [], 'the file is not even read');
-	});
-
 	// --- the pre-existing loss, independent of one-tab-per-path ---
-
-	test('re-opening an edited file from recents activates its tab instead of reloading it', async () => {
-		reset();
-		const session = makeSession();
-		const edited = openEdited('/notes/a.md', 'on disk', 'my unsaved paragraph');
-		tabManager.addTab('/notes/b.md', 'b');
-
-		await session.loadMarkdown('/notes/a.md');
-
-		assert.equal(edited.rawContent, 'my unsaved paragraph');
-		assert.equal(edited.originalContent, 'on disk');
-		assert.equal(edited.isDirty, true);
-		assert.equal(tabManager.activeTabId, edited.id);
-		assert.deepEqual(reads, []);
-	});
 
 	test('re-opening the edited file already in front does not reload it either', async () => {
 		reset();

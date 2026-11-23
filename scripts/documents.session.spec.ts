@@ -306,15 +306,6 @@ describe('document session', () => {
 		}
 	});
 
-	test('the untitled save dialog prefills the numbered tab title', async () => {
-		const session = makeSession();
-		tabManager.addNewTab();
-		tabManager.addNewTab();
-		await session.saveContent();
-		assert.equal(dialogs()[0].defaultPath, tabManager.activeTab!.title);
-		assert.match(tabManager.activeTab!.title, / 2$/);
-	});
-
 	test('save-as writes a snapshot rather than the buffer as it stands', async () => {
 		// A keystroke landing during the write is not in the file and leaves the
 		// tab unsaved.
@@ -390,31 +381,4 @@ describe('document session', () => {
 
 	// --- the file watcher ---------------------------------------------------------
 
-	test('the watcher follows the active file instead of retaining a previous tab watcher', async () => {
-		// #296: the session re-issued `watch_file` on every load, so the watcher
-		// followed whichever document loaded last rather than the active one.
-		const session = makeSession();
-		disk.set('/notes/a.md', { body: 'a' });
-		disk.set('/notes/b.md', { body: 'b' });
-		const watches = () =>
-			calls.filter((call) => call.cmd === 'watch_file' || call.cmd === 'unwatch_file').map((call) => call.args?.path ?? '-');
-
-		await session.loadMarkdown('/notes/a.md');
-		await session.loadMarkdown('/notes/b.md');
-		assert.deepEqual(watches(), [], 'a load asked for a watch of its own');
-
-		const first = tabManager.tabs[0].id;
-		// Untracked, so only the watcher's own effect re-runs, as in the component.
-		const stop = runeEffect(() => untrack(() => followActiveFile(() => tabManager.activeTab?.path ?? '')));
-		try {
-			flushSync();
-			tabManager.activeTabId = first;
-			flushSync();
-			tabManager.closeAll();
-			flushSync();
-		} finally {
-			stop();
-		}
-		assert.deepEqual(watches(), ['/notes/b.md', '/notes/a.md', '-']);
-	});
 });

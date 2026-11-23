@@ -23,11 +23,9 @@ type ConfiguredTitlebarToolbarIds = {
 };
 
 const TITLEBAR_TOOLBAR_ACTIONS: TitlebarToolbarAction[] = [
-	{ id: 'home', labelKey: 'menu.home', fallbackName: 'Home', sample: 'H', defaultPlacement: 'bar' },
 	{ id: 'reload', labelKey: 'tooltip.reloadFromDisk', fallbackName: 'Reload from Disk', sample: 'R', defaultPlacement: 'bar', hintKey: 'settings.toolbarDiskFileOnly' },
 	{ id: 'live', labelKey: 'menu.autoReload', fallbackName: 'Auto-Reload', sample: 'L', defaultPlacement: 'bar', hintKey: 'settings.toolbarDiskFileOnly' },
 	{ id: 'zen', labelKey: 'menu.zenMode', fallbackName: 'Zen Mode', sample: 'Z', defaultPlacement: 'menu' },
-	{ id: 'tabs', labelKey: 'settings.toolbarTabs', fallbackName: 'Show/Hide Tab Bar', sample: 'Tab', defaultPlacement: 'menu' },
 	{ id: 'zoom', labelKey: 'tooltip.resetZoom', fallbackName: 'Reset Zoom', sample: '%', defaultPlacement: 'menu', hintKey: 'settings.toolbarZoomedOnly' },
 	{ id: 'theme', labelKey: 'menu.changeTheme', fallbackName: 'Change Theme', sample: 'A', defaultPlacement: 'menu' },
 	{ id: 'settings', labelKey: 'tooltip.settings', fallbackName: 'Settings', sample: '...', defaultPlacement: 'menu', required: true },
@@ -119,7 +117,6 @@ export function applyTitlebarToolbarMove(order: readonly string[], move: Toolbar
 
 export type TitlebarActionContext = {
 	hasActiveTab: boolean;
-	showHome: boolean;
 	currentFile: string;
 	zoomLevel?: number;
 };
@@ -144,10 +141,7 @@ export type TitlebarActionContext = {
 export function visibleTitlebarActionIds(context: TitlebarActionContext): string[] {
 	const list: string[] = [];
 
-	// With no tab there is nothing but Home to show, so there is nothing to toggle.
-	if (context.hasActiveTab) list.push('home');
-
-	if (context.hasActiveTab && !context.showHome) {
+	if (context.hasActiveTab) {
 		if (context.currentFile) list.push('reload');
 
 		// An unsaved buffer has no name to read an extension off, and is
@@ -162,7 +156,6 @@ export function visibleTitlebarActionIds(context: TitlebarActionContext): string
 			list.push('live');
 		}
 		list.push('zen');
-		list.push('tabs');
 	}
 
 	if (context.zoomLevel && context.zoomLevel !== 100) list.push('zoom');

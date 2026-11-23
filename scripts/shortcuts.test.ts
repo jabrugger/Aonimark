@@ -7,7 +7,6 @@ import { buildMenuModel, type MenuNode, type MenuState } from '../src/lib/utils/
 import { getSupportedLanguages, type LanguageCode, t, type Translation } from '../src/lib/utils/i18n.js';
 import { formatChord, modifierFor, SHORTCUT_GROUPS, type ShortcutEntry, shortcutLabel, SHORTCUTS, shortcutSections } from '../src/lib/utils/shortcuts.js';
 import type { ViewerCommand } from '../src/lib/utils/viewerKeymap.js';
-import { tabListMenuItems, tabMenuItems } from '../src/lib/utils/tabContextMenu.js';
 import { translations } from './allTranslations.js';
 import { type Chord, documentKeymap, PLATFORMS, toMonacoLabel, viewerCommandCalls } from './keymapHarness.js';
 
@@ -38,7 +37,7 @@ describe('shortcut registry', () => {
 	test('the registry was actually read, and is internally coherent', () => {
 		// Every assertion below iterates SHORTCUTS. If it were empty — or if a filter
 		// silently dropped everything — they would all pass having checked nothing.
-		assert.ok(SHORTCUTS.length > 15, `the registry holds ${SHORTCUTS.length} entries`);
+		assert.ok(SHORTCUTS.length > 8, `the registry holds ${SHORTCUTS.length} entries`);
 
 		const ids = SHORTCUTS.map((entry) => entry.id);
 		assert.equal(new Set(ids).size, ids.length, 'shortcut ids are unique');
@@ -120,7 +119,7 @@ describe('shortcut registry', () => {
 	function menuAccelerators(): Array<{ text: string; accelerator: string; action: MenuNode & { kind: 'item' | 'check' } }> {
 		const flatten = (nodes: readonly MenuNode[]): MenuNode[] =>
 			nodes.flatMap((node) => (node.kind === 'submenu' ? flatten(node.items) : [node]));
-		return flatten(buildMenuModel({ language: 'en', liveMode: true, showTabs: true})).flatMap((node) =>
+		return flatten(buildMenuModel({ language: 'en', liveMode: true})).flatMap((node) =>
 			(node.kind === 'item' || node.kind === 'check') && node.accelerator
 				? [{ text: node.text, accelerator: node.accelerator, action: node }]
 				: [],
@@ -192,7 +191,7 @@ describe('shortcut registry', () => {
 			answered++;
 			assert.ok('viewer' in action && action.viewer === command, `${accelerator}: the page runs ${command}, the menu's ${text} something else`);
 		}
-		assert.ok(answered > 15, `the page answered ${answered} menu accelerators`);
+		assert.ok(answered > 8, `the page answered ${answered} menu accelerators`);
 	});
 
 	test('each zoom chord reaches its own zoom operation, not just the zoom code', () => {
@@ -405,8 +404,6 @@ describe('shortcut registry', () => {
 
 		assert.equal(mac.find((e) => e.id === 'file-save')?.chords[0], 'Cmd+S');
 		assert.equal(win.find((e) => e.id === 'file-save')?.chords[0], 'Ctrl+S');
-		// A literal Ctrl is not a Mod: tab cycling is Ctrl+Tab on macOS too.
-		assert.equal(mac.find((e) => e.id === 'tab-next')?.chords[0], 'Ctrl+Tab');
 		// F5 has no modifier at all.
 		assert.equal(mac.find((e) => e.id === 'file-reload')?.chords[0], 'F5');
 
@@ -560,18 +557,6 @@ describe('shortcut registry', () => {
 			'macOS and Linux, which requirement 157 put out of scope from the start (see the per-platform test ' +
 			'above). Not shown because the panel already prints Mod+W for that command and a second row would read ' +
 			'as a second command — and a row true on one platform of three would have to say so.',
-		'Mod+PageUp':
-			'Tab cycling as browsers and editors bind it. tab-prev advertises Ctrl+Shift+Tab; this is the same ' +
-			'command under the chord the muscle memory reaches for.',
-		'Mod+PageDown': 'The tab-next half of the same pair as Mod+PageUp.',
-		'Meta+Alt+Left':
-			'The macOS tab-cycling gesture (Cmd+Alt+arrow), kept for Mac users whose fingers expect it. Advertising ' +
-			'it would give tab-prev a platform-specific second row that is wrong on the other two platforms.',
-		'Meta+Alt+Right': 'The tab-next half of the same pair as Meta+Alt+Left.',
-		'Meta+Tab':
-			'The Cmd twin of tab-next, which is spelled with a literal Ctrl precisely because Cmd+Tab is the macOS ' +
-			'application switcher and never reaches the app. Reachable in the handler, unreachable in practice.',
-		'Meta+Shift+Tab': 'The tab-prev half of the same pair as Meta+Tab.',
 	};
 
 	test('every chord the document handler answers is advertised, or consciously not', () => {
@@ -632,7 +617,7 @@ describe('formatting shortcuts keymap', () => {
 		// above both layers above, and neither of them could see it.
 		const flatten = (nodes: readonly MenuNode[]): MenuNode[] =>
 			nodes.flatMap((node) => (node.kind === 'submenu' ? flatten(node.items) : [node]));
-		const claims = flatten(buildMenuModel({ language: 'en', liveMode: true, showTabs: true})).flatMap(
+		const claims = flatten(buildMenuModel({ language: 'en', liveMode: true})).flatMap(
 			(node) =>
 				(node.kind === 'item' || node.kind === 'check') && /^CmdOrCtrl\+[TN]$/.test(node.accelerator ?? '')
 					? [[node.accelerator, node.action]]
@@ -653,7 +638,7 @@ describe('macOS app menu', () => {
 		liveMode: true,
 		
 		
-		showTabs: true,
+		
 		
 	};
 
@@ -691,17 +676,6 @@ describe('macOS app menu', () => {
 		assert.ok(node.kind === 'check', `${text} is not a check item`);
 		return node;
 	}
-
-	test('Tab Bar carries the registry chord', () => {
-		const model = buildMenuModel(base);
-		for (const [text, id] of [
-			['Tab Bar', 'toggle-tabs'],
-		] as const) {
-			const item = find(model, text);
-			const chord = SHORTCUTS.find((row) => row.id === id)!.chords[0];
-			assert.equal(item.kind === 'check' && item.accelerator, chord.replace(/^Mod\b/, 'CmdOrCtrl'), text);
-		}
-	});
 
 	test('Edit keeps the system text commands that WKWebView fields rely on (#526)', () => {
 		const edit = buildMenuModel(base)[2];
@@ -757,40 +731,6 @@ describe('open shortcut in preview', () => {
 		// user was actually doing.
 		for (const chord of ['Ctrl+Shift+O', 'Alt+Ctrl+O']) {
 			assert.equal(documentKeymap('windows').get(chord), undefined, chord);
-		}
-	});
-});
-
-describe('tab context menus', () => {
-	test('the tab context menus print the modifier the user is on, not a hard-coded Ctrl', () => {
-		const emit = () => {};
-		const menus = (osType: string) => ({
-			tab: tabMenuItems({
-				tab: { id: 'tab-1', path: '/notes/a.md' },
-				language: 'en',
-				osType,
-				tabCount: 2,
-				fileActionItems: [],
-				moveToWindowItems: [],
-				emit,
-			}),
-			strip: tabListMenuItems('en', osType, emit),
-		});
-		const shown = (items: { label?: string; shortcut?: string }[]) =>
-			items.filter((item) => item.shortcut).map((item) => [item.label, item.shortcut]);
-
-		for (const [osType, mod] of [['macos', 'Cmd'], ['windows', 'Ctrl'], ['linux', 'Ctrl']] as const) {
-			const { tab, strip } = menus(osType);
-			// Every chord comes from shortcutLabel(), so it agrees with the app menu.
-			assert.deepEqual(shown(tab), [
-				[t('menu.newFile', 'en'), `${mod}+T`],
-				[t('menu.undoCloseTab', 'en'), `${mod}+Shift+T`],
-				[t('menu.closeFile', 'en'), `${mod}+W`],
-			]);
-			assert.deepEqual(shown(strip), [
-				[t('menu.newFile', 'en'), `${mod}+T`],
-				[t('menu.undoCloseTab', 'en'), `${mod}+Shift+T`],
-			]);
 		}
 	});
 });

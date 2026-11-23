@@ -17,18 +17,14 @@ export type ViewerCommandHost = {
 	};
 	tabManager: { readonly activeTabId: string | null; cycleTab(direction: 'next' | 'prev'): void };
 	reloadFromDisk(): unknown;
-	carryActiveTabToNextWindow(): unknown;
 	closeFile(): unknown;
 	handleNewFile(): unknown;
-	openNewWindow(): Promise<unknown>;
 	selectFile(): unknown;
 	appExit(): unknown;
 	toggleLiveMode(): unknown;
 	saveContentAs(): unknown;
 	saveActiveTab(): unknown;
-	handleUndoCloseTab(): unknown;
 	openSettings(): void;
-	toggleHome(): void;
 	openFileLocation(): unknown;
 };
 
@@ -41,28 +37,19 @@ export function viewerCommandTable(host: ViewerCommandHost): Record<ViewerComman
 	const { settings, tabManager } = host;
 	return {
 		'reload-from-disk': () => void host.reloadFromDisk(),
-		'move-tab-to-next-window': () => void host.carryActiveTabToNextWindow(),
 		'close-file': () => void host.closeFile(),
 		'new-file': () => void host.handleNewFile(),
-		'new-window': () => void host.openNewWindow().catch(console.error),
 		'open-file': () => void host.selectFile(),
 		'app-exit': () => void host.appExit(),
 		'toggle-live-mode': () => void host.toggleLiveMode(),
 		'toggle-zen-mode': () => settings.toggleZenMode(),
-		'toggle-tabs': () => {
-			settings.showTabs = !settings.showTabs;
-		},
 		'save-as': () => void host.saveContentAs(),
 		// Save from any mode; see `saveActiveTab`.
 		save: () => void host.saveActiveTab(),
-		'undo-close-tab': () => void host.handleUndoCloseTab(),
-		'next-tab': () => tabManager.cycleTab('next'),
-		'previous-tab': () => tabManager.cycleTab('prev'),
 		'zoom-in': () => settings.zoomIn(),
 		'zoom-out': () => settings.zoomOut(),
 		'zoom-reset': () => settings.resetZoom(),
 		'open-settings': () => host.openSettings(),
-		'toggle-home': () => host.toggleHome(),
 		'reveal-file': () => void host.openFileLocation(),
 	};
 }

@@ -49,25 +49,18 @@ import type { OSType } from '../stores/settings.svelte.js';
  */
 export type ViewerCommand =
 	| 'reload-from-disk'
-	| 'move-tab-to-next-window'
 	| 'close-file'
 	| 'new-file'
-	| 'new-window'
 	| 'open-file'
 	| 'app-exit'
 	| 'toggle-live-mode'
 	| 'toggle-zen-mode'
-	| 'toggle-tabs'
 	| 'save-as'
 	| 'save'
-	| 'undo-close-tab'
-	| 'next-tab'
-	| 'previous-tab'
 	| 'zoom-in'
 	| 'zoom-out'
 	| 'zoom-reset'
 	| 'open-settings'
-	| 'toggle-home'
 	| 'reveal-file';
 
 /**
@@ -169,7 +162,6 @@ export function viewerCommandFor(e: KeyStroke, context: KeyContext): ViewerComma
 	if (context.osType === 'macos' && mod && key === 'q') return null;
 
 	if (!cmdOrCtrl && !e.shiftKey && !e.altKey && code === 'F5') return 'reload-from-disk';
-	if (modShift && key === 'm') return 'move-tab-to-next-window';
 	// Nothing catches the Shift and Alt variants on the way past: they are not
 	// another command in disguise, they are a user asking the WINDOW manager
 	// for something. Leaving them unhandled — and unprevented — is what lets
@@ -198,7 +190,6 @@ export function viewerCommandFor(e: KeyStroke, context: KeyContext): ViewerComma
 	// outside the editor. Both are listed here so the two paths cannot
 	// drift again; `shortcuts.editor.test.ts` holds them equal.
 	if (mod && (key === 't' || key === 'n')) return 'new-file';
-	if (modShift && key === 'n') return 'new-window';
 	if (mod && key === 'o') return 'open-file';
 	if (mod && key === 'q') return 'app-exit';
 	// Mod+L had only the Monaco half (`editorAction` in shortcuts.ts), so it
@@ -211,7 +202,6 @@ export function viewerCommandFor(e: KeyStroke, context: KeyContext): ViewerComma
 	if (modAlt && code === 'KeyZ') return 'toggle-zen-mode';
 	// Both halves, like Zen: off macOS no menu accelerator sits behind the
 	// preview to catch the chord.
-	if (modShift && key === 'b') return 'toggle-tabs';
 	// Save As. The app menu advertised this chord for as long as the menu has
 	// existed, but nothing ever bound it: the branch below matched on
 	// `cmdOrCtrl && key === 's'` with no Shift guard, so the advertised
@@ -220,16 +210,10 @@ export function viewerCommandFor(e: KeyStroke, context: KeyContext): ViewerComma
 	// keyboard path at all — its only caller was the menu button.
 	if (modShift && key === 's') return 'save-as';
 	if (mod && key === 's') return 'save';
-	if (modShift && key === 't') return 'undo-close-tab';
 	// Not `mod`/`modShift`: Shift is the ARGUMENT here, not part of the chord's
 	// identity — it picks the direction. Alt still has to be up.
-	if (cmdOrCtrl && !e.altKey && code === 'Tab') return e.shiftKey ? 'previous-tab' : 'next-tab';
-	if (mod && code === 'PageUp') return 'previous-tab';
-	if (mod && code === 'PageDown') return 'next-tab';
 	// Alt-based chords, so they say what they need by hand: `mod` would demand
 	// Alt be up, which is the opposite of what these two bind.
-	if (e.metaKey && !e.ctrlKey && e.altKey && !e.shiftKey && code === 'ArrowLeft') return 'previous-tab';
-	if (e.metaKey && !e.ctrlKey && e.altKey && !e.shiftKey && code === 'ArrowRight') return 'next-tab';
 	// The one chord that cannot demand Shift be up. `+` IS the shifted `=` on
 	// the layouts that have both, so `mod` would delete the `+` spelling
 	// outright and leave Cmd+Shift+= — how a lot of people zoom in — dead. The
@@ -241,7 +225,6 @@ export function viewerCommandFor(e: KeyStroke, context: KeyContext): ViewerComma
 	if (mod && key === '-') return 'zoom-out';
 	if (mod && key === '0') return 'zoom-reset';
 	if (mod && key === ',') return 'open-settings';
-	if (modShift && key === 'h') return 'toggle-home';
 	// Had only the Monaco half, so it did nothing in the preview.
 	if (modShift && key === 'r') return 'reveal-file';
 	return null;

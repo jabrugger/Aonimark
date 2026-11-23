@@ -2,10 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import postcss from 'postcss';
 
-import { duplicateNameSuffixes } from '../src/lib/utils/duplicateTabNames.js';
 import { HOME_TAB_PATH } from '../src/lib/utils/homeTab.js';
 import { getTabFileActions, hasRealFilePath } from '../src/lib/utils/tabFileActions.js';
-import { closestSlotIndex, dragDistance } from '../src/lib/utils/tabReorder.js';
 import type { Tab } from '../src/lib/stores/tabs.svelte.js';
 import { asBufferLine, asRendererLine, EDITOR_ANCHOR_LINE_OFFSET } from '../src/lib/utils/lineCoordinates.js';
 import {
@@ -21,54 +19,6 @@ import { nextUntitledTitle } from '../src/lib/utils/untitledTitle.js';
 import { outgoingTabAnchorLine, type StoredTabPosition, editorReadingPosition } from '../src/lib/utils/editorPosition.js';
 import type { ScrollSyncPosition } from '../src/lib/utils/scrollSync.js';
 
-describe('duplicate tab names', () => {
-	function suffixes(...paths: string[]): (string | undefined)[] {
-		const tabs = paths.map((path, i) => ({ id: String(i), path }));
-		const map = duplicateNameSuffixes(tabs);
-		return tabs.map((tab) => map.get(tab.id));
-	}
-
-	test('a name nothing else shares gets no suffix', () => {
-		assert.deepEqual(suffixes('/a/README.md', '/b/NOTES.md'), [undefined, undefined]);
-	});
-
-	test('same name in different folders gets the containing folder (#727)', () => {
-		assert.deepEqual(suffixes('/x/.claude/skills/alpha/SKILL.md', '/x/.claude/skills/beta/SKILL.md'), [
-			'alpha',
-			'beta',
-		]);
-	});
-
-	test('a suffix that is itself shared grows by one more folder', () => {
-		assert.deepEqual(suffixes('/w/docs/api/README.md', '/w/packages/api/README.md'), [
-			'docs/api',
-			'packages/api',
-		]);
-	});
-
-	test('only the tabs that still collide grow; a sibling keeps one folder', () => {
-		assert.deepEqual(suffixes('/w/docs/api/README.md', '/w/packages/api/README.md', '/w/guide/README.md'), [
-			'docs/api',
-			'packages/api',
-			'guide',
-		]);
-	});
-
-	test('a windows path is shown with the separator it is spelled in', () => {
-		assert.deepEqual(suffixes('C:\\w\\docs\\api\\README.md', 'C:\\w\\pkg\\api\\README.md'), [
-			'docs\\api',
-			'pkg\\api',
-		]);
-	});
-
-	test('a file with no folder left to name is left alone rather than looping', () => {
-		assert.deepEqual(suffixes('/README.md', '/w/README.md'), [undefined, 'w']);
-	});
-
-	test('untitled buffers and the home tab are not files and take no suffix', () => {
-		assert.deepEqual(suffixes('', '', HOME_TAB_PATH), [undefined, undefined, undefined]);
-	});
-});
 
 describe('tab file actions', () => {
 	test('tab file actions are enabled for saved files', () => {
@@ -95,36 +45,6 @@ describe('tab file actions', () => {
 				]
 			);
 		}
-	});
-});
-
-describe('tab reorder', () => {
-	// Three 100x30 tabs, laid out across the strip and then down the column (#884).
-	const row = [0, 1, 2].map((i) => ({ left: i * 104, top: 0, width: 100, height: 30 }));
-	const column = [0, 1, 2].map((i) => ({ left: 0, top: i * 32, width: 180, height: 30 }));
-
-	test('the strip picks the slot nearest the pointer horizontally', () => {
-		assert.equal(closestSlotIndex(row, { x: 10, y: 500 }, 'x'), 0);
-		assert.equal(closestSlotIndex(row, { x: 160, y: 500 }, 'x'), 1);
-		assert.equal(closestSlotIndex(row, { x: 999, y: 0 }, 'x'), 2);
-	});
-
-	test('the column picks the slot nearest the pointer vertically, whatever its x', () => {
-		assert.equal(closestSlotIndex(column, { x: 500, y: 5 }, 'y'), 0);
-		assert.equal(closestSlotIndex(column, { x: -40, y: 40 }, 'y'), 1);
-		assert.equal(closestSlotIndex(column, { x: 90, y: 400 }, 'y'), 2);
-	});
-
-	test('non-tab children are skipped and an empty list has no slot', () => {
-		assert.equal(closestSlotIndex([null, column[1], null], { x: 0, y: 0 }, 'y'), 1);
-		assert.equal(closestSlotIndex([], { x: 0, y: 0 }, 'x'), -1);
-	});
-
-	test('a drag starts on travel along the layout axis only', () => {
-		const start = { x: 100, y: 100 };
-		assert.equal(dragDistance(start, { x: 108, y: 100 }, 'x'), 8);
-		assert.equal(dragDistance(start, { x: 108, y: 100 }, 'y'), 0);
-		assert.equal(dragDistance(start, { x: 100, y: 93 }, 'y'), 7);
 	});
 });
 

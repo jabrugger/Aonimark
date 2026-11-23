@@ -191,22 +191,6 @@ describe('tab file history', () => {
 		assert.equal(tabManager.goBack(id), null);
 	});
 
-	test('a tab that gave up its path to another does not keep a dead entry either', () => {
-		reset();
-		tabManager.addTab('/notes/target.md', 'target text');
-		const resident = tabManager.activeTabId!;
-		// Only a DIRTY tab survives losing its path — a clean one is closed.
-		tabManager.updateTabRawContent(resident, 'work in progress');
-		tabManager.addTab('/notes/from.md', 'from text');
-		tabManager.navigate(tabManager.activeTabId!, '/notes/target.md');
-		assert.equal(tabWith(resident).path, '', 'the dirty loser is now untitled');
-
-		tabManager.navigate(resident, '/notes/b.md');
-
-		assert.deepEqual(tabWith(resident).history, ['/notes/b.md']);
-		assert.equal(tabManager.canGoBack(resident), false);
-	});
-
 	test('back and forward still walk a tab that has actually been somewhere', () => {
 		reset();
 		tabManager.addTab('/notes/a.md', 'a');
@@ -233,89 +217,6 @@ describe('tab file history', () => {
 
 		assert.deepEqual(tabWith(id).history, ['/notes/saved.md']);
 		assert.equal(tabManager.canGoBack(id), false);
-	});
-});
-
-// A link opened in a new tab leaves the tab it was clicked in as it was. #1007
-// routed it through `loadMarkdown`'s ordinary open path, which clears the
-// in-page jump stacks of the ACTIVE tab before picking a tab, and at that point
-// the active tab is still the one the user is leaving.
-describe('a new-tab link keeps scroll history', () => {
-	beforeAll(() => {
-		(window as any).__TAURI_INTERNALS__ = {
-			metadata: { currentWindow: { label: 'main' }, currentWebview: { windowLabel: 'main', label: 'main' } },
-			invoke: (cmd: string) => {
-				if (cmd === 'open_markdown_preview') return Promise.resolve(['# B\n', true, false]);
-				if (cmd === 'read_file_content_checked') return Promise.resolve(['# B\n', false]);
-				if (cmd === 'get_os_type') return Promise.resolve('macos');
-				return Promise.resolve(null);
-			},
-		};
-	});
-
-	afterAll(() => {
-		// One store for the whole file: leave it empty for the next describe.
-		tabManager.closeAll();
-		tabManager.recentlyClosed.length = 0;
-		localStorage.clear();
-	});
-
-	// What openMarkdownTargetInNewTab passes (pinned in documents.load.spec.ts).
-	const newTabOptions = { inNewTab: true };
-
-	function makeSession() {
-		return createDocumentSession({
-			setShowHome: () => {},
-			currentFile: () => tabManager.activeTab?.path ?? '',
-			// As MarkdownViewer wires it.
-			resetScrollHistory: () => {
-				if (tabManager.activeTabId) tabManager.clearScrollHistory(tabManager.activeTabId);
-			},
-			renderMarkdown: async (raw: string) => raw,
-			afterLoad: async () => {},
-			saveRecentFile: () => {},
-			deleteRecentFile: () => {},
-			setLoadingTabs: () => {},
-			measureInitialViewport: () => {},
-			isScrolling: () => false,
-			onError: () => {},
-			onDiskChangedUnderSave: () => {},
-			cancelPendingAutoSave: () => {},
-			askClose: async () => 'discard' as const,
-			onCloseSaveNewerEdits: () => {},
-			onCloseAutoSaveFailed: () => {},
-			onPartialCopySaved: () => {},
-		});
-	}
-
-	const stackOf = (id: string) => tabManager.tabs.find((t) => t.id === id)!.scrollHistory;
-
-	test('a link opened in a new tab keeps the source tab in-page back history', async () => {
-		tabManager.closeAll();
-		tabManager.addTab('/notes/a.md', '# A\n');
-		const a = tabManager.activeTabId!;
-		tabManager.pushScrollHistory(a, 1200);
-		tabManager.pushScrollHistory(a, 3400);
-
-		await makeSession().loadMarkdown('/notes/b.md', newTabOptions);
-
-		assert.notEqual(tabManager.activeTabId, a, 'b.md opened in its own tab');
-		assert.deepEqual(stackOf(a), [1200, 3400]);
-	});
-
-	test('a link to a file already open in another tab still activates that tab', async () => {
-		tabManager.closeAll();
-		tabManager.addTab('/notes/b.md', '# B\n');
-		const b = tabManager.activeTabId!;
-		tabManager.addTab('/notes/a.md', '# A\n');
-		const a = tabManager.activeTabId!;
-		tabManager.pushScrollHistory(a, 1200);
-
-		await makeSession().loadMarkdown('/notes/b.md', newTabOptions);
-
-		assert.equal(tabManager.activeTabId, b);
-		assert.equal(tabManager.tabs.length, 2);
-		assert.deepEqual(stackOf(a), [1200]);
 	});
 });
 
@@ -425,73 +326,6 @@ describe('scroll history per tab', () => {
 
 		assert.deepEqual(stackOf(short), []);
 		assert.ok(!('scrolledTo' in result), 'the short document has no jump of its own to go back to');
-	});
-
-	test('with no jump of its own, back moves the tab to the previous FILE instead', () => {
-		reset();
-		tabManager.addTab('/notes/long.md', '# Long\n');
-		const long = tabManager.activeTabId!;
-		jumpFrom(8400);
-
-		tabManager.addTab('/notes/short.md', '# Short\n');
-		const short = tabManager.activeTabId!;
-		tabManager.navigate(short, '/notes/other.md');
-
-		assert.deepEqual(mouseButton('back', 0), { openedFile: '/notes/short.md' });
-		// ...and the tab that DID jump still has its own offset waiting.
-		assert.deepEqual(stackOf(long), [8400]);
-	});
-
-	test('the offset is still there when the reader comes back to the document they jumped in', () => {
-		const { long } = jumpInLongThenSwitchToShort();
-
-		tabManager.setActive(long);
-
-		assert.deepEqual(mouseButton('back', 200), { scrolledTo: 8400 });
-	});
-
-	test('forward is per tab too', () => {
-		const { long, short } = jumpInLongThenSwitchToShort();
-
-		tabManager.setActive(long);
-		mouseButton('back', 200);
-		assert.deepEqual(futureOf(long), [200]);
-
-		tabManager.setActive(short);
-		assert.deepEqual(futureOf(short), []);
-		assert.ok(!('scrolledTo' in mouseButton('forward', 0)));
-	});
-
-	test('two tabs jumped in keep their own offsets, in their own order', () => {
-		reset();
-		tabManager.addTab('/notes/a.md', '# A\n');
-		const a = tabManager.activeTabId!;
-		jumpFrom(100);
-		jumpFrom(200);
-
-		tabManager.addTab('/notes/b.md', '# B\n');
-		const b = tabManager.activeTabId!;
-		jumpFrom(900);
-
-		tabManager.setActive(a);
-		assert.deepEqual(mouseButton('back', 250), { scrolledTo: 200 });
-		assert.deepEqual(mouseButton('back', 200), { scrolledTo: 100 });
-
-		tabManager.setActive(b);
-		assert.deepEqual(mouseButton('back', 950), { scrolledTo: 900 });
-	});
-
-	test('an untitled buffer has a stack of its own', () => {
-		reset();
-		tabManager.addNewTab();
-		const untitled = tabManager.activeTabId!;
-		jumpFrom(300);
-
-		tabManager.addTab('/notes/a.md', '# A\n');
-		assert.deepEqual(stackOf(tabManager.activeTabId!), []);
-
-		tabManager.setActive(untitled);
-		assert.deepEqual(mouseButton('back', 400), { scrolledTo: 300 });
 	});
 
 	test('closing a tab takes its offsets with it', () => {

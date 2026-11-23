@@ -1,7 +1,5 @@
 <script lang="ts">
 	import { commands, events, type Appearance } from './bindings.js';
-	import { emitToWindow, type WindowEventName } from './windowEvents.js';
-	import type { EventCallback } from '@tauri-apps/api/event';
 	import { getAllWindows, getCurrentWindow } from '@tauri-apps/api/window';
 	import { onMount, tick, untrack } from 'svelte';
 import { fade } from 'svelte/transition';
@@ -9,8 +7,7 @@ import { openPath } from '@tauri-apps/plugin-opener';
 	import { open, save, ask } from '@tauri-apps/plugin-dialog';
 	import Settings from './components/Settings.svelte';
 	import TitleBar from './components/TitleBar.svelte';
-	import Sidebar from './components/Sidebar.svelte';
-	import { folderManager, snapshotFolder, type FolderEntry } from './stores/folder.svelte.js';
+import { folderManager, snapshotFolder } from './stores/folder.svelte.js';
 	import WysiwygEditor from './components/WysiwygEditor.svelte';
 	import Modal from './components/Modal.svelte';
 	import UpdateDialog from './components/UpdateDialog.svelte';
@@ -51,15 +48,14 @@ import { FrontMatterFieldState } from './utils/frontMatterFieldState.svelte.js';
 import { anchorIdCandidates, hasMarkdownLinkExtension, type MarkdownLinkTarget as RelativeMarkdownTarget } from './utils/markdownLinks.js';
 import { diagramToPngBase64 } from './utils/diagramImage.js';
 import { openRelativeMarkdownTarget as openRelativeTarget, openWithSystem as openPathWithSystem } from './utils/previewLinks.js';
-import { basename, canonicalizePath, isSameFilePath } from './utils/pathIdentity.js';
+import { canonicalizePath } from './utils/pathIdentity.js';
 import { ChoiceDialog } from './utils/choiceDialog.svelte.js';
 import { saveImageAs as saveImageAsFile } from './utils/viewerContextMenu.js';
 import { createRecentFiles } from './utils/recentFiles.js';
 
 	const appWindow = getCurrentWindow();
 
-	import HomePage from './components/HomePage.svelte';
-	import { openNewWindow, pinnedTagFromWindowLabel } from './utils/pinnedTagWindow.js';
+import { pinnedTagFromWindowLabel } from './utils/pinnedTagWindow.js';
 import { tabManager, type Tab } from './stores/tabs.svelte.js';
 import { createTabMovers, createTransferOptions } from './sessions/windowTransfer.js';
 import { viewerCommandTable } from './utils/viewerCommands.js';
@@ -78,9 +74,6 @@ import { createWindowSession } from './sessions/windowSession.svelte.js';
 import { reportWindowMeta } from './sessions/windowMeta.svelte.js';
 import { createBoundedWriter, restoreRecords, recoverySnapshot } from './sessions/unsavedRecovery.js';
 import { createDocumentSession, type LoadMarkdownOptions } from './sessions/documentSession.svelte.js';
-import { createOpenFilePicker } from './sessions/openFilePicker.svelte.js';
-import type { ViewerWindowEntry } from './utils/viewerWindows.js';
-import WindowPickerList from './components/WindowPickerList.svelte';
 import { followActiveFile } from './sessions/fileWatch.svelte.js';
 
 	import 'highlight.js/styles/github-dark.css';
@@ -223,13 +216,8 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	// Which side the tab column is on, or null while the tabs are across the
 	// title bar or hidden (#884). Zen mode clears `showTabs`, so it hides the
 	// column through the same switch it uses for the strip, and hides the folder too.
-	const tabColumnSide = $derived(
-		tabManager.tabs.length > 0 && settings.tabPlacement !== 'top' ? settings.tabPlacement : null,
-	);
-	const folderShown = $derived(folderManager.root !== null && !settings.zenMode);
-	// With the tabs in a column the folder stacks into it; otherwise it takes its own side.
-	const sidebarSide = $derived(tabColumnSide ?? (folderShown ? settings.folderSide : null));
-		// The bounds come from TOC_WIDTH_RANGE, the same object settings.setTocWidth
+			// With the tabs in a column the folder stacks into it; otherwise it takes its own side.
+			// The bounds come from TOC_WIDTH_RANGE, the same object settings.setTocWidth
 	// clamps against, so the handle cannot offer a width persistence would shrink.
 	// The keyboard increment stays local: TOC_WIDTH_RANGE.step is 1, the spin-button
 	// granularity of the numeric settings input, and arrow keys move the splitter 16px.
@@ -353,21 +341,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	// How long a window waits for `windows-restored` before asking anyway: a
 	// reopened window that never finishes loading would otherwise hold back
 	// every file opened from outside.
-	const RESTORE_WAIT_MS = 10_000;
-
-	const openFilePicker = createOpenFilePicker({
-		selfLabel: appWindow.label,
-		setting: () => settings.openFileTarget,
-		isOpenHere: (path) => tabManager.tabs.some((tab) => isSameFilePath(tab, { path })),
-		listWindows: () => commands.listViewerWindows() as Promise<ViewerWindowEntry[]>,
-		openHere: (paths) => openFromOutside(paths),
-		sendTo: async (label, paths) => {
-			await emitToWindow(label, 'open-files-here', paths);
-			await commands.focusWindow(label);
-		},
-		raise: () => commands.focusWindow(appWindow.label).then(() => {}),
-	});
-
+	
 	function closeModal(choice: 'save' | 'cancel') {
 		modalState.close(choice);
 	}
@@ -378,8 +352,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 
 	
 	
-	let identifyFlash = $state('');
-	let identifyFlashTimer: ReturnType<typeof setTimeout> | undefined;
+		let identifyFlashTimer: ReturnType<typeof setTimeout> | undefined;
 
 	const RESTORE_IN_PROGRESS_KEY = 'markpad-window-restore-in-progress';
 
@@ -513,12 +486,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		pinnedTags = (await commands.listPinnedTags()) as typeof pinnedTags;
 	}
 
-	async function unpinTagFromHome(name: string) {
-		await commands.removePinnedTag(name);
-		if (tabManager.windowTag?.name === name) tabManager.setWindowTag({ ...tabManager.windowTag, pinned: false });
-		await refreshPinnedTags();
-	}
-
+	
 	// The template's HomePage gate: an empty window or the home tab shows Home
 	// without `showHome`, which is the cold-start case.
 	// Reading the window tag re-runs this when the title bar pins or unpins it.
@@ -659,13 +627,8 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		moveTabToWindow,
 	});
 	const {
-		savePinnedTagIfNeeded,
-		openPinnedTag,
 		settleForUpdate,
 		appExit,
-		destroyWindowAfterTabsClosed,
-		closeTabAndWindowIfLast,
-		mergeSelfInto,
 	} = windowExit;
 
 	/**
@@ -772,10 +735,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	
 	async function loadMarkdown(filePath: string, options: LoadMarkdownOptions = {}) {
 		return documentSession.loadMarkdown(filePath, options);
-	}
-
-	function openFromOutside(paths: readonly string[]) {
-		return documentSession.openFiles(paths, (mode) => viewMode.setViewMode(mode === 'editor' ? 'edit' : mode));
 	}
 
 	function currentMermaidTheme() {
@@ -1016,13 +975,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		return recentFileList.listen(window);
 	});
 
-	function removeRecentFile(path: string, event: MouseEvent) {
-		event.stopPropagation();
-		// Forgets the entry, not the document: an open tab stays open, the way
-		// "Remove from Recently Opened" works in VS Code.
-		deleteRecentFile(path);
-	}
-
+	
 	async function canCloseTab(tabId: string): Promise<boolean> {
 		return documentSession.canCloseTab(tabId);
 	}
@@ -1176,9 +1129,19 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	
 	// One export at a time: a second would refill `#print-root` under the first.
 		
+	/** A window holds one document: replacing it asks about unsaved changes first. */
+	async function replaceDocument(replace: () => unknown) {
+		const current = tabManager.activeTab;
+		if (current && !(await canCloseTab(current.id))) return;
+		await replace();
+	}
+
 	function handleNewFile() {
-		tabManager.addNewTab();
-		showHome = false;
+		void replaceDocument(() => tabManager.addNewTab());
+	}
+
+	async function openDocument(path: string) {
+		await replaceDocument(() => loadMarkdown(path));
 	}
 
 	function openWithSystem(path: string) {
@@ -1191,60 +1154,22 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		});
 	}
 
-	async function selectFolder() {
-		const selected = await open({ directory: true, multiple: false });
-		if (typeof selected === 'string') await folderManager.open(selected);
-	}
 
-	function openFolderEntry(entry: FolderEntry, openable: boolean) {
-		if (openable) {
-			showHome = false;
-			void loadMarkdown(entry.path);
-		} else {
-			void openWithSystem(entry.path);
-		}
-	}
 
 	async function selectFile() {
 		const selected = await open({
-			multiple: true,
+			multiple: false,
 			filters: MARKDOWN_OPEN_FILTERS,
 		});
-		if (!selected) return;
-		const paths = Array.isArray(selected) ? selected : [selected];
-		for (const path of paths) await loadMarkdown(path);
+		if (typeof selected === 'string') await openDocument(selected);
 	}
 
-	function toggleHome() {
-		showHome = !showHome;
-	}
 
 	async function closeFile() {
-		if (!tabManager.activeTabId) {
-			await destroyWindowAfterTabsClosed();
-			return;
-		}
-
-		await closeTabAndWindowIfLast(tabManager.activeTabId);
+		await appWindow.close();
 	}
 
-	async function closeTabsWithConfirmation(tabIds: string[]) {
-		for (const tabId of tabIds) {
-			if (!(await canCloseTab(tabId))) return;
-			tabManager.closeTab(tabId);
-		}
-	}
 
-	/**
-	 * Close the tag's files and leave an empty window on Home. The pin is saved
-	 * first, so a pinned tag keeps its files and can be reopened from Home or
-	 * the app menu. A dirty tab the user keeps open keeps the tag too.
-	 */
-	async function closeWindowTag() {
-		await savePinnedTagIfNeeded();
-		await closeTabsWithConfirmation(tabManager.tabs.map((tab) => tab.id));
-		if (tabManager.tabs.length === 0) tabManager.setWindowTag(null);
-	}
 
 	async function openFileLocation() {
 		if (currentFile) await commands.openFileFolder(currentFile);
@@ -1327,8 +1252,8 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		return {
 			mode,
 			osType: settings.osType,
-			overlayOpen: showSettings || modalState.show || promptModal.show || openFilePicker.state.show || showHome,
-			dialogOpen: modalState.show || promptModal.show || openFilePicker.state.show,
+			overlayOpen: showSettings || modalState.show || promptModal.show,
+			dialogOpen: modalState.show || promptModal.show,
 		};
 	}
 
@@ -1336,18 +1261,14 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		settings,
 		tabManager,
 		reloadFromDisk,
-		carryActiveTabToNextWindow,
 		closeFile,
 		handleNewFile,
-		openNewWindow,
 		selectFile,
 		appExit,
 		toggleLiveMode,
 		saveContentAs,
 		saveActiveTab,
-		handleUndoCloseTab,
 		openSettings: () => (showSettings = true),
-		toggleHome,
 		openFileLocation,
 	});
 
@@ -1364,7 +1285,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	let menuRevision = $state(0);
 	// `isFocused` starts out true; the menu waits for the real answer.
 	let focusKnown = $state(false);
-	let titleBar = $state<{ openTagEditor: () => void } | undefined>();
 
 	$effect(() => {
 		if (settings.osType !== 'macos' || !focusKnown || !isFocused) return;
@@ -1372,7 +1292,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		const model = buildMenuModel({
 			language: settings.language,
 			liveMode,
-			showTabs: settings.showTabs,
 		});
 		void installAppMenu(model, runMenuAction, () => isFocused);
 	});
@@ -1387,14 +1306,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		switch (action.app) {
 			case 'check-updates':
 				return updateStore.openDialog();
-			case 'open-folder':
-				return void selectFolder();
-			case 'close-folder':
-				return void folderManager.close();
-			case 'merge-windows':
-				return void mergeAllWindowsHere();
-			case 'set-window-tag':
-				return titleBar?.openTagEditor();
 		}
 	}
 
@@ -1418,36 +1329,9 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	 */
 	
 	
-	async function handleUndoCloseTab() {
-		const path = tabManager.popRecentlyClosed();
-		if (path) {
-			await loadMarkdown(path);
-		}
-	}
-
-	async function carryActiveTabToNextWindow() {
-		const activeId = tabManager.activeTabId;
-		if (!activeId) return;
-		const windows = (await commands.listViewerWindows()) as Array<{ label: string; number: number }>;
-		const ordered = windows.slice().sort((a, b) => a.number - b.number);
-		const selfIndex = ordered.findIndex((window) => window.label === appWindow.label);
-		if (selfIndex === -1 || ordered.length === 1) {
-			await handleDetach(activeId);
-			return;
-		}
-		await moveTabToWindow(activeId, ordered[(selfIndex + 1) % ordered.length].label, true);
-	}
-
-	async function mergeAllWindowsHere() {
-		const windows = (await commands.listViewerWindows()) as Array<{ label: string }>;
-		const others = windows.filter((window) => window.label !== appWindow.label);
-		if (others.length === 0) {
-			addToast(t('toast.noOtherWindows', settings.language), 'info');
-			return;
-		}
-		await Promise.all(others.map((window) => emitToWindow(window.label, 'merge-into', appWindow.label)));
-	}
-
+	
+	
+	
 	
 	
 	onMount(() => {
@@ -1471,27 +1355,10 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 				isFocused = await appWindow.isFocused();
 				focusKnown = true;
 
-			const restoredOwnState = await windowSession.restore();
+			await windowSession.restore();
 			if (isDisposed) return;
-			void folderManager.restore(restoredFolder);
-			// After this window's own restore, which discards every snapshot when
-			// restore is off. Only the first window of a launch reopens anything.
-			if (settings.restoreStateOnReopen) {
-				await commands.reopenRememberedWindows().catch((error) => console.error('Failed to reopen windows', error));
-			}
 			if (settings.persistOpenEditors) await restoreUnsavedChanges();
 			if (isDisposed) return;
-			// A reopened window's snapshot owns its tabs, a pinned one's included:
-			// opening the pinned group as well would open its files twice.
-			if (!restoredOwnState) {
-				const pinnedName = pinnedTagFromWindowLabel(appWindow.label);
-				if (pinnedName === null) await windowSession.claimTransferredTab();
-				else {
-					const tags = (await commands.listPinnedTags()) as typeof pinnedTags;
-					const tag = tags.find((pinned) => pinned.name === pinnedName);
-					if (tag) await openPinnedTag(tag);
-				}
-			}
 			windowMeta.markReady();
 			if (isDisposed) return;
 
@@ -1515,84 +1382,10 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 			);
 			unlisteners.push(
 				await events.filePath(appWindow).listen((event) => {
-					if (event.payload) openFilePicker.request(event.payload);
-				}),
-			);
-			// Nothing is asked about until every window of the launch has
-			// restored. See `createOpenFilePicker`.
-			unlisteners.push(await events.windowsRestored(appWindow).listen(() => openFilePicker.markReady()));
-			unlisteners.push(
-				await events.tabTransferOffer(appWindow).listen((event) => {
-					if (windowExit.isCloseWalkActive()) return;
-					windowSession.acceptOfferedTransfer(event.payload);
+					if (event.payload) void openDocument(event.payload);
 				}),
 			);
 
-			const listeners: [WindowEventName, EventCallback<any>][] = [
-				['menu-tab-rename', async (event) => {
-					const tabId = event.payload as string;
-					const tab = tabManager.tabs.find((t) => t.id === tabId);
-					if (!tab || !tab.path) return;
-
-					const newName = await promptCustom(t('menu.renameFile', settings.language), {
-						title: t('menu.rename', settings.language),
-						initial: tab.title,
-					});
-					if (newName && newName !== tab.title) {
-						const oldPath = tab.path;
-						const newPath = oldPath.replace(/[/\\][^/\\]+$/, (m) => m.charAt(0) + newName);
-						try {
-							await documentSession.renameFile(tabId, newPath);
-							recentFileList.rename(oldPath, newPath);
-						} catch (e) {
-							console.error('Failed to rename file', e);
-							await askCustom(`Failed to rename file: ${e}`, { title: 'Error', kind: 'error' });
-						}
-					}
-				}],
-				['menu-tab-new', () => {
-					tabManager.addNewTab();
-				}],
-				['menu-tab-undo', () => {
-					handleUndoCloseTab();
-				}],
-				['menu-tab-close', async (event) => {
-					const tabId = event.payload as string;
-					await closeTabAndWindowIfLast(tabId);
-				}],
-				['menu-tab-detach', (event) => {
-					handleDetach(event.payload as string);
-				}],
-				['menu-tab-move', (event) => {
-					const { tabId, targetLabel } = event.payload as { tabId: string; targetLabel: string };
-					moveTabToWindow(tabId, targetLabel).catch((error) => console.error('Failed to move tab', error));
-				}],
-				['merge-into', (event) => {
-					mergeSelfInto(event.payload).catch((error) => console.error('Failed to merge window', error));
-				}],
-				['open-files-here', async (event) => {
-					await openFromOutside(event.payload.filter((path: unknown) => typeof path === 'string' && path));
-				}],
-				['window-identify', (event) => {
-					identifyFlash = event.payload;
-					clearTimeout(identifyFlashTimer);
-					identifyFlashTimer = setTimeout(() => (identifyFlash = ''), 700);
-				}],
-				['menu-tab-close-others', async (event) => {
-					const tabId = event.payload as string;
-					const tabsToClose = tabManager.tabs.filter((t) => t.id !== tabId).map((t) => t.id);
-					await closeTabsWithConfirmation(tabsToClose);
-				}],
-				['menu-tab-close-right', async (event) => {
-					const tabId = event.payload as string;
-					const index = tabManager.tabs.findIndex((t) => t.id === tabId);
-					if (index !== -1) {
-						const tabsToClose = tabManager.tabs.slice(index + 1).map((t) => t.id);
-						await closeTabsWithConfirmation(tabsToClose);
-					}
-				}],
-			];
-			for (const [event, handler] of listeners) unlisteners.push(await appWindow.listen(event, handler));
 			unlisteners.push(
 				await appWindow.onCloseRequested(windowExit.handleCloseRequested),
 			);
@@ -1602,10 +1395,9 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 					if (event.payload.type === 'enter' || event.payload.type === 'over') {
 						isDragging = true;
 					} else if (event.payload.type === 'drop') {
-						for (const path of event.payload.paths) {
-							if (hasMarkdownLinkExtension(path)) void loadMarkdown(path);
-							else reportUnsupportedDrop(path);
-						}
+						const [path] = event.payload.paths;
+						if (path && hasMarkdownLinkExtension(path)) void openDocument(path);
+						else if (path) reportUnsupportedDrop(path);
 						isDragging = false;
 					} else if (event.payload.type === 'leave') {
 						isDragging = false;
@@ -1623,13 +1415,11 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 			// launch window, so a detached window never re-opens them.
 			try {
 				const args: string[] = await commands.sendMarkdownPath();
-				if (!isDisposed) for (const path of args ?? []) openFilePicker.request(path);
+				if (!isDisposed && args?.[0]) await openDocument(args[0]);
 			} catch (error) {
 				console.error('Error receiving Markdown file path:', error);
 			}
-			// A window opened after the launch has restored missed the event.
-			if (await commands.windowsRestored().catch(() => true)) openFilePicker.markReady();
-			else setTimeout(openFilePicker.markReady, RESTORE_WAIT_MS);
+			if (!tabManager.activeTab) tabManager.addNewTab();
 
 			if (!isDisposed) mode = 'app';
 		};
@@ -1649,32 +1439,24 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 
 {#if mode === 'loading'}
 	<TitleBar
-		bind:this={titleBar}
 		{isFocused}
 		isScrolled={false}
 		currentFile={''}
 		{liveMode}
 		windowTitle="Aonimark"
-		showHome={false}
 		zoomLevel={settings.zoomLevel}
 		onnewFile={handleNewFile}
 		onopenFile={selectFile}
-		onopenFolder={selectFolder}
-		onmergeAllWindows={mergeAllWindowsHere}
-		onclosetag={closeWindowTag}
 		onsaveFile={saveContent}
 		onsaveFileAs={saveContentAs}
 		onreloadFromDisk={reloadFromDisk}
 		onexit={appExit}
-		ontoggleHome={toggleHome}
 		ononpenFileLocation={openFileLocation}
 		ontoggleLiveMode={toggleLiveMode}
-		ontabclick={() => (showHome = false)}
 		onresetZoom={() => settings.resetZoom()}
 		theme={settings.theme}
 		onSetTheme={(t: string) => (settings.theme = resolveTheme(t))}
-		onopenSettings={() => (showSettings = true)}
-		oncloseTab={closeTabAndWindowIfLast} />
+		onopenSettings={() => (showSettings = true)} />
 	<div class="loading-screen">
 		<svg class="spinner" viewBox="0 0 50 50">
 			<circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="4"></circle>
@@ -1682,58 +1464,29 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	</div>
 {:else}
 	<TitleBar
-		bind:this={titleBar}
 		{isFocused}
 		{isScrolled}
 		{currentFile}
 		{liveMode}
 		{windowTitle}
-		{showHome}
 		zoomLevel={settings.zoomLevel}
 		onnewFile={handleNewFile}
 		onopenFile={selectFile}
-		onopenFolder={selectFolder}
-		onmergeAllWindows={mergeAllWindowsHere}
-		onclosetag={closeWindowTag}
 		onsaveFile={saveContent}
 		onsaveFileAs={saveContentAs}
 		onreloadFromDisk={reloadFromDisk}
 		onexit={appExit}
-		ontoggleHome={toggleHome}
 		ononpenFileLocation={openFileLocation}
 		ontoggleLiveMode={toggleLiveMode}
-		ontabclick={() => (showHome = false)}
 		onresetZoom={() => settings.resetZoom()}
 		theme={settings.theme}
 		onSetTheme={(t: string) => (settings.theme = resolveTheme(t))}
-		onopenSettings={() => (showSettings = true)}
-		oncloseTab={closeTabAndWindowIfLast} />
+		onopenSettings={() => (showSettings = true)} />
 
 	<Settings show={showSettings} theme={settings.theme} onSetTheme={(t) => (settings.theme = t)} onclose={() => (showSettings = false)} />
 
-	{#if sidebarSide}
-		<Sidebar
-			side={sidebarSide}
-			showOpenFiles={tabColumnSide !== null}
-			showFolder={folderShown}
-			{showHome}
-			ontabclick={() => (showHome = false)}
-			oncloseTab={closeTabAndWindowIfLast}
-			onopenEntry={openFolderEntry} />
-	{/if}
-
-	<!--
-		Plain block with the tabs across the top. With a tab column (#884) it
-		becomes the box the document is laid out in, inset by the column's width,
-		so the absolutely positioned layout, the outline and the home page all
-		measure from the column's edge without each learning about it.
-	-->
-	<div
-		class="content-area"
-		class:beside-tab-column={sidebarSide !== null}
-		style:left={sidebarSide === 'left' ? `${settings.tabColumnWidth}px` : null}
-		style:right={sidebarSide === 'right' ? `${settings.tabColumnWidth}px` : null}>
-	{#if activeExternalChangeConflict && !showHome}
+	<div class="content-area">
+	{#if activeExternalChangeConflict}
 		<div class="external-change-bar" role="status" style:top="{36 + paneTopChrome}px">
 			<span class="external-change-text">{t('externalChange.message', settings.language)}</span>
 				<button class="external-change-action" onclick={() => resolveExternalChangeByReloading(tabManager.activeTabId ?? '')}>
@@ -1744,7 +1497,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 			</button>
 		</div>
 	{/if}
-	{#if tabManager.activeTab && !showsHomeScreen(() => tabManager.activeTab, showHome)}
+	{#if tabManager.activeTab}
 			<div
 				class="markdown-container"
 				style="--code-font: {previewAppearance.codeFontFamily}; --code-font-size: {previewAppearance.codeFontSize * contentZoom}px; --highlight-color: {previewAppearance.highlightColor};"
@@ -1768,8 +1521,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 					</div>
 				</div>
 			</div>
-	{:else}
-		<HomePage {recentFiles} {pinnedTags} onselectFile={selectFile} onloadFile={loadMarkdown} onremoveRecentFile={removeRecentFile} onnewFile={handleNewFile} onopenPinnedTag={openPinnedTag} onunpinTag={unpinTagFromHome} />
 	{/if}
 	</div>
 
@@ -1811,25 +1562,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		onconfirm={() => closePrompt(promptModal.value)}
 		oncancel={() => closePrompt(null)} />
 
-	<Modal
-		show={openFilePicker.state.show}
-		title={openFilePicker.state.paths.length > 1
-			? t('modal.openFilesInTitle', settings.language).replace('{{count}}', String(openFilePicker.state.paths.length))
-			: t('modal.openFileInTitle', settings.language)}
-		message={openFilePicker.state.paths.map((path) => basename(path) || path).join(', ')}
-		kind="info"
-		confirmLabel={t('modal.openFileInButton', settings.language)}
-		onkeydown={openFilePicker.keydown}
-		onconfirm={() => void openFilePicker.confirm()}
-		oncancel={openFilePicker.cancel}>
-		<WindowPickerList picker={openFilePicker} selfLabel={appWindow.label} />
-	</Modal>
-
-	{#if identifyFlash}
-		<div class="identify-flash" transition:fade={{ duration: 150 }}>
-			<span>{identifyFlash}</span>
-		</div>
-	{/if}
 
 	<div class="toast-container">
 		{#each toasts as toast (toast.id)}

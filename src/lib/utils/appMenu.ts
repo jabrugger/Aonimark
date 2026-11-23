@@ -22,12 +22,7 @@ import type { ViewerCommand } from './viewerKeymap.js';
  */
 
 /** What a menu click runs that `ViewerCommand` has no name for. */
-export type AppMenuCommand =
-	| 'check-updates'
-	| 'open-folder'
-	| 'close-folder'
-	| 'merge-windows'
-	| 'set-window-tag';
+export type AppMenuCommand = 'check-updates';
 
 export type MenuAction =
 	| { readonly viewer: ViewerCommand }
@@ -45,7 +40,6 @@ export type MenuNode =
 export type MenuState = {
 	readonly language: LanguageCode;
 	readonly liveMode: boolean;
-	readonly showTabs: boolean;
 };
 
 /**
@@ -103,13 +97,9 @@ export function buildMenuModel(state: MenuState): MenuNode[] {
 			text: t('menu.file', lang),
 			items: [
 				viewer(t('menu.newFile', lang), 'new-file', 'file-new', 1),
-				viewer(t('menu.newWindow', lang), 'new-window', 'file-new-window'),
 				viewer(t('menu.openFile', lang), 'open-file', 'file-open'),
-				app(t('folder.openFolder', lang), 'open-folder'),
-				app(t('folder.closeFolder', lang), 'close-folder'),
 				separator,
 				viewer(t('menu.closeFile', lang), 'close-file', 'file-close'),
-				viewer(t('menu.undoCloseTab', lang), 'undo-close-tab', 'tab-undo-close'),
 				separator,
 				viewer(t('menu.save', lang), 'save', 'file-save'),
 				viewer(t('menu.saveAs', lang), 'save-as', 'file-save-as'),
@@ -141,8 +131,6 @@ export function buildMenuModel(state: MenuState): MenuNode[] {
 			items: [
 				check(t('menu.autoReload', lang), { viewer: 'toggle-live-mode' }, state.liveMode, 'view-toggle-live'),
 				separator,
-				check(t('menu.tabBar', lang), { viewer: 'toggle-tabs' }, state.showTabs, 'toggle-tabs'),
-				separator,
 				viewer(t('menu.zoomIn', lang), 'zoom-in', 'view-zoom-in'),
 				viewer(t('menu.zoomOut', lang), 'zoom-out', 'view-zoom-out'),
 				viewer(t('menu.resetZoom', lang), 'zoom-reset', 'view-zoom-reset'),
@@ -157,15 +145,6 @@ export function buildMenuModel(state: MenuState): MenuNode[] {
 			items: [
 				{ kind: 'predefined', item: 'Minimize', text: t('common.minimize', lang) },
 				{ kind: 'predefined', item: 'Maximize', text: t('menu.zoomWindow', lang) },
-				separator,
-				viewer(t('menu.home', lang), 'toggle-home', 'app-home'),
-				separator,
-				// Ctrl+Tab is not a reliable menu key equivalent; the page answers it.
-				viewer(t('menu.nextTab', lang), 'next-tab'),
-				viewer(t('menu.previousTab', lang), 'previous-tab'),
-				viewer(t('menu.moveToNextWindow', lang), 'move-tab-to-next-window', 'tab-move-window'),
-				app(t('menu.mergeAllWindows', lang), 'merge-windows'),
-				app(t('menu.setWindowTag', lang), 'set-window-tag'),
 			],
 		},
 	];

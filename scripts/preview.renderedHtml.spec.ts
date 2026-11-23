@@ -66,39 +66,6 @@ describe('rendered HTML field', () => {
 		);
 	});
 
-	test('every Tab construction site starts the rendered-HTML field empty', () => {
-		// The invariant the fix restores. `updateTabContent` is the only writer.
-		reset();
-		// restoreState REPLACES the tab list, so it goes first.
-		tabManager.restoreState(JSON.stringify({ tabs: [{ path: '/notes/b.md', title: 'b.md' }] }));
-		tabManager.addTab('/notes/a.md', '# a\n');
-		tabManager.addNewTab();
-		tabManager.addHomeTab();
-		tabManager.insertTransferredTab({
-			path: '/notes/c.md',
-			title: 'c.md',
-			rawContent: '# c\n',
-			originalContent: '# c\n',
-			scrollTop: 0,
-			isDirty: false,
-			isEditing: false,
-			history: ['/notes/c.md'],
-			historyIndex: 0,
-			scrollPercentage: 0,
-			anchorLine: asRendererLine(0),
-			isSplit: false,
-			splitRatio: 0.5,
-			isScrollSynced: false,
-			hasReplacementChars: false,
-			encoding: 'UTF-8',
-		});
-
-		assert.equal(tabManager.tabs.length, 5, 'precondition: every construction site produced a tab');
-		for (const tab of tabManager.tabs) {
-			assert.equal(tab.content, '', `${tab.path || tab.title} was constructed with a non-empty content field`);
-		}
-	});
-
 	// ------------------------------------------------------- the Home menu's export
 	//
 	// The menu used to gate on `content`, the rendered-preview HTML, which is

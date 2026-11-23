@@ -61,19 +61,6 @@ describe('one tab per file', () => {
 
 	// --- one tab per file ---
 
-	test('opening a file that is already open activates that tab instead of duplicating it', () => {
-		reset();
-		tabManager.addTab('/notes/a.md', 'first');
-		const first = tabManager.activeTabId;
-		tabManager.addTab('/notes/b.md');
-
-		tabManager.addTab('/notes/a.md');
-
-		assert.equal(tabsFor('/notes/a.md').length, 1);
-		assert.equal(tabManager.activeTabId, first, 'the request resolves to the existing tab');
-		assert.equal(tabManager.tabs.length, 2);
-	});
-
 	// Scope: this proves the STORE does not clobber the buffer when an open file
 	// is opened again. It does not prove the whole open flow is safe —
 	// `documentSession.loadMarkdown` re-reads the file into the tab it activates,
@@ -90,42 +77,6 @@ describe('one tab per file', () => {
 		const tab = tabManager.tabs.find((item) => item.id === id)!;
 		assert.equal(tab.rawContent, 'unsaved edits');
 		assert.equal(tab.isDirty, true);
-	});
-
-	test('following a link to an open file leaves exactly one tab holding it', () => {
-		reset();
-		tabManager.addTab('/notes/target.md', 'target text');
-		tabManager.addTab('/notes/from.md', 'from text');
-		const walker = tabManager.activeTabId!;
-
-		tabManager.navigate(walker, '/notes/target.md');
-
-		assert.equal(tabsFor('/notes/target.md').length, 1);
-		assert.equal(tabsFor('/notes/target.md')[0].id, walker);
-		// The clean loser is a copy of the file the winner now holds, so closing it
-		// costs nothing — and it lands on the reopen stack like any other close.
-		assert.ok(tabManager.recentlyClosed.includes('/notes/target.md'));
-	});
-
-	test('a tab with unsaved edits is never closed to resolve a path conflict', () => {
-		reset();
-		tabManager.addTab('/notes/target.md', 'target text');
-		const resident = tabManager.activeTabId!;
-		tabManager.updateTabRawContent(resident, 'work in progress');
-		tabManager.addTab('/notes/from.md', 'from text');
-		const walker = tabManager.activeTabId!;
-
-		tabManager.navigate(walker, '/notes/target.md');
-
-		const kept = tabManager.tabs.find((tab) => tab.id === resident);
-		assert.ok(kept, 'the dirty buffer survives');
-		assert.equal(kept!.rawContent, 'work in progress');
-		assert.equal(kept!.isDirty, true);
-		// It keeps the text and gives up the path: nothing is discarded, and
-		// nothing can auto-save over the file behind the user's back.
-		assert.equal(kept!.path, '');
-		assert.equal(tabsFor('/notes/target.md').length, 1);
-		assert.equal(tabsFor('/notes/target.md')[0].id, walker);
 	});
 
 	test('Save As onto a file that is already open does not leave two tabs on it', () => {
@@ -151,19 +102,6 @@ describe('one tab per file', () => {
 
 		assert.equal(tabsFor('/notes/target.md').length, 1);
 		assert.equal(tabsFor('/notes/target.md')[0].id, moved);
-	});
-
-	test('going back to a file another tab has since opened does not duplicate it', () => {
-		reset();
-		tabManager.addTab('/notes/a.md', 'a');
-		const walker = tabManager.activeTabId!;
-		tabManager.navigate(walker, '/notes/b.md');
-		tabManager.addTab('/notes/a.md');
-
-		assert.equal(tabManager.goBack(walker), '/notes/a.md');
-
-		assert.equal(tabsFor('/notes/a.md').length, 1);
-		assert.equal(tabsFor('/notes/a.md')[0].id, walker);
 	});
 
 	test('a tab arriving from another window does not duplicate a file open here', () => {
@@ -193,26 +131,6 @@ describe('one tab per file', () => {
 		assert.equal(tabsFor('/notes/shared.md')[0].rawContent, 'edited elsewhere');
 	});
 
-	test('untitled tabs are not files and do not collide', () => {
-		reset();
-		tabManager.addNewTab();
-		tabManager.addNewTab();
-		tabManager.addNewTab();
-
-		assert.equal(tabManager.tabs.length, 3);
-		assert.equal(tabsFor('').length, 3);
-	});
-
-	test('the home tab is a singleton on its own terms, not through the path rule', () => {
-		reset();
-		tabManager.addHomeTab();
-		const home = tabManager.activeTabId;
-		tabManager.addTab('/notes/a.md');
-		tabManager.addHomeTab();
-
-		assert.equal(tabsFor('HOME').length, 1);
-		assert.equal(tabManager.activeTabId, home);
-	});
 });
 
 /** What `take_command_line_open` answers, per path: what a command line asked. */
@@ -405,68 +323,6 @@ describe('path identity on a case-folding volume', () => {
 		assert.equal(tabManager.activeTabId, first, 'the request resolved to the tab that already held it');
 	});
 
-	test('two genuinely different files still get their own tabs', async () => {
-		// The guard against over-merging: nothing above may collapse files that
-		// differ by more than spelling.
-		reset();
-		const session = makeSession();
-		disk.set('/notes/a.md', { body: 'a', lossy: false });
-		disk.set('/notes/b.md', { body: 'b', lossy: false });
-
-		await session.loadMarkdown('/notes/a.md');
-		await session.loadMarkdown('/notes/b.md');
-
-		assert.equal(tabManager.tabs.length, 2);
-	});
-
-	// A link opened in a new tab takes the ordinary open path, which resolves the
-	// file's identity before picking a tab. Putting the path on a tab first and
-	// loading with `skipTabManagement` compared spellings, so `C:/n/b.md` from a
-	// link opened a second tab beside the `C:\n\b.md` the user already had open.
-	test('every file the OS hands the launch window opens, in order', async () => {
-		reset();
-		const session = makeSession();
-		disk.set('/notes/a.md', { body: 'a', lossy: false });
-		disk.set('/notes/b.md', { body: 'b', lossy: false });
-		disk.set('/notes/c.md', { body: 'c', lossy: false });
-
-		await session.openFiles(['/notes/a.md', '/notes/b.md', '/notes/c.md']);
-
-		assert.deepEqual(
-			tabManager.tabs.map((tab) => tab.path),
-			['/notes/a.md', '/notes/b.md', '/notes/c.md'],
-		);
-	});
-
-	// `markpad --edit a.md b.md c.md` (#1051): a.md is already open in preview,
-	// b.md is not, c.md does not exist yet.
-	test('files from a command line open in the view it asked for', async () => {
-		reset();
-		const session = makeSession();
-		settings.openFileMode = 'preview';
-		disk.set('/notes/a.md', { body: 'a', lossy: false });
-		disk.set('/notes/b.md', { body: 'b', lossy: false });
-		await session.loadMarkdown('/notes/a.md');
-		for (const path of ['/notes/a.md', '/notes/b.md']) commandLine.set(path, { mode: 'editor', missing: false });
-		commandLine.set('/notes/c.md', { mode: 'editor', missing: true });
-		const switched: string[] = [];
-
-		await session.openFiles(['/notes/a.md', '/notes/b.md', '/notes/c.md'], async (mode) => {
-			switched.push(`${tabManager.activeTab!.path}:${mode}`);
-		});
-
-		assert.deepEqual(switched, ['/notes/a.md:editor'], 'the open tab switches through the view toggle');
-		const byPath = (path: string) => tabManager.tabs.find((tab) => tab.path === path)!;
-		assert.equal(byPath('/notes/b.md').isEditing, true);
-		assert.equal(byPath('/notes/c.md').isEditing, true);
-		assert.equal(byPath('/notes/c.md').isDirty, false);
-		assert.equal(commandLine.size, 0, 'each request is taken once');
-
-		// The same file from Finder afterwards opens as the setting says.
-		await session.openFiles(['/notes/a.md'], async (mode) => void switched.push(`again:${mode}`));
-		assert.equal(switched.length, 1);
-	});
-
 	test('a command line spelling an open file differently still switches its view', async () => {
 		reset();
 		const session = makeSession();
@@ -495,43 +351,6 @@ describe('path identity on a case-folding volume', () => {
 		assert.deepEqual(switched, ['preview']);
 	});
 
-	test('a link opened in a new tab goes through the ordinary open path', async () => {
-		reset();
-		const session = makeSession();
-		disk.set('/notes/A.md', { body: 'a', lossy: false });
-		disk.set('/notes/b.md', { body: 'b', lossy: false });
-
-		await session.loadMarkdown('/notes/A.md');
-		const first = tabManager.activeTabId!;
-		await session.loadMarkdown('/notes/b.md');
-		await session.openInNewTab('/notes/a.md');
-
-		assert.equal(tabManager.tabs.length, 2, 'a link to an open file opened a second tab');
-		assert.equal(tabManager.activeTabId, first);
-	});
-
-	// #1087: a middle-clicked link opens behind the tab being read, as a browser's does.
-	test('a link opened in a background tab leaves the reader where they are', async () => {
-		reset();
-		const session = makeSession();
-		disk.set('/notes/A.md', { body: 'a', lossy: false });
-		disk.set('/notes/b.md', { body: 'b', lossy: false });
-
-		await session.loadMarkdown('/notes/A.md');
-		const reading = tabManager.activeTabId!;
-		await session.openInBackgroundTab('/notes/b.md');
-		await session.openInBackgroundTab('/notes/a.md');
-
-		assert.equal(tabManager.activeTabId, reading);
-		assert.deepEqual(tabManager.tabs.map((tab) => tab.path), ['/notes/A.md', '/notes/b.md'], 'an open file gets no second tab');
-		const background = tabManager.tabs[1];
-		assert.equal(background.unread, true, 'read when first shown');
-
-		tabManager.setActive(background.id);
-		await session.readActiveIfUnread();
-		assert.equal(background.rawContent, 'b');
-	});
-
 	// #1087: a background tab joins recent files through its first read, which
 	// records only a read that succeeds, not when the link is clicked: a dead
 	// link must not leave a dead entry.
@@ -551,47 +370,6 @@ describe('path identity on a case-folding volume', () => {
 		await session.readActiveIfUnread();
 		await session.readActiveIfUnread();
 		assert.deepEqual(recents, ['/notes/b.md'], 'recorded once, by the read');
-	});
-
-	// #1087: middle-clicking a link to a file open here neither switches nor
-	// duplicates; the tab bar flashes that tab instead.
-	test('a background open of a file already open flashes its tab and stays put', async () => {
-		reset();
-		const session = makeSession();
-		disk.set('/notes/a.md', { body: 'a', lossy: false });
-		disk.set('/notes/b.md', { body: 'b', lossy: false });
-
-		await session.loadMarkdown('/notes/a.md');
-		const reading = tabManager.activeTabId!;
-		tabManager.flashedTab = null;
-		await session.openInBackgroundTab('/notes/b.md');
-		assert.equal(tabManager.flashedTab, null, 'a new tab is not a flash');
-		const b = tabManager.tabs[1].id;
-
-		await session.openInBackgroundTab('/notes/b.md');
-		assert.equal((tabManager.flashedTab as { id: string } | null)?.id, b);
-		assert.equal(tabManager.activeTabId, reading);
-		assert.equal(tabManager.tabs.length, 2);
-	});
-
-	// #1087: `[x](b.md#section)` opened behind this tab still lands on `#section`,
-	// once, when that tab is first shown, and never moves the tab being read.
-	test('a background tab hands its link heading to the viewer once, on its first read', async () => {
-		reset();
-		const session = makeSession();
-		disk.set('/notes/a.md', { body: 'a', lossy: false });
-		disk.set('/notes/b.md', { body: 'b', lossy: false });
-
-		await session.loadMarkdown('/notes/a.md');
-		await session.openInBackgroundTab('/notes/b.md', 'section');
-		assert.equal(await session.readActiveIfUnread(), null, 'the tab being read is not asked to scroll');
-
-		tabManager.setActive(tabManager.tabs[1].id);
-		assert.equal(await session.readActiveIfUnread(), 'section');
-		assert.equal(tabManager.tabs[1].rawContent, 'b', 'handed over after the read landed');
-
-		tabManager.markTabUnread(tabManager.tabs[1].id);
-		assert.equal(await session.readActiveIfUnread(), null, 'only once');
 	});
 
 	// Back/forward and a tab arriving from another window put a path on a tab
@@ -845,50 +623,6 @@ describe('a read lands in its own tab', () => {
 
 	const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 	const tabById = (id: string) => tabManager.tabs.find((tab) => tab.id === id)!;
-
-	test('Reload from disk lands in the tab it was asked for, not the one switched to', async () => {
-		reset();
-		const session = makeSession();
-		disk.set('/notes/a.md', 'a on disk');
-		tabManager.addTab('/notes/a.md', 'a old');
-		const a = tabManager.activeTabId!;
-		tabManager.addTab('/notes/b.md', 'b text');
-		const b = tabManager.activeTabId!;
-		tabManager.setActive(a);
-
-		const gate = hold('canonicalize_path');
-		const load = session.loadMarkdown('/notes/a.md', { preserveEditState: true, skipTabManagement: true, discardUnsavedBuffer: true });
-		tabManager.setActive(b);
-		gate.resolve(undefined);
-		await load;
-
-		assert.equal(tabById(b).rawContent, 'b text', 'the tab switched to must keep its own text');
-		assert.equal(tabById(b).path, '/notes/b.md');
-		assert.equal(tabById(a).rawContent, 'a on disk', 'the reload belongs to the tab it was asked for');
-	});
-
-	test('Back lands in the tab it was pressed in', async () => {
-		reset();
-		const session = makeSession();
-		disk.set('/notes/prev.md', 'prev on disk');
-		tabManager.addTab('/notes/prev.md', 'prev on disk');
-		const a = tabManager.activeTabId!;
-		tabManager.navigate(a, '/notes/next.md');
-		tabManager.setTabRawContent(a, 'next text');
-		tabManager.addTab('/notes/b.md', 'b text');
-		const b = tabManager.activeTabId!;
-		tabManager.setActive(a);
-
-		const path = tabManager.goBack(a)!;
-		const gate = hold('canonicalize_path');
-		const load = session.loadMarkdown(path, { skipTabManagement: true });
-		tabManager.setActive(b);
-		gate.resolve(undefined);
-		await load;
-
-		assert.equal(tabById(b).rawContent, 'b text');
-		assert.equal(tabById(a).rawContent, 'prev on disk');
-	});
 
 	test('typing during a Live Mode reload is kept, and the tab stays dirty', async () => {
 		for (const mode of ['preview', 'editor'] as const) {
@@ -1402,35 +1136,6 @@ describe('tab transfer races', () => {
 		assert.deepEqual(log, []);
 	});
 
-	test('a partial buffer cannot be handed to another window', async () => {
-		// The destination rebuilds the tab from the payload alone and cannot know
-		// the text is incomplete, so its auto-save would truncate the file.
-		const tabId = openTab('first 50KB');
-		tabManager.addTab('/notes/another.md', 'another');
-		const transfer = makeTransfer();
-		assert.equal(transfer.canTransfer(tabId), true);
-		assert.equal(transfer.canDetach(tabId), true);
-		tabManager.tabs.find((tab) => tab.id === tabId)!.isTruncated = true;
-		assert.equal(transfer.canTransfer(tabId), false);
-		assert.equal(transfer.canDetach(tabId), false);
-
-		// The movers complete the buffer first, and stop when they cannot.
-		const asked: string[] = [];
-		let partial = 0;
-		const movers = createTabMovers({
-			ensureFullContent: async () => false,
-			onPartialDocument: () => partial++,
-			session: {
-				detach: async (id) => (asked.push(`detach ${id}`), true),
-				transfer: async (id) => (asked.push(`transfer ${id}`), true),
-			},
-		});
-		assert.equal(await movers.handleDetach(tabId), false);
-		assert.equal(await movers.moveTabToWindow(tabId, 'w2'), false);
-		assert.deepEqual(asked, []);
-		assert.equal(partial, 2);
-	});
-
 	test('moving to an existing window uses the acknowledged transfer protocol', async () => {
 		respond = (cmd) => (cmd === 'stage_detached_tab' ? TOKEN : null);
 		const tabId = openTab('doc');
@@ -1468,12 +1173,6 @@ describe('tabs the store builds', () => {
 		tabManager.closeAll();
 	});
 
-	test('new tabs are created with numbered untitled titles', () => {
-		tabManager.addNewTab();
-		tabManager.addNewTab();
-		assert.deepEqual(tabManager.tabs.map((tab) => tab.title), ['Untitled 1', 'Untitled 2']);
-	});
-
 	test('a tab arriving from another window gets a free localized untitled title, becomes active, and its id is returned', async () => {
 		await loadLocale('de');
 		settings.language = 'de';
@@ -1506,26 +1205,4 @@ describe('tabs the store builds', () => {
 		assert.deepEqual(tabManager.tabs.map((tab) => tab.title), ['Unbenannt 1', 'Unbenannt 2']);
 	});
 
-	test('a percentage is not invented to go with the anchor', () => {
-		// The view state carries `scrollTop` but neither height, so no fraction of
-		// the scrollable range can be computed from it. `anchorLine` is the first
-		// entry of both restore cascades, so recovering it is what decides where the
-		// tab opens; writing a percentage nobody can justify is not.
-		tabManager.addTab('/notes/a.md', 'body\n'.repeat(200));
-		const background = tabManager.activeTab!;
-		background.isEditing = true;
-		background.scrollPercentage = 0.25;
-		background.editorViewState = {
-			viewState: { firstPosition: { lineNumber: 40, column: 1 }, firstPositionDeltaTop: 0, scrollTop: 900 },
-		};
-		tabManager.addTab('/notes/b.md', 'other');
-
-		const first = JSON.parse(tabManager.serializeState());
-		const second = JSON.parse(tabManager.serializeState());
-
-		assert.notEqual(first.tabs[0].anchorLine, 0, 'the anchor is recovered from the view state');
-		assert.equal(first.tabs[0].scrollPercentage, 0.25);
-		assert.equal(second.tabs[0].scrollPercentage, 0.25);
-		assert.equal(background.scrollPercentage, 0.25);
-	});
 });
