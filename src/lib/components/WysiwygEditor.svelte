@@ -360,7 +360,7 @@
 		min-height: 100%;
 		padding: 20px max(24px, 10%);
 		color: var(--color-fg-default);
-		font-size: 16px;
+		font-size: calc(16px * var(--editor-zoom, 1));
 		line-height: 1.6;
 		outline: none;
 	}
