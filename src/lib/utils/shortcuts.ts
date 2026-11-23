@@ -40,9 +40,7 @@ type ShortcutPlatform = 'macos' | 'windows' | 'linux';
 
 export type ShortcutEntry = {
 	/**
-	 * Stable id. Where `editorAction` is true this IS the Monaco action id, which
-	 * is also the toolbar tool id — that is what lets one row serve the panel and
-	 * the toolbar tooltip at once.
+	 * Stable id.
 	 */
 	readonly id: string;
 	/**
@@ -174,10 +172,6 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 		labelKey: 'menu.autoReload',
 		chords: ['Mod+L'],
 		group: 'view',
-		// Both halves, like Mod+E: Monaco's own Ctrl+L is `expandLineSelection`,
-		// so the editor action is what stops the chord selecting a line, and the
-		// document command is what makes it work in the preview, where there is
-		// no Monaco to register anything on.
 		documentCommands: ['toggle-live-mode'],
 	},
 	{

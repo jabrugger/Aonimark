@@ -3,7 +3,7 @@ export type AutoSaveTabState = {
 	id: string;
 	path: string;
 	isDirty: boolean;
-	/** In edit mode or split view. */
+	/** Whether the document can be edited. */
 	editable: boolean;
 	hasPendingConflict: boolean;
 	decodedLossily: boolean;

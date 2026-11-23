@@ -198,7 +198,7 @@ import { followTheme } from './utils/themeEffect.svelte.js';
 		dropRestoredTab: (tabId) => tabManager.closeTab(tabId),
 		onError: (message, error) => {
 			console.error(message, error);
-			// eslint-disable-next-line markpad/toasts-are-translated -- a pass-through: the sessions pass t() text, and the rest is developer detail beside String(error).
+			// eslint-disable-next-line aonimark/toasts-are-translated -- a pass-through: the sessions pass t() text, and the rest is developer detail beside String(error).
 			addToast(`${message}: ${String(error)}`, 'error');
 		},
 		onWarning: (message, error) => console.warn(message, error),
@@ -239,7 +239,7 @@ import { followTheme } from './utils/themeEffect.svelte.js';
 		afterLoad: tick,
 		onError: (message, error) => {
 			console.error(message, error);
-			// eslint-disable-next-line markpad/toasts-are-translated -- a pass-through: the sessions pass t() text, and the rest is developer detail beside String(error).
+			// eslint-disable-next-line aonimark/toasts-are-translated -- a pass-through: the sessions pass t() text, and the rest is developer detail beside String(error).
 			addToast(`${message}: ${String(error)}`, 'error');
 		},
 		onDiskChangedUnderSave: (id) => externalChange.noteExternalChangeConflict(id),
@@ -607,7 +607,7 @@ import { followTheme } from './utils/themeEffect.svelte.js';
 	/*
 	 * `viewerKeymap.ts` decides which command a keystroke means. This maps each
 	 * command to the function that runs it. Every command is preventDefaulted
-	 * here. An unbound chord, macOS ⌘Q, or Mod+F inside Monaco comes back null
+	 * here. An unbound chord or macOS ⌘Q comes back null
 	 * and is not prevented.
 	 */
 	function keyContext(): KeyContext {

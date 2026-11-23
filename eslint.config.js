@@ -1,4 +1,4 @@
-// Markpad's code conventions, as lint rules (`npm run lint`).
+// Aonimark's code conventions, as lint rules (`npm run lint`).
 //
 // This config turns on no style preset. Every rule below is a convention the
 // app depends on that no type can express: a second copy of a fixed behaviour,
@@ -131,18 +131,11 @@ const CONVENTIONS = {
 				'Turning Live Mode on is not a request to discard the buffer; reloading here skips canCloseTab.',
 		},
 	},
-	'view-modes-do-not-touch-live-mode': {
-		files: ['src/lib/sessions/viewMode.svelte.ts'],
-		ban: {
-			"Identifier[name=/^(liveMode|toggleLiveMode)$/]":
-				'Entering split view used to turn Live Mode off behind the user (#692). The view modes are not handed Live Mode.',
-		},
-	},
 	'open-dialog-uses-the-extension-list': {
 		ignores: [BINDINGS],
 		ban: {
 			"Property[key.name='extensions'] > ArrayExpression:has(> Literal[value='md'])":
-				'A literal extension list drifts from the one Markpad treats as documents; use MARKDOWN_OPEN_FILTERS (utils/markdownLinks.ts).',
+				'A literal extension list drifts from the one Aonimark treats as documents; use MARKDOWN_OPEN_FILTERS (utils/markdownLinks.ts).',
 		},
 	},
 	'save-content-cancels-auto-save-itself': {
@@ -159,32 +152,8 @@ const CONVENTIONS = {
 		},
 	},
 
-	// -------------------------------------------------------------------- editing
 
-	// --------------------------------------------------------------------- layout
-	'fold-layout-is-rooted-at-the-visible-host': {
-		files: [VIEWER],
-		ban: {
-			"CallExpression[callee.name='observeFoldLayout'][arguments.0.name='markdownBody'], CallExpression[callee.name='followFoldLayout'][arguments.1.body.name='markdownBody']":
-				'The article holds one host per tab, all but one display:none; measuring from it writes zero heights into every hidden tab.',
-		},
-	},
 
-	// ----------------------------------------------------------------- navigation
-	'one-preview-restore-cascade': {
-		files: [VIEWER],
-		ban: {
-			"AssignmentExpression[left.property.name='scrollTop'][right.callee.name='getAnchorScrollTop'], MemberExpression[property.name='scrollPercentage'], CallExpression[callee.object.name='Array'][callee.property.name='from'][arguments.0.property.name='children']":
-				'The reading position is restored through restorePreviewReadingPosition (utils/previewAnchor.ts); the cascade is an ORDER, and a second site consulting the same fields answers differently.',
-		},
-	},
-	'line-coordinates-come-from-the-buffer': {
-		files: [VIEWER],
-		ban: {
-			"CallExpression[callee.name='lineCoordinates']:not(VariableDeclarator[id.name='lineCoords'] > CallExpression > CallExpression[arguments.0.name='rawContent'])":
-				'One derivation, `lineCoords = $derived(lineCoordinates(rawContent))`: the render is what the front matter was stripped out of, so measuring it answers 0.',
-		},
-	},
 
 	// --------------------------------------------------------------------- editor
 	'settings-os-type-is-written-by-the-store': {
@@ -195,97 +164,8 @@ const CONVENTIONS = {
 		},
 	},
 
-	// -------------------------------------------------------------------- preview
-	'katex-contribs-through-the-exports-map': {
-		ban: {
-			"ImportExpression[source.value=/^katex\\/dist\\/contrib\\//], ImportDeclaration[source.value=/^katex\\/dist\\/contrib\\//]":
-				'katex/dist/contrib/*.js is CommonJS with its own KaTeX copy, so a macro mhchem registers there never reaches renderToString (#745). Import katex/contrib/*.',
-		},
-	},
-	'one-sanitizer-policy': {
-		ignores: SANITIZER_FILES,
-		ban: {
-			"ImportDeclaration[source.value='dompurify'], CallExpression[callee.object.name='DOMPurify'][callee.property.name='sanitize']":
-				'A DOMPurify config outside utils/sanitize.ts (documents) and utils/richContent.ts (Mermaid SVG) is a second, unreviewed sanitizer. Use sanitizeMarkdownHtml.',
-		},
-	},
-	'diagram-sanitizer-stays-separate': {
-		files: ['src/lib/utils/richContent.ts'],
-		ban: {
-			"ImportDeclaration[source.value=/\\/sanitize(\\.js)?$/]":
-				'The diagram filter needs the <style> the document policy forbids; do not adopt the document policy here.',
-		},
-	},
-	'render-through-render-markdown-preview': {
-		ignores: ['src/lib/utils/export.ts'],
-		ban: {
-			[`${command('renderMarkdown')}:not(FunctionDeclaration[id.name='renderMarkdownPreview'] *)`]:
-				'renderMarkdownPreview strips YAML front matter before the Rust renderer; a raw render elsewhere renders it as body text.',
-		},
-	},
 
 	// ------------------------------------------------- single implementations
-	'mermaid-render-sites': {
-		ignores: ['src/lib/utils/mermaidPrint.ts', 'src/lib/utils/richContent.ts'],
-		ban: {
-			"CallExpression[callee.object.name='mermaid'][callee.property.name='render']":
-				'Export re-renders Mermaid from data-mermaid-source; a render path outside mermaidPrint.ts/richContent.ts skips rememberDiagramSource and exports blank diagrams (#359).',
-		},
-	},
-	'one-mermaid-theme-resolver': {
-		ignores: [VIEWER, 'src/lib/utils/mermaidPrint.ts'],
-		ban: {
-			"CallExpression[callee.name='resolveMermaidTheme']":
-				'The on-screen render and the print restore share resolveMermaidTheme so they cannot drift.',
-		},
-	},
-	'scroll-sync-max-from-content-height': {
-		ban: {
-			"BinaryExpression[operator='-'][left.callee.property.name='getScrollHeight'][right.property.name=/height/i], BinaryExpression[operator='-'][left.callee.property.name='getScrollHeight'][right.name=/height/i]":
-				'Split-view scroll sync must not count the editor bottom padding (#316).',
-		},
-	},
-	'fold-height-from-layout': {
-		files: ['src/lib/utils/**'],
-		ban: {
-			"MemberExpression[property.name='scrollHeight']":
-				'KaTeX glyphs reach past their box, so scrollHeight overshoots what height:auto resolves to and the fold jumps; measure getBoundingClientRect().height.',
-		},
-	},
-	'no-embedded-frames': {
-		ban: {
-			"CallExpression[callee.property.name='createElement'][arguments.0.value='iframe']":
-				'The CSP has no frame-src: YouTube renders as a thumbnail that opens the browser.',
-		},
-	},
-	'one-rich-content-renderer': {
-		ignores: ['src/lib/utils/richContent.ts'],
-		ban: {
-			"FunctionDeclaration[id.name='renderRichContent']:has(TSTypeReference[typeName.name='RenderRichContentOptions'])":
-				'utils/richContent.ts owns the render pipeline for the preview and the export; a second one is how the export shipped raw LaTeX.',
-		},
-	},
-	'one-editor-language-table': {
-		ignores: ['src/lib/utils/editorLanguage.ts'],
-		ban: {
-			"ReturnStatement > Literal[value='plaintext']":
-				'A second extension-to-language table drifts from the one the editor uses (utils/editorLanguage.ts).',
-		},
-	},
-	'home-tab-sentinel': {
-		ignores: ['src/lib/utils/homeTab.ts'],
-		ban: {
-			"Literal[value='HOME']":
-				'The home tab sentinel is spelled once (utils/homeTab.ts); the reader that did not know it rendered the home tab blank (#392). Use isHomePath / HOME_TAB_PATH.',
-		},
-	},
-	'one-highlight-palette': {
-		ignores: [VIEWER],
-		ban: {
-			"Literal[value=/--highlight-color:/], TemplateElement[value.raw=/--highlight-color:/], SvelteLiteral[value=/--highlight-color:/]":
-				'The highlight palette is bound to --highlight-color in MarkdownViewer.svelte; a second binding drifts from it.',
-		},
-	},
 	'one-language-catalogue': {
 		ignores: ['src/lib/utils/i18n.ts'],
 		ban: {
@@ -293,19 +173,6 @@ const CONVENTIONS = {
 				'The language catalogue is getSupportedLanguages() in utils/i18n.ts; a second table drifted from it.',
 			"TSTypeAliasDeclaration[id.name='LanguageCode']":
 				'LanguageCode is declared once (utils/i18n.ts); two unions type-check against each other only while they agree.',
-		},
-	},
-	'toc-width-bounds-from-the-range': {
-		ban: {
-			"Identifier[name=/^TOC_(MIN|MAX)_WIDTH$/]":
-				'The TOC width bounds are TOC_WIDTH_RANGE, which the store clamps against.',
-		},
-	},
-	'one-fold-key': {
-		ignores: ['src/lib/utils/foldState.ts'],
-		ban: {
-			"LogicalExpression[operator='||'][right.property.name='textContent']:matches([left.name='id'], [left.property.name='id']), LogicalExpression[operator='||'][right.object.property.name='textContent']:matches([left.name='id'], [left.property.name='id'])":
-				'A fold is named by assignFoldKey/foldKeyOf (utils/foldState.ts); three spellings disagreed about block ids.',
 		},
 	},
 	'local-storage-writes-through-the-store': {
@@ -346,13 +213,6 @@ const CONVENTIONS = {
 				'A font preference reaches CSS through fontFamilyValue (utils/fontFamily.ts), quoted.',
 			"Property[key.name='fontFamily'] > MemberExpression.value[object.name='settings']":
 				'A font preference reaches Monaco through fontFamilyValue (utils/fontFamily.ts), quoted.',
-		},
-	},
-	'theme-css-is-text': {
-		files: ['src/lib/utils/theme.ts'],
-		ban: {
-			"AssignmentExpression[left.property.name=/^(innerHTML|outerHTML)$/]":
-				'Fill the theme style tag with textContent so imported CSS can never be parsed as markup.',
 		},
 	},
 	't-requires-a-language': {
@@ -415,27 +275,6 @@ const CONVENTIONS = {
 		},
 	},
 
-	// -------------------------------------------------------------------- windows
-	'windows-are-equal': {
-		ban: {
-			"Literal[value='main'], TemplateLiteral[expressions.length=0] > TemplateElement[value.raw='main'], Identifier[name=/^isMain(Window)?$/]":
-				'Only Rust startup tells the launch window apart (LAUNCH_LABEL); a frontend branch on "main" makes a second, unequal kind of window.',
-		},
-	},
-	'recent-files-through-the-helper': {
-		ignores: ['src/lib/utils/recentFiles.ts'],
-		ban: {
-			"CallExpression[callee.property.name=/^(setItem|getItem)$/][arguments.0.value='recent-files']":
-				'A window writing recent-files itself publishes its own snapshot over the others; use recentFileList.',
-		},
-	},
-	'removing-a-recent-entry-keeps-the-tab': {
-		files: [VIEWER],
-		ban: {
-			"FunctionDeclaration[id.name='removeRecentFile'] CallExpression[callee.property.name='closeTab']":
-				'The × on a recent entry closed the tab with no unsaved-changes prompt.',
-		},
-	},
 
 	// ---------------------------------------------------------------- test suite
 	'tests-read-through-source-tree': {
@@ -464,7 +303,7 @@ export default [
 	{
 		linterOptions: { reportUnusedDisableDirectives: 'error' },
 		plugins: {
-			markpad: {
+			aonimark: {
 				rules: Object.fromEntries(
 					Object.entries(CONVENTIONS).map(([name, c]) => [name, c.custom ?? convention(c)]),
 				),
@@ -474,6 +313,6 @@ export default [
 	...Object.entries(CONVENTIONS).map(([name, c]) => ({
 		files: c.files ?? SOURCE,
 		ignores: c.ignores ?? [],
-		rules: { [`markpad/${name}`]: 'error' },
+		rules: { [`aonimark/${name}`]: 'error' },
 	})),
 ];

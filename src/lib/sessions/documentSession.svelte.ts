@@ -71,8 +71,8 @@ type DocumentSessionOptions = {
 /**
  * Per tab: the revision of the newest disk read aimed at it. Module scope
  * rather than per session, because the reads it orders are not all the
- * session's own — entering the editor or split view, and the startup restore,
- * read the file elsewhere and fill the same buffer.
+ * session's own — the startup restore reads the file elsewhere and fills the
+ * same buffer.
  */
 const readRevisionByTab = new Map<string, number>();
 
@@ -292,8 +292,7 @@ export function createDocumentSession(options: DocumentSessionOptions) {
 	/**
 	 * Replace a partial buffer (the >5MB preview read) with the whole file.
 	 * Must be awaited by every path that can lead to a write — entering the
-	 * editor or split view, editing front matter, toggling a task checkbox,
-	 * moving the tab to another window — because writing the partial buffer
+	 * editor, editing front matter, toggling a task checkbox — because writing the partial buffer
 	 * back permanently truncates the document.
 	 *
 	 * Returns false when the buffer is still partial afterwards. A partial
@@ -427,8 +426,7 @@ export function createDocumentSession(options: DocumentSessionOptions) {
 	 * Both halves are needed, and the second is why set membership alone was
 	 * not enough. `lossySaveWarnedTabs` records what was SAID; whether the
 	 * refusal still stands is a property of the tab, decided fresh by every
-	 * read that fills the buffer — `ensureFullContent`, entering the editor,
-	 * entering split view, a cross-window arrival. Any of those clears
+	 * read that fills the buffer — `ensureFullContent` and entering the editor. Either clears
 	 * `hasReplacementChars` for a file converted to UTF-8 since the load, and
 	 * none of them goes through `loadMarkdown`, the only place that empties the
 	 * set. A tab that had once been refused therefore went on suppressing the

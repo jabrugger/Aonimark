@@ -76,10 +76,9 @@ export type KeyContext = {
 /**
  * The command this keystroke means, or null for one the app does not bind.
  *
- * Null is also the answer for a chord that is *deliberately* left to something
- * else — macOS's ⌘Q, which the native menu owns, and Mod+F while the editor has
- * focus, which is Monaco's. The caller preventDefaults exactly when this
- * returns a command, which is what the handler did branch by branch before.
+ * Null is also the answer for a chord left to something else, such as macOS's
+ * ⌘Q, which the native menu owns. The caller preventDefaults exactly when this
+ * returns a command.
  */
 export function viewerCommandFor(e: KeyStroke, context: KeyContext): ViewerCommand | null {
 	if (context.mode !== 'app' || context.dialogOpen) return null;
@@ -133,41 +132,14 @@ export function viewerCommandFor(e: KeyStroke, context: KeyContext): ViewerComma
 	// A bare `osType` check rather than `platformOf`, which folds Linux into
 	// Windows. `'unknown'` at startup does not match, so it fails closed.
 	if (context.osType === 'windows' && mod && code === 'F4') return 'close-file';
-	// New file, both keys, whether or not the editor has focus (#392).
-	//
-	// Monaco resolves its own keybindings on the editor container and calls
-	// stopPropagation() when it consumes one, so this handler only ever runs
-	// for keystrokes the editor did not claim. That is how Ctrl+T came to
-	// mean two things: inside Monaco the `file-new` action answered it and
-	// opened an Untitled buffer, outside it this branch opened a Home tab.
-	// Both of the app's own labels already promised the first one — the tab
-	// strip's + button is titled "New Tab (Ctrl+T)" and the app menu prints
-	// Ctrl/Cmd+T beside "New File" — so the branch, not the labels, was the
-	// odd one out.
-	//
-	// `file-new` binds Ctrl/Cmd+N as well, and this handler used to know
-	// about only one of the two, which left Ctrl+N doing nothing at all
-	// outside the editor. Both are listed here so the two paths cannot
-	// drift again; `shortcuts.editor.test.ts` holds them equal.
+	// New file: both keys.
 	if (mod && (key === 't' || key === 'n')) return 'new-file';
 	if (mod && key === 'o') return 'open-file';
 	if (mod && key === 'q') return 'app-exit';
-	// Mod+L had only the Monaco half (`editorAction` in shortcuts.ts), so it
-	// fired in the editor and in split view and did nothing in the preview —
-	// the exact inverse of where the Auto-Reload button was drawn (#692). The
-	// panel advertised the chord in every mode regardless.
 	if (mod && key === 'l') return 'toggle-live-mode';
-	// Zen had only the Monaco half, so it did nothing in the preview (#800).
 	// `code`, not `key`: Option turns Z into Ω on a Mac.
 	if (modAlt && code === 'KeyZ') return 'toggle-zen-mode';
-	// Both halves, like Zen: off macOS no menu accelerator sits behind the
-	// preview to catch the chord.
-	// Save As. The app menu advertised this chord for as long as the menu has
-	// existed, but nothing ever bound it: the branch below matched on
-	// `cmdOrCtrl && key === 's'` with no Shift guard, so the advertised
-	// keystroke fell through to a plain Save and silently overwrote the file
-	// the user was asking to write somewhere else. `saveContentAs` had no
-	// keyboard path at all — its only caller was the menu button.
+	// Save As, then Save: Shift tells them apart.
 	if (modShift && key === 's') return 'save-as';
 	if (mod && key === 's') return 'save';
 	// Not `mod`/`modShift`: Shift is the ARGUMENT here, not part of the chord's
@@ -185,7 +157,6 @@ export function viewerCommandFor(e: KeyStroke, context: KeyContext): ViewerComma
 	if (mod && key === '-') return 'zoom-out';
 	if (mod && key === '0') return 'zoom-reset';
 	if (mod && key === ',') return 'open-settings';
-	// Had only the Monaco half, so it did nothing in the preview.
 	if (modShift && key === 'r') return 'reveal-file';
 	return null;
 }

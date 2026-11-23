@@ -80,10 +80,6 @@ describe('the release workflow', () => {
 		assert.match(step(build.jobs.build.steps, 'Upload Windows Artifacts').run ?? '', /bundle\/nsis\/\*-setup\.exe/);
 	});
 
-	test('the test bundle command uses an isolated builder', () => {
-		assert.equal(packageJson.scripts['build:test-bundle'], 'node scripts/build-test-bundle.mjs');
-	});
-
 	/** The `node-version` of every setup-node step. */
 	const nodeVersions = (wf: Workflow) =>
 		steps(wf)

@@ -1,32 +1,8 @@
 import assert from 'node:assert/strict';
-import { after, before, describe, test, type TestContext } from 'node:test';
+import { describe, test } from 'node:test';
 
-import postcss, { type Root } from 'postcss';
-import { parse as parseSvelte } from 'svelte/compiler';
 
-import { installShimDom, parseHtml } from './renderProtocolDom.ts';
-import { stubTauriInvoke } from './tauriInvoke.js';
 import { getMarkdownBodyWithoutFrontMatter, parseFrontMatter } from '../src/lib/utils/frontMatter.js';
-import { readSource } from './sourceTree.js';
-import { hasMarkdownLinkExtension } from '../src/lib/utils/markdownLinks.js';
-
-/*
- * Issue #604's second item: Enter on a list item continues the list, Tab
- * changes its level, and Enter on an empty item ends the list.
- *
- * WHAT IS RUN AND WHAT IS ONLY READ
- *
- * The decision — "given this line and this caret, what should the next line
- * say" — is a pure function in `src/lib/utils/listEditing.ts` and is CALLED
- * here, once per shape of list item and block quote the app claims to
- * understand.
- *
- * The key handlers themselves run in 'editing keys in the editor' below.
- */
-
-
-
-
 
 describe('front matter parsing and editing', () => {
 	const planMarkdown = `---

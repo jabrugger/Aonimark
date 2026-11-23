@@ -6,18 +6,6 @@ on:
 permissions:
   contents: write
 
-# One release build at a time: dispatching twice would give two runs writing to
-# the same draft release.
-#
-# Keyed on the ref rather than on the version, because the version is read from
-# package.json inside `create-release` and is not available to a concurrency
-# group, which is evaluated before any job starts. A release is always dispatched
-# from master, so in practice the two are the same key.
-#
-# `cancel-in-progress: false` deliberately. The second dispatch waits instead of
-# killing the first: a half-cancelled run leaves a draft release holding some
-# platforms' assets and not others, which looks exactly like a build that has not
-# finished yet.
 concurrency:
   group: build-and-release-${{ github.ref }}
   cancel-in-progress: false
@@ -40,15 +28,6 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          # An exact major rather than `lts/*`. Resolving an LTS *alias*
-          # requires the version manifest, which is a network call made before
-          # the tool-cache lookup — and that call is what failed three times in
-          # one afternoon with `self-signed certificate`, on jobs whose own
-          # work needed no network at all. A semver range is matched against
-          # the runner's tool cache first, and the cache already holds what
-          # `lts/*` was resolving to (`Found in cache @ …/node/24.18.0`), so
-          # the manifest is never reached. If a future image drops 24 this
-          # falls back to fetching the manifest — today's behaviour, not worse.
           node-version: 24
 
       - name: Get Version
@@ -56,23 +35,6 @@ jobs:
         shell: bash
         run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
 
-      # `create-release` composes the release for `v<version from package.json>`,
-      # and softprops/action-gh-release documents what it does when that tag
-      # already has one: "the existing release will be updated". The matrix then
-      # uploads with `--clobber`, and `generate-update-feed` overwrites
-      # `latest.json`. So a dispatch from a master that was never bumped does not
-      # fail and does not create anything -- it rewrites the release users are
-      # downloading right now, with a build of whatever master holds today, and
-      # every gate this pipeline has is downstream of that: the draft, the asset
-      # check, and clicking Publish all come after the write.
-      #
-      # The tag and the version are two facts that nothing else compares. This
-      # compares them against the one place a released version is recorded.
-      #
-      # It fails closed. An answer that is not "no release" and not "a draft" --
-      # including a network error or a rate limit -- stops the run, because the
-      # direction this guard protects is the one where proceeding is expensive
-      # and waiting five minutes is not.
       - name: This version has not already been released
         shell: bash
         env:
@@ -171,15 +133,6 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          # An exact major rather than `lts/*`. Resolving an LTS *alias*
-          # requires the version manifest, which is a network call made before
-          # the tool-cache lookup — and that call is what failed three times in
-          # one afternoon with `self-signed certificate`, on jobs whose own
-          # work needed no network at all. A semver range is matched against
-          # the runner's tool cache first, and the cache already holds what
-          # `lts/*` was resolving to (`Found in cache @ …/node/24.18.0`), so
-          # the manifest is never reached. If a future image drops 24 this
-          # falls back to fetching the manifest — today's behaviour, not worse.
           node-version: 24
 
       - name: Install Rust
@@ -187,37 +140,8 @@ jobs:
         with:
           targets: ${{ matrix.rust_target }}
 
-      # No cargo cache here, deliberately, and it is a budget decision rather
-      # than a judgement that caching does not work.
-      #
-      # A cargo cache is 1.0-1.2 GB per entry. This workflow has four matrix
-      # entries, so caching it would claim another ~4.5 GB of a 10 GB
-      # per-repository limit that already holds ~110 npm caches and the three
-      # entries test_build.yml writes on master. Over that limit GitHub evicts
-      # least-recently-used, and these would be the least recently used of all:
-      # this workflow is `workflow_dispatch` only and runs about once a week.
-      #
-      # What it would buy is also the least valuable minutes in the repository.
-      # A release build is not on anyone's critical path -- nobody waits on it
-      # the way they wait on a pull request check -- and its four jobs already
-      # finish in 12-16 minutes. Spending a third of the cache budget to make a
-      # weekly job faster, at the cost of the caches every pull request reads,
-      # is the wrong trade. If the limit ever stops binding, this is the first
-      # place to add one back.
-
       - name: Install Linux dependencies
         if: matrix.os == 'linux'
-        # The same list test_build.yml installs, which is what makes it a
-        # check: a pull request now compiles and bundles against exactly the
-        # packages a release does. An assertion holds the two together.
-        #
-        # It was sixteen. Six of those apt installs anyway --
-        # libwebkit2gtk-4.1-dev depends on libwebkit2gtk-4.1-0,
-        # libjavascriptcoregtk-4.1-dev, gir1.2-webkit2-4.1 and libgtk-3-dev,
-        # and those pull the remaining two -- and four libxcb *-dev packages
-        # and xdg-utils appear in no Tauri v2 prerequisite list. Run
-        # 31487547674 built the .deb, the .rpm and the AppImage on
-        # ubuntu-24.04 with the six below and nothing else.
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -231,7 +155,6 @@ jobs:
       - name: Install Frontend Dependencies
         run: npm ci
 
-      # --- Windows Build ---
       - name: Build Windows
         if: matrix.os == 'windows'
         env:
@@ -239,8 +162,6 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run tauri build ${{ matrix.target && format('-- --target {0}', matrix.target) || '' }}
 
-      # One `gh release upload` with explicit paths, not `find -exec`: find exits
-      # 0 when the command it runs fails, so a failed upload passed the step.
       - name: Upload Windows Artifacts
         if: matrix.os == 'windows'
         shell: bash
@@ -255,22 +176,14 @@ jobs:
           cp "$OUT/Aonimark.exe" "$PORTABLE"
           gh release upload "v$VERSION" "$PORTABLE" "$OUT"/bundle/nsis/*-setup.exe "$OUT"/bundle/nsis/*-setup.exe.sig --clobber
 
-      # --- Linux Build ---
       - name: Build Linux
         if: matrix.os == 'linux'
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # See the same variable in test_build.yml. A release must not be the
-          # place this is discovered: the PR check hits it about half the time,
-          # and there is nothing about a tag that would make it less likely.
           APPIMAGE_EXTRACT_AND_RUN: "1"
         run: npm run tauri build
 
-      # Why the AppImage has to be repacked at all, and what is removed, is in
-      # scripts/strip-appimage.sh. It is a script rather than a heredoc because
-      # this is the step that failed in two of the three v2.7.2 release
-      # attempts, and an inline one can only be exercised by cutting a release.
       - name: Strip host-coupled libraries from AppImage
         if: matrix.os == 'linux'
         run: |
@@ -283,9 +196,6 @@ jobs:
           echo "APPIMAGE=$(realpath "$APPIMAGE")" >> "$GITHUB_ENV"
           bash scripts/strip-appimage.sh "$APPIMAGE"
 
-      # tauri build already produced a .sig for the pre-strip file, which no
-      # longer matches what the updater will download. Signing is kept out of
-      # the script so the script can be run on any AppImage without a key.
       - name: Re-sign the repacked AppImage
         if: matrix.os == 'linux'
         env:
@@ -300,16 +210,6 @@ jobs:
           fi
           ls -la "$APPIMAGE" "$APPIMAGE.sig"
 
-      # The last thing before the artifact becomes downloadable, and the only
-      # check in this pipeline that starts Aonimark rather than inspecting it.
-      # It runs on another distribution's userspace, because the runner cannot
-      # disagree with libraries that were copied out of the runner.
-      #
-      # Placed after the re-sign so it starts the exact bytes latest.json will
-      # point at, and before the upload so a failure leaves the draft release
-      # without a Linux artifact. generate-update-feed needs `build` to have
-      # succeeded, so it does not run either -- nothing is published, and
-      # nothing was ever installable.
       - name: The AppImage starts on a distribution it was not built on
         if: matrix.os == 'linux'
         run: bash scripts/smoke-appimage.sh "$APPIMAGE"
@@ -324,7 +224,6 @@ jobs:
           B=src-tauri/target/release/bundle
           gh release upload "v${{ needs.create-release.outputs.version }}" "$B"/deb/*.deb "$B"/rpm/*.rpm "$B"/appimage/*.AppImage "$B"/appimage/*.AppImage.sig --clobber
 
-      # --- MacOS Build ---
       # Developer ID takes precedence; without it the legacy signing path remains.
       - name: Import macOS signing certificate
         if: matrix.os == 'macos'
@@ -363,14 +262,6 @@ jobs:
             exit 0
           fi
 
-          # The certificate is set, so this release is meant to be signed, and
-          # the early exit above no longer covers a configuration that is only
-          # half there. The identity is the value with nothing downstream to
-          # catch it: a wrong one stops `codesign` with "no identity found",
-          # while an empty one is exported as an empty APPLE_SIGNING_IDENTITY,
-          # and whether `tauri build` then errors or simply signs nothing is not
-          # this step's to know. Refusing here makes it not matter. A missing
-          # password needs no check of its own -- `security import` fails on it.
           if [ -z "${MACOS_SIGNING_IDENTITY:-}" ]; then
             echo "::error::MACOS_CERTIFICATE is set but MACOS_SIGNING_IDENTITY is empty. Set all three secrets or none -- RELEASING.md one-time setup step 6."
             exit 1
@@ -383,18 +274,12 @@ jobs:
 
           printf '%s' "$MACOS_CERTIFICATE" | base64 --decode > "$CERTIFICATE"
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-          # Lock the keychain after an hour and on sleep, so a stuck runner does
-          # not leave the key readable for the rest of its life.
           security set-keychain-settings -lut 3600 "$KEYCHAIN"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           security import "$CERTIFICATE" -k "$KEYCHAIN" -P "$MACOS_CERTIFICATE_PASSWORD" \
             -T /usr/bin/codesign
-          # Without this, codesign blocks on a GUI prompt for the private key
-          # that nobody is there to answer.
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" \
             "$KEYCHAIN" > /dev/null
-          # codesign resolves the identity through the search list, so the new
-          # keychain has to join it rather than replace it.
           security list-keychains -d user -s \
             $(security list-keychains -d user | tr -d '"') "$KEYCHAIN"
           rm -f "$CERTIFICATE"
@@ -410,7 +295,6 @@ jobs:
       - name: Build MacOS (Universal)
         if: matrix.os == 'macos'
         env:
-          # Fix OOM issue
           NODE_OPTIONS: "--max-old-space-size=8192"
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -473,14 +357,8 @@ jobs:
 
   generate-update-feed:
     needs: [create-release, build]
-    # Pinned like every other runner that this pipeline names. This job only runs
-    # `gh` and `jq`, so the version buys little on its own -- what it buys is that
-    # `ubuntu-latest` moving is a thing that happens to us with a commit rather
-    # than without one.
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    # The updater feed must describe a complete release. Do not publish an
-    # update if any platform build failed or was cancelled.
     if: ${{ always() && needs.create-release.result == 'success' && needs.build.result == 'success' }}
     steps:
       - name: Generate latest.json
@@ -491,12 +369,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p ./sigs
-          # Fail loudly on auth/rate-limit/transient issues — never silently
-          # publish an empty latest.json that would overwrite a previously-good one.
           gh release download "v$VERSION" --repo "$REPO" --pattern "*.sig" --dir ./sigs
 
-          # Default Tauri v2 updater mode: macOS .app.tar.gz, Windows NSIS *-setup.exe, Linux *.AppImage
-          # (NOT v1Compatible mode — which would use .nsis.zip / .AppImage.tar.gz wrappers)
           MAC_SIG=$(ls ./sigs/*.app.tar.gz.sig 2>/dev/null | head -1 || true)
           WIN_X64_SIG=$(ls ./sigs/*x64*-setup.exe.sig 2>/dev/null | head -1 || true)
           WIN_ARM_SIG=$(ls ./sigs/*arm64*-setup.exe.sig 2>/dev/null | head -1 || true)
@@ -515,8 +389,6 @@ jobs:
             fi
             local artifact
             artifact=$(basename "${sig_file%.sig}")
-            # Strip CR/LF that Windows-produced .sig files may carry; minisign signatures
-            # don't contain whitespace within the payload, so it's safe to remove.
             local sig
             sig=$(tr -d '\r\n' < "$sig_file")
             local url="https://github.com/${REPO}/releases/download/v${VERSION}/${artifact}"
@@ -532,27 +404,6 @@ jobs:
           LINUX_X86_64=$(platform_entry "$LINUX_SIG")
 
           # Every key below is a plain {os}-{arch}, and that is load-bearing.
-          #
-          # tauri-plugin-updater looks up two keys in order: {os}-{arch}-{installer}
-          # first, then {os}-{arch}. The first is only tried when the binary knows
-          # its own bundle type, and ours does not on Windows or Linux --
-          # `__TAURI_BUNDLE_TYPE` is written into the binary by patching it after
-          # the build, and that patch fails on both, three times in the v2.7.0 run:
-          #   Warn Failed to add bundler type to the binary: __TAURI_BUNDLE_TYPE
-          #   variable not found in binary. ... Updater plugin may not be able to
-          #   update this package.
-          # macOS is unaffected: tauri-utils returns BundleType::App there without
-          # reading the variable.
-          #
-          # So Windows and Linux clients ask only for {os}-{arch}, which is what
-          # this file publishes, and the warning is inert for us.
-          #
-          # Adding a per-installer key -- "windows-x86_64-nsis" say -- would end
-          # that. It would be the key those clients cannot ask for, so they would
-          # keep resolving the unsuffixed one and silently ignore the new entry;
-          # remove the unsuffixed one in the same edit and they get
-          # TargetsNotFound and stop updating. If per-installer keys are ever
-          # wanted, the missing bundle type has to be fixed first.
           jq -n \
             --arg version "$VERSION" \
             --arg notes "See https://github.com/${REPO}/releases/tag/v${VERSION}" \

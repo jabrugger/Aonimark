@@ -97,8 +97,7 @@ export function buildMenuModel(state: MenuState): MenuNode[] {
 			kind: 'submenu',
 			text: t('menu.edit', lang),
 			// WKWebView hands ⌘X/⌘C/⌘V/⌘A/⌘Z in plain inputs to the main menu, so
-			// without these every native field loses them (#526). Monaco
-			// preventDefaults the keys first and keeps its own handlers.
+			// without these every native field loses them (#526).
 			items: [
 				{ kind: 'predefined', item: 'Undo', text: t('menu.undo', lang) },
 				{ kind: 'predefined', item: 'Redo', text: t('menu.redo', lang) },

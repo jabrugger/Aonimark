@@ -1,9 +1,6 @@
 name: Audit
 
 # What ships to users, checked when it changes and again before a release.
-# Not on every pull request: an advisory published overnight is not caused by
-# the unrelated change that happens to run next, and it used to fail that run
-# and skip every check after it.
 on:
   pull_request:
     paths:
@@ -21,8 +18,6 @@ on:
       - 'package-lock.json'
       - 'src-tauri/Cargo.toml'
       - 'src-tauri/Cargo.lock'
-  # build.yml, before it creates a release: the lockfiles have not changed, but
-  # the advisories have.
   workflow_call:
 
 permissions:
@@ -39,9 +34,6 @@ jobs:
         with:
           node-version: 24
 
-      # Reads the lockfile, so nothing is installed. `--omit=dev` holds only while
-      # package.json is honest: anything bundled into the app, Svelte and SvelteKit
-      # included, belongs in `dependencies`.
       - name: audit shipped npm dependencies
         run: npm audit --omit=dev --audit-level=moderate
 
@@ -55,11 +47,6 @@ jobs:
         with:
           tool: cargo-audit
 
-      # The three ignored advisories are all in `zip`'s `extract`, which follows
-      # Unix symlinks and permission bits from the archive. Only
-      # tauri-plugin-updater extracts, and only on Windows, an update whose
-      # signature it has verified. It requires zip ^4 and the fix is in 9, so
-      # drop these once it moves.
       - name: audit Rust dependencies
         run: >-
           cargo audit --file src-tauri/Cargo.lock

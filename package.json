@@ -1,24 +1,18 @@
 {
 	"name": "aonimark",
 	"version": "0.1.0",
-	"description": "Light as Notepad, elegant as Markdown.",
+	"description": "The WordPad of Markdown.",
 	"type": "module",
 	"imports": {
 		"#lib/*": "./src/lib/*"
 	},
 	"scripts": {
 		"dev": "vite dev",
-		"dev:installer": "tauri dev -- -- --install",
 		"build": "vite build",
-		"preview": "vite preview",
 		"test": "node --test --import tsx \"scripts/*.test.ts\"",
 		"test:vitest": "vitest run",
-		"test:frontmatter": "node --test --import tsx scripts/editing.test.ts",
-		"test:workflows": "node --test --import tsx scripts/export.test.ts scripts/shortcuts.toolbar.test.ts",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"lint": "eslint .",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"build:test-bundle": "node scripts/build-test-bundle.mjs",
 		"tauri": "tauri",
 		"release": "node scripts/release.mjs"
 	},
@@ -42,7 +36,6 @@
 		"eslint": "10.15.0",
 		"eslint-plugin-svelte": "3.23.0",
 		"jsdom": "^30.0.1",
-		"postcss": "8.5.31",
 		"svelte-check": "^4.7.5",
 		"svelte-eslint-parser": "1.8.1",
 		"tsx": "^4.23.12",
