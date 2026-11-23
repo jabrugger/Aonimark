@@ -556,9 +556,9 @@ describe('macOS app menu', () => {
 		const zh = buildMenuModel({ ...base, language: 'zh-CN' });
 		assert.deepEqual(
 			zh.map((node) => (node as { text: string }).text),
-			['Markpad', '文件', '编辑', '视图', '窗口'],
+			['Aonimark', '文件', '编辑', '视图', '窗口'],
 		);
-		find(zh, '退出 Markpad');
+		find(zh, '退出 Aonimark');
 		find(zh, '切换全屏');
 		find(buildMenuModel({ ...base, language: 'zh-TW' }), '切換全螢幕');
 	});
@@ -577,7 +577,7 @@ describe('macOS app menu', () => {
 	});
 
 	test('Quit runs the app exit path, so hot exit still sees it (#962)', () => {
-		const quit = find(buildMenuModel(base), 'Quit Markpad');
+		const quit = find(buildMenuModel(base), 'Quit Aonimark');
 		assert.ok(quit.kind === 'item');
 		assert.deepEqual(quit.action, { viewer: 'app-exit' });
 		assert.equal(quit.accelerator, 'CmdOrCtrl+Q');

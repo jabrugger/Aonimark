@@ -62,7 +62,7 @@ export function buildMenuModel(state: MenuState): MenuNode[] {
 	return [
 		{
 			kind: 'submenu',
-			text: 'Markpad',
+			text: 'Aonimark',
 			items: [
 				{ kind: 'predefined', item: { About: null }, text: t('menu.about', lang) },
 				separator,
