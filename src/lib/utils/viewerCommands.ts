@@ -7,15 +7,11 @@ import type { ViewerCommand } from './viewerKeymap.js';
  */
 export type ViewerCommandHost = {
 	settings: {
-		previewFullWidth: boolean;
-		previewMaxWidth: number;
-		showTabs: boolean;
 		toggleZenMode(): void;
 		zoomIn(): void;
 		zoomOut(): void;
 		resetZoom(): void;
 	};
-	tabManager: { readonly activeTabId: string | null; cycleTab(direction: 'next' | 'prev'): void };
 	reloadFromDisk(): unknown;
 	closeFile(): unknown;
 	handleNewFile(): unknown;
@@ -34,7 +30,7 @@ export type ViewerCommandHost = {
  * entry does not compile.
  */
 export function viewerCommandTable(host: ViewerCommandHost): Record<ViewerCommand, () => void> {
-	const { settings, tabManager } = host;
+	const { settings } = host;
 	return {
 		'reload-from-disk': () => void host.reloadFromDisk(),
 		'close-file': () => void host.closeFile(),

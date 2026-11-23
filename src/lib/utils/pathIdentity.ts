@@ -15,7 +15,7 @@ export function basename(path: string): string {
 	return path.slice(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1);
 }
 
-export interface PathIdentity {
+interface PathIdentity {
 	path: string;
 	/**
 	 * `path` resolved by the filesystem — see the Rust `canonical_identity`.

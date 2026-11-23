@@ -13,9 +13,6 @@ const { tabManager } = await import('../src/lib/stores/tabs.svelte.js');
 const { settings } = await import('../src/lib/stores/settings.svelte.js');
 const { createDocumentSession } = await import('../src/lib/sessions/documentSession.svelte.js');
 const { createExternalChange } = await import('../src/lib/sessions/externalChange.svelte.js');
-const { buildTransferredTab, snapshotTab, validateTransferPayload } = await import(
-	'../src/lib/utils/tabTransfer.js'
-);
 
 // An explicit save and the 1.5s auto-save debounce can both be aimed at one
 // tab. The debounce is armed on the last keystroke and disarmed by the
@@ -78,16 +75,7 @@ describe('explicit save cancels auto-save', () => {
 
 	function makeSession() {
 		return createDocumentSession({
-			setShowHome: () => {},
-			currentFile: () => tabManager.activeTab?.path ?? '',
-			resetScrollHistory: () => {},
-			renderMarkdown: async (raw: string) => raw,
 			afterLoad: async () => {},
-			saveRecentFile: () => {},
-			deleteRecentFile: () => {},
-			setLoadingTabs: () => {},
-			measureInitialViewport: () => {},
-			isScrolling: () => false,
 			onError: () => {},
 			onDiskChangedUnderSave: () => {},
 			cancelPendingAutoSave: (tabId: string) => void events.push(`cancel:${tabId}`),
@@ -99,8 +87,8 @@ describe('explicit save cancels auto-save', () => {
 	}
 
 	function reset() {
-		tabManager.closeAll();
-		tabManager.recentlyClosed.length = 0;
+		tabManager.tabs = [];
+		tabManager.activeTabId = null;
 		localStorage.clear();
 		disk.clear();
 		events.length = 0;
@@ -264,16 +252,7 @@ describe('one write per tab in flight', () => {
 
 	function makeSession() {
 		return createDocumentSession({
-			setShowHome: () => {},
-			currentFile: () => tabManager.activeTab?.path ?? '',
-			resetScrollHistory: () => {},
-			renderMarkdown: async (raw: string) => raw,
 			afterLoad: async () => {},
-			saveRecentFile: () => {},
-			deleteRecentFile: () => {},
-			setLoadingTabs: () => {},
-			measureInitialViewport: () => {},
-			isScrolling: () => false,
 			onError: () => {},
 			onDiskChangedUnderSave: () => void (conflicts += 1),
 			cancelPendingAutoSave: () => {},
@@ -285,8 +264,8 @@ describe('one write per tab in flight', () => {
 	}
 
 	function reset() {
-		tabManager.closeAll();
-		tabManager.recentlyClosed.length = 0;
+		tabManager.tabs = [];
+		tabManager.activeTabId = null;
 		localStorage.clear();
 		disk.clear();
 		unsettledWrites = 0;
@@ -567,16 +546,7 @@ describe('rename file session', () => {
 
 	function makeSession() {
 		return createDocumentSession({
-			setShowHome: () => {},
-			currentFile: () => tabManager.activeTab?.path ?? '',
-			resetScrollHistory: () => {},
-			renderMarkdown: async (raw: string) => raw,
 			afterLoad: async () => {},
-			saveRecentFile: () => {},
-			deleteRecentFile: () => {},
-			setLoadingTabs: () => {},
-			measureInitialViewport: () => {},
-			isScrolling: () => false,
 			onError: () => {},
 			onDiskChangedUnderSave: (tabId: string) => void conflicts.push(tabId),
 			cancelPendingAutoSave: () => {},
@@ -588,8 +558,8 @@ describe('rename file session', () => {
 	}
 
 	function reset() {
-		tabManager.closeAll();
-		tabManager.recentlyClosed.length = 0;
+		tabManager.tabs = [];
+		tabManager.activeTabId = null;
 		localStorage.clear();
 		disk.clear();
 		events.length = 0;
@@ -706,16 +676,7 @@ describe('untitled first save writes', () => {
 
 	function makeSession() {
 		return createDocumentSession({
-			setShowHome: () => {},
-			currentFile: () => tabManager.activeTab?.path ?? '',
-			resetScrollHistory: () => {},
-			renderMarkdown: async (raw: string) => raw,
 			afterLoad: async () => {},
-			saveRecentFile: () => {},
-			deleteRecentFile: () => {},
-			setLoadingTabs: () => {},
-			measureInitialViewport: () => {},
-			isScrolling: () => false,
 			onError: (message: string) => void errors.push(message),
 			onDiskChangedUnderSave: (tabId: string) => void conflicts.push(tabId),
 			cancelPendingAutoSave: () => {},
@@ -727,8 +688,8 @@ describe('untitled first save writes', () => {
 	}
 
 	function reset() {
-		tabManager.closeAll();
-		tabManager.recentlyClosed.length = 0;
+		tabManager.tabs = [];
+		tabManager.activeTabId = null;
 		localStorage.clear();
 		disk.clear();
 		writes.length = 0;
@@ -789,117 +750,13 @@ describe('untitled first save writes', () => {
 		assert.equal(disk.get('/notes/a.md'), 'theirs', 'their text is still there');
 	});
 
-	// `markpad --edit draft.md` for a file that does not exist yet (#1051).
-	test('a file a command line names before it exists is created by the first save', async () => {
-		reset();
-		const session = makeSession();
-		await session.openMissingFile('/notes/draft.md', 'editor');
-		const tab = tabManager.activeTab!;
-		assert.equal(tab.path, '/notes/draft.md');
-		assert.equal(tab.isEditing, true);
-		assert.equal(tab.isDirty, false, 'closing it untouched creates nothing');
-		assert.deepEqual(writes, []);
 
-		tabManager.updateTabRawContent(tab.id, 'draft');
-		assert.equal(await session.saveContent(tab.id), true);
-		assert.equal(disk.get('/notes/draft.md'), 'draft');
-		assert.deepEqual(conflicts, []);
 
-		// Created now: a file that goes missing after this is a conflict again.
-		disk.delete('/notes/draft.md');
-		tabManager.updateTabRawContent(tab.id, 'more');
-		assert.equal(await session.saveContent(tab.id), false);
-		assert.deepEqual(conflicts, [tab.id]);
-	});
 
-	test('a file somebody else creates that cannot be read is still not overwritten', async () => {
-		reset();
-		const session = makeSession();
-		await session.openMissingFile('/notes/draft.md', null);
-		const tabId = tabManager.activeTabId!;
-		disk.set('/notes/draft.md', 'theirs');
-		unreadable.add('/notes/draft.md');
-		tabManager.updateTabRawContent(tabId, 'mine');
 
-		assert.equal(await session.saveContent(tabId), false);
-		assert.equal(disk.get('/notes/draft.md'), 'theirs');
-	});
 
-	test('an empty file somebody else creates first is not overwritten either', async () => {
-		reset();
-		const session = makeSession();
-		await session.openMissingFile('/notes/draft.md', null);
-		const tabId = tabManager.activeTabId!;
-		disk.set('/notes/draft.md', '');
-		tabManager.updateTabRawContent(tabId, 'mine');
 
-		assert.equal(await session.saveContent(tabId), false);
-		assert.equal(disk.get('/notes/draft.md'), '');
-	});
 
-	test('a tab moved off the file it was to create guards its new file as usual', async () => {
-		reset();
-		const session = makeSession();
-		await session.openMissingFile('/notes/draft.md', null);
-		const tabId = tabManager.activeTabId!;
-		tabManager.updateTabRawContent(tabId, 'mine');
-		nextSaveTarget = '/notes/other.md';
-		assert.equal(await session.saveContentAs(), true);
-
-		// Saved As, so the tab is clean on a real file and is remembered.
-		assert.deepEqual(JSON.parse(tabManager.serializeState()).tabs.map((tab: { path: string }) => tab.path), ['/notes/other.md']);
-		// That file then disappears: a save is a conflict, not a quiet re-create.
-		disk.delete('/notes/other.md');
-		tabManager.updateTabRawContent(tabId, 'more');
-		assert.equal(await session.saveContent(tabId), false);
-		assert.deepEqual(conflicts, [tabId]);
-	});
-
-	test('reading the file a tab was to create ends the exemption', async () => {
-		reset();
-		const session = makeSession();
-		await session.openMissingFile('/notes/draft.md', null);
-		const tabId = tabManager.activeTabId!;
-		disk.set('/notes/draft.md', 'theirs');
-		await session.loadMarkdown('/notes/draft.md');
-		tabManager.updateTabRawContent(tabId, 'theirs, edited');
-
-		assert.equal(await session.saveContent(tabId), true, 'the tab holds their file now');
-		assert.equal(disk.get('/notes/draft.md'), 'theirs, edited');
-	});
-
-	test('a tab still to create its file is remembered only once it has text', async () => {
-		reset();
-		const session = makeSession();
-		await session.openMissingFile('/notes/draft.md', null);
-		const saved = () => JSON.parse(tabManager.serializeState()).tabs.map((tab: { path: string }) => tab.path);
-		assert.deepEqual(saved(), [], 'the next launch would only fail to read it');
-		tabManager.updateTabRawContent(tabManager.activeTabId!, 'draft');
-		assert.deepEqual(saved(), ['/notes/draft.md']);
-	});
-
-	test('the same missing file delivered twice at launch is one quiet tab', async () => {
-		reset();
-		const session = makeSession();
-		await session.openMissingFile('/notes/draft.md', 'editor');
-		// The second delivery has no command-line request left to take.
-		await session.openFiles(['/notes/draft.md']);
-		assert.equal(tabManager.tabs.length, 1);
-		assert.equal(tabManager.activeTab!.createsFile, '/notes/draft.md');
-		assert.deepEqual(errors, []);
-	});
-
-	test('a file somebody else creates first is not overwritten by the tab waiting to create it', async () => {
-		reset();
-		const session = makeSession();
-		await session.openMissingFile('/notes/draft.md', null);
-		const tabId = tabManager.activeTabId!;
-		disk.set('/notes/draft.md', 'theirs');
-		tabManager.updateTabRawContent(tabId, 'mine');
-
-		assert.equal(await session.saveContent(tabId), false);
-		assert.equal(disk.get('/notes/draft.md'), 'theirs');
-	});
 
 });
 
@@ -965,16 +822,7 @@ describe('lossy save refusal scope', () => {
 
 	function makeSession() {
 		return createDocumentSession({
-			setShowHome: () => {},
-			currentFile: () => tabManager.activeTab?.path ?? '',
-			resetScrollHistory: () => {},
-			renderMarkdown: async () => '',
 			afterLoad: async () => {},
-			saveRecentFile: () => {},
-			deleteRecentFile: () => {},
-			setLoadingTabs: () => {},
-			measureInitialViewport: () => {},
-			isScrolling: () => false,
 			onError: (message) => void toasts.push(message),
 			onDiskChangedUnderSave: () => {},
 			cancelPendingAutoSave: () => {},
@@ -990,7 +838,8 @@ describe('lossy save refusal scope', () => {
 	 * once — which is the state the refusal set records.
 	 */
 	async function refusedTab() {
-		tabManager.closeAll();
+		tabManager.tabs = [];
+		tabManager.activeTabId = null;
 		toasts = [];
 		writeFails = false;
 		const session = makeSession();
@@ -1077,54 +926,6 @@ describe('lossy save refusal scope', () => {
 		assert.equal(toasts.length, 2, 'the new refusal is explained');
 	});
 
-	test('saveContent is the choke point auto-save and the close dialogs share', async () => {
-		// Auto-save (saveSilently, the debounce's writer) and the close dialog's
-		// Save both reach saveContent, so the lossy guard covers them without
-		// either repeating it.
-		const { tab } = await refusedTab();
-		writes = 0;
-		const autoSave = settings.autoSave;
-		settings.autoSave = true;
-		try {
-			const session = createDocumentSession({
-				setShowHome: () => {},
-				currentFile: () => tabManager.activeTab?.path ?? '',
-				resetScrollHistory: () => {},
-				renderMarkdown: async () => '',
-				afterLoad: async () => {},
-				saveRecentFile: () => {},
-				deleteRecentFile: () => {},
-				setLoadingTabs: () => {},
-				measureInitialViewport: () => {},
-				isScrolling: () => false,
-				onError: () => {},
-				onDiskChangedUnderSave: () => {},
-				cancelPendingAutoSave: () => {},
-				askClose: async () => 'save' as const,
-				onCloseSaveNewerEdits: () => {},
-				onCloseAutoSaveFailed: () => {},
-				onPartialCopySaved: () => {},
-			});
-			const silent = createExternalChange({
-				tabManager,
-				settings: { autoSave: true, language: 'en' },
-				documentSession: session,
-				loadMarkdown: async () => {},
-				canCloseTab: async () => true,
-				readFile: async () => [LOSSY, true, 'UTF-8'],
-				editorLanguageFor: () => 'markdown',
-				addToast: () => {},
-				t: (key) => key,
-			});
-
-			assert.equal(await silent.saveSilently(tab.id), false, 'auto-save is refused');
-			assert.equal(await session.canCloseTab(tab.id), false, 'Save in the close dialog is refused');
-			assert.equal(writes, 0);
-			assert.equal(tab.rawContent, 'edited');
-		} finally {
-			settings.autoSave = autoSave;
-		}
-	});
 
 	test('a closed tab is not remembered as refused', async () => {
 		// `closeTab` splices the tab out with no dispose hook, so the set keeps
@@ -1194,16 +995,7 @@ describe('document encoding round trip', () => {
 
 	function makeSession() {
 		return createDocumentSession({
-			setShowHome: () => {},
-			currentFile: () => tabManager.activeTab?.path ?? '',
-			resetScrollHistory: () => {},
-			renderMarkdown: async () => '',
 			afterLoad: async () => {},
-			saveRecentFile: () => {},
-			deleteRecentFile: () => {},
-			setLoadingTabs: () => {},
-			measureInitialViewport: () => {},
-			isScrolling: () => false,
 			onError: () => {},
 			onDiskChangedUnderSave: () => {},
 			cancelPendingAutoSave: () => {},
@@ -1216,7 +1008,8 @@ describe('document encoding round trip', () => {
 
 	/** A tab opened from a file the backend reports as `encoding`. */
 	async function openedAs(encoding: string, lossy = false) {
-		tabManager.closeAll();
+		tabManager.tabs = [];
+		tabManager.activeTabId = null;
 		writes = [];
 		fileEncoding = encoding;
 		fileLossy = lossy;
@@ -1285,298 +1078,14 @@ describe('document encoding round trip', () => {
 	test('an untitled buffer has an encoding before anything has been read', async () => {
 		// Required, not optional, on the Tab — so a buffer that never came from a
 		// file still answers, and answers the only thing it could be.
-		tabManager.closeAll();
+		tabManager.tabs = [];
+		tabManager.activeTabId = null;
 		tabManager.addNewTab();
 		assert.equal(tabManager.activeTab!.encoding, 'UTF-8');
 	});
 
-	test('a moved tab keeps its encoding across the window boundary', async () => {
-		// The buffer is a decode of a file in this encoding; the destination
-		// window auto-saves it. A payload that dropped the field would rewrite the
-		// user's GBK document as UTF-8 the moment it landed.
-		const { tab } = await openedAs('Shift_JIS');
-
-		const payload = JSON.stringify(snapshotTab(tab));
-		const validated = validateTransferPayload(payload);
-		assert.notEqual(validated, null, 'precondition: the payload validates');
-		assert.equal(buildTransferredTab(validated!, [], 'Untitled').encoding, 'Shift_JIS');
-	});
-
-	test('a payload without an encoding is rejected rather than defaulted', async () => {
-		// Same rule as `hasReplacementChars`: a missing field must not be read as
-		// "UTF-8, go ahead", because that is a write to the user's file.
-		const { tab } = await openedAs('Big5');
-		const { encoding, ...withoutEncoding } = snapshotTab(tab);
-		void encoding;
-
-		assert.equal(validateTransferPayload(JSON.stringify(withoutEncoding)), null);
-	});
 });
 
-// Toggling a task checkbox in the preview finds the line to rewrite by counting
-// `\n` up to the regex match. Three rounds of fixes for #148 were verified on
-// macOS, i.e. on LF, and all three missed that the count is wrong on CRLF:
-//
-//   `\s` matches `\r` as well as `\n`, and JavaScript's `/m` `^` also matches
-//   between a `\r` and its `\n`. With `\s*` greedy, every match began one
-//   character early — on the previous line's `\n` — so the slice held one `\n`
-//   too few and every task resolved to line N-1.
-//
-// On the LAST task that is a no-op: nothing matches `sourceLine`, `toggle`
-// returns false, and the caller restores the control. The reporter reads that
-// as "the checkbox does not work". Everywhere else the off-by-one lands on a
-// *real* task line and silently rewrites the wrong one, which is worse and was
-// never reported because nobody could see it happen.
-//
-// These tests drive the real document session over both line endings. The
-// existing behavioural toggle test lives in `documents.load.spec.ts` and
-// passes `sourceLine: 1` — the one line number the bug cannot reach, since at
-// offset 0 there is no preceding terminator for `\s*` to eat.
-describe('task toggle line endings', () => {
-	// The runes are the compiler's, not ours: vitest builds `.svelte.ts` through the
-	// Svelte plugin, so the store and the session run under real reactivity, and jsdom
-	// supplies `window` and `localStorage`. Only the Tauri backend is stubbed.
-
-	let invokeCalls: Array<{ cmd: string; args: any }> = [];
-	let handleInvoke: (cmd: string, args: any) => unknown = () => {
-		throw new Error('unexpected invoke');
-	};
-
-	beforeAll(() => {
-		(window as any).__TAURI_INTERNALS__ = {
-			metadata: { currentWindow: { label: 'main' }, currentWebview: { windowLabel: 'main', label: 'main' } },
-			invoke: (cmd: string, args: any) => {
-				invokeCalls.push({ cmd, args });
-				return Promise.resolve(handleInvoke(cmd, args)).then((value) => value);
-			},
-		};
-	});
-
-	function makeSession() {
-		return createDocumentSession({
-			setShowHome: () => {},
-			currentFile: () => tabManager.activeTab?.path ?? '',
-			resetScrollHistory: () => {},
-			renderMarkdown: async (raw: string) => `<p>${raw.length}</p>`,
-			afterLoad: async () => {},
-			saveRecentFile: () => {},
-			deleteRecentFile: () => {},
-			setLoadingTabs: () => {},
-			measureInitialViewport: () => {},
-			isScrolling: () => false,
-			onError: () => {},
-			onDiskChangedUnderSave: () => {},
-			cancelPendingAutoSave: () => {},
-			askClose: async () => 'discard' as const,
-			onCloseSaveNewerEdits: () => {},
-			onCloseAutoSaveFailed: () => {},
-			onPartialCopySaved: () => {},
-		});
-	}
-
-	/**
-	 * Opens `doc`, toggles the task on `sourceLine`, and returns what was written.
-	 *
-	 * Returns null when the toggle refused to write, which is the shape the last
-	 * task in a CRLF document had before this fix.
-	 */
-	async function toggledContent(doc: string, sourceLine: number, nowChecked: boolean) {
-		tabManager.closeAll();
-		invokeCalls = [];
-		handleInvoke = (cmd) => {
-			if (cmd === 'open_markdown_preview') return [doc, false, false];
-			if (cmd === 'read_file_content_checked') return [doc, false];
-			if (cmd === 'save_file_content') return null;
-			return null;
-		};
-		const session = makeSession();
-		await session.loadMarkdown('/docs/tasks.md');
-		await session.toggleTaskCheckbox(sourceLine, nowChecked);
-		const write = invokeCalls.find((call) => call.cmd === 'save_file_content');
-		return write ? (write.args.content as string) : null;
-	}
-
-	/**
-	 * The same document in both line endings, so a case can be run over each.
-	 *
-	 * The blank line before the list is not decoration — it is the condition that
-	 * makes this reachable on LF. `\s*` is greedy and `/m` `^` matches at the
-	 * start of the blank line, so the match ate the blank line's terminator and
-	 * `offset` landed one line early. Every list written the ordinary way, with a
-	 * blank line above it, hit this on every platform; CRLF widened it from the
-	 * first task of each block to all of them.
-	 */
-	function document(eol: string) {
-		return ['intro', '', '- [ ] one', '- [ ] two', '- [ ] three'].join(eol) + eol;
-	}
-
-	/** A list that starts immediately after prose — the shape that always worked. */
-	function documentWithoutBlankLine(eol: string) {
-		return ['intro', '- [ ] one', '- [ ] two'].join(eol) + eol;
-	}
-
-	for (const [name, eol] of [
-		['LF', '\n'],
-		['CRLF', '\r\n'],
-	] as const) {
-		test(`${name}: the task the reader clicked is the task that changes`, async () => {
-			// Line 3 is `- [ ] two`. Under the old pattern this resolved to line 2
-			// and rewrote `one` instead — a silent, invisible wrong write.
-			const written = await toggledContent(document(eol), 4, true);
-			assert.ok(written, 'the toggle wrote');
-			assert.equal(written, ['intro', '', '- [ ] one', '- [x] two', '- [ ] three'].join(eol) + eol);
-		});
-
-		test(`${name}: the last task toggles at all`, async () => {
-			// Line 4 is the last task. Under the old pattern nothing matched line 4,
-			// so the write was skipped entirely and the control snapped back. This
-			// is the symptom #148 reports.
-			const written = await toggledContent(document(eol), 5, true);
-			assert.ok(written, 'the toggle wrote instead of silently refusing');
-			assert.equal(written, ['intro', '', '- [ ] one', '- [ ] two', '- [x] three'].join(eol) + eol);
-		});
-
-		test(`${name}: unticking is the same arithmetic`, async () => {
-			const doc = ['intro', '', '- [x] one', '- [x] two'].join(eol) + eol;
-			const written = await toggledContent(doc, 4, false);
-			assert.equal(written, ['intro', '', '- [x] one', '- [ ] two'].join(eol) + eol);
-		});
-
-		test(`${name}: only one line changes`, async () => {
-			// The failure mode this guards is a match that spans the previous line's
-			// terminator: the replacement then rewrites two lines at once.
-			const before = document(eol);
-			const written = await toggledContent(before, 4, true);
-			assert.ok(written);
-			const changed = written!
-				.split(eol)
-				.filter((line, index) => line !== before.split(eol)[index]);
-			assert.deepEqual(changed, ['- [x] two'], 'exactly one line differs');
-		});
-
-		test(`${name}: the shapes the write-back claims to support`, async () => {
-			// Ordered, parenthesised, quoted, nested and `*`/`+` bullets all go
-			// through the same pattern; the CRLF bug hit every one of them.
-			const doc = ['intro', '', '1. [ ] ordered', '2) [ ] paren', '> - [ ] quoted', '  * [ ] nested', '+ [ ] plus'].join(eol) + eol;
-			for (const [line, expected] of [
-				[3, '1. [x] ordered'],
-				[4, '2) [x] paren'],
-				[5, '> - [x] quoted'],
-				[6, '  * [x] nested'],
-				[7, '+ [x] plus'],
-			] as const) {
-				const written = await toggledContent(doc, line, true);
-				assert.ok(written, `line ${line} wrote`);
-				assert.equal(written!.split(eol)[line - 1], expected);
-			}
-		});
-	}
-
-	test('a tab-indented task keeps its indentation', async () => {
-		// `[ \t]*` has to admit a tab, or a tab-indented task stops being found at
-		// all — the failure the narrowing could plausibly have introduced.
-		const doc = ['intro', '', '\t- [ ] tabbed'].join('\r\n') + '\r\n';
-		const written = await toggledContent(doc, 3, true);
-		assert.equal(written, ['intro', '', '\t- [x] tabbed'].join('\r\n') + '\r\n');
-	});
-
-	// The condition, isolated. A list that begins immediately after prose was
-	// always correct on LF — which is why the first version of this file, whose
-	// fixtures had no blank line, passed on LF and hid half the bug.
-	for (const [name, eol] of [
-		['LF', '\n'],
-		['CRLF', '\r\n'],
-	] as const) {
-		test(`${name}: a list with no blank line above it`, async () => {
-			const written = await toggledContent(documentWithoutBlankLine(eol), 3, true);
-			assert.equal(written, ['intro', '- [ ] one', '- [x] two'].join(eol) + eol);
-		});
-	}
-
-	test('LF: the first task after a blank line is the one that regressed', async () => {
-		// On LF only the first task of each block was wrong: `\s*` could eat the
-		// blank line's single `\n`, but not a task line above it. That is why
-		// samples/stress-test.md — 44 tasks, LF — had exactly six wrong, one per
-		// block. CRLF widened it to every task, because `^` also matches between
-		// a `\r` and its `\n`.
-		const doc = ['intro', '', '- [ ] one', '- [ ] two'].join('\n') + '\n';
-		const written = await toggledContent(doc, 3, true);
-		assert.equal(written, ['intro', '', '- [x] one', '- [ ] two'].join('\n') + '\n');
-	});
-
-	test('LF: two blank lines above the list', async () => {
-		const doc = ['intro', '', '', '- [ ] one'].join('\n') + '\n';
-		const written = await toggledContent(doc, 4, true);
-		assert.equal(written, ['intro', '', '', '- [x] one'].join('\n') + '\n');
-	});
-
-	// ---------------------------------------------- the toggle does not re-render
-	//
-	// Ticking a checkbox writes the buffer, and MarkdownViewer's render effect
-	// re-renders whenever the buffer stops matching `previewedRawContent`. It
-	// would rebuild the whole article to arrive at the DOM already on screen — the
-	// browser has drawn the native checkbox and the caller has added `task-done` —
-	// and rebuilding drops the reader's scroll position, which in a long document
-	// throws the view somewhere else entirely.
-
-	test('a toggle tells the preview it is already up to date', async () => {
-		const doc = ['intro', '', '- [ ] one', '- [ ] two'].join('\n') + '\n';
-		tabManager.closeAll();
-		invokeCalls = [];
-		handleInvoke = (cmd) => {
-			if (cmd === 'open_markdown_preview') return [doc, false, false];
-			if (cmd === 'read_file_content_checked') return [doc, false];
-			if (cmd === 'save_file_content') return null;
-			return null;
-		};
-		const session = makeSession();
-		await session.loadMarkdown('/docs/tasks.md');
-		const tab = tabManager.activeTab!;
-
-		await session.toggleTaskCheckbox(3, true);
-
-		assert.equal(tab.previewedRawContent, tab.rawContent, 'the render effect has nothing to do');
-	});
-
-	// #804: with auto-save off the toggle is an unsaved edit like any other. It used
-	// to save the whole buffer, taking the user's unsaved typing to disk with it.
-	test('with auto-save off a toggle leaves the tab unsaved', async () => {
-		const doc = ['- [ ] one'].join('\n') + '\n';
-		tabManager.closeAll();
-		invokeCalls = [];
-		handleInvoke = (cmd) => {
-			if (cmd === 'open_markdown_preview') return [doc, false, false];
-			if (cmd === 'read_file_content_checked') return [doc, false];
-			return null;
-		};
-		const session = makeSession();
-		await session.loadMarkdown('/docs/tasks.md');
-		const tab = tabManager.activeTab!;
-		settings.autoSave = false;
-		try {
-			assert.equal(await session.toggleTaskCheckbox(1, true), true);
-		} finally {
-			settings.autoSave = true;
-		}
-		assert.equal(tab.rawContent, '- [x] one\n');
-		assert.equal(tab.isDirty, true);
-		assert.equal(invokeCalls.some((call) => call.cmd === 'save_file_content'), false);
-	});
-
-	test('a task in an untitled tab can be toggled', async () => {
-		tabManager.closeAll();
-		invokeCalls = [];
-		handleInvoke = () => null;
-		const session = makeSession();
-		tabManager.addNewTab();
-		const tab = tabManager.activeTab!;
-		tabManager.updateTabRawContent(tab.id, '- [ ] one\n');
-
-		assert.equal(await session.toggleTaskCheckbox(1, true), true);
-		assert.equal(tab.rawContent, '- [x] one\n');
-		assert.equal(invokeCalls.some((call) => call.cmd === 'save_file_content'), false);
-	});
-});
 
 describe('view mode without saving', () => {
 	// ---------------------------------------------------------------- environment
@@ -1622,16 +1131,7 @@ describe('view mode without saving', () => {
 
 	function makeSession(askClose: (title: string) => Promise<'save' | 'discard' | 'cancel'>) {
 		return createDocumentSession({
-			setShowHome: () => {},
-			currentFile: () => tabManager.activeTab?.path ?? '',
-			resetScrollHistory: () => {},
-			renderMarkdown: async (raw: string) => `<p>${raw.length}</p>`,
 			afterLoad: async () => {},
-			saveRecentFile: () => {},
-			deleteRecentFile: () => {},
-			setLoadingTabs: () => {},
-			measureInitialViewport: () => {},
-			isScrolling: () => false,
 			onError: () => {},
 			onDiskChangedUnderSave: () => {},
 			cancelPendingAutoSave: () => {},
@@ -1644,7 +1144,8 @@ describe('view mode without saving', () => {
 
 	test('closing a tab with unsaved edits still asks, and Cancel still keeps it open', async () => {
 		setSettings(false);
-		tabManager.closeAll();
+		tabManager.tabs = [];
+		tabManager.activeTabId = null;
 		tabManager.addTab('/notes/note.md');
 		const tab = tabManager.activeTab!;
 		tabManager.setTabRawContent(tab.id, ON_DISK);

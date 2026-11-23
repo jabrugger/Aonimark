@@ -7,7 +7,7 @@
 	import { tabManager } from '../stores/tabs.svelte.js';
 	import { settings } from '../stores/settings.svelte.js';
 	import { t } from '../utils/i18n.js';
-	import { getConfiguredTitlebarToolbarIds, visibleTitlebarActionIds } from '../utils/titlebarToolbar.js';
+	import { titlebarActionIds } from '../utils/titlebarToolbar.js';
 	import { shortcutLabel } from '../utils/shortcuts.js';
 	import { TitleBarPlatform } from '../stores/titleBarPlatform.svelte.js';
 	import { getVersion } from '@tauri-apps/api/app';
@@ -17,7 +17,6 @@ import { TitleBarPopovers, containClick } from '../stores/titleBarPopovers.svelt
 
 	let {
 		isFocused,
-		isScrolled,
 		currentFile,
 		liveMode,
 
@@ -38,7 +37,6 @@ import { TitleBarPopovers, containClick } from '../stores/titleBarPopovers.svelt
 		onopenSettings,
 	} = $props<{
 		isFocused: boolean;
-		isScrolled: boolean;
 		currentFile: string;
 		liveMode: boolean;
 
@@ -168,44 +166,15 @@ import { TitleBarPopovers, containClick } from '../stores/titleBarPopovers.svelt
 		}
 	});
 
-	let visibleActionIds = $derived.by(() =>
-		visibleTitlebarActionIds({
+	let actionIds = $derived(
+		titlebarActionIds({
 			hasActiveTab: Boolean(tabManager.activeTab),
 			currentFile,
 			zoomLevel,
 		}),
 	);
 
-	let configuredActionIds = $derived.by(() =>
-		getConfiguredTitlebarToolbarIds(
-			visibleActionIds,
-			settings.titlebarToolbarOrder,
-			settings.titlebarToolbarHidden,
-			settings.titlebarToolbarPlacement,
-		),
-	);
-
-	let pinnedTags = $state<Array<{ name: string; color: string }>>([]);
-
-	$effect(() => {
-		if (!popovers.homeMenuOpen) return;
-		commands.listPinnedTags()
-			.then((tags) => (pinnedTags = tags))
-			.catch(console.error);
-	});
 	let appVersion = $state('');
-	let savedVscodeThemes = $state<string[]>([]);
-	
-	$effect(() => {
-		if (popovers.themeMenuOpen) {
-			commands.getSavedVscodeThemes()
-				.then((themes) => {
-					savedVscodeThemes = themes as string[];
-				})
-				.catch(console.error);
-		}
-	});
-
 	$effect(() => {
 		getVersion()
 			.then((v) => {
@@ -224,7 +193,7 @@ import { TitleBarPopovers, containClick } from '../stores/titleBarPopovers.svelt
 
 <svelte:window bind:innerWidth />
 
-<div class="custom-title-bar {isScrolled ? 'scrolled' : ''} {!isMac ? 'windows' : ''} {isMac ? 'native-mac' : ''}" class:maximized={isMaximized}>
+<div class="custom-title-bar {!isMac ? 'windows' : ''} {isMac ? 'native-mac' : ''}" class:maximized={isMaximized}>
 	{#if !isMac && !isWin11}
 		<div class="window-top-border"></div>
 	{/if}
@@ -295,7 +264,7 @@ import { TitleBarPopovers, containClick } from '../stores/titleBarPopovers.svelt
 				{t('menu.openFile', currentLanguage)}
 				<span class="menu-shortcut">{shortcutLabel('file-open', modifier)}</span>
 			</button>
-					{#if currentFile !== '' || (tabManager.activeTab && tabManager.activeTab.isEditing)}
+					{#if currentFile !== '' || tabManager.activeTab}
 						<button
 						class="home-menu-item"
 						onclick={() => {
@@ -558,14 +527,6 @@ import { TitleBarPopovers, containClick } from '../stores/titleBarPopovers.svelt
 								<button class="theme-option {theme === 'system' ? 'selected' : ''}" onclick={() => handleSetTheme('system')}> {t('theme.followSystem', currentLanguage)} </button>
 								<button class="theme-option {theme === 'light' ? 'selected' : ''}" onclick={() => handleSetTheme('light')}> {t('theme.defaultLight', currentLanguage)} </button>
 								<button class="theme-option {theme === 'dark' ? 'selected' : ''}" onclick={() => handleSetTheme('dark')}> {t('theme.defaultDark', currentLanguage)} </button>
-								{#if savedVscodeThemes.length > 0}
-									<div class="theme-menu-divider"></div>
-									{#each savedVscodeThemes as t}
-										<button class="theme-option {theme === `vscode:${t}` ? 'selected' : ''}" onclick={() => handleSetTheme(`vscode:${t}`)}>
-											{t}
-										</button>
-									{/each}
-								{/if}
 							</div>
 						{/if}
 					</div>
@@ -594,13 +555,13 @@ import { TitleBarPopovers, containClick } from '../stores/titleBarPopovers.svelt
 		{/snippet}
 
 		{#if isCollapsed}
-			{@render actionMenu(configuredActionIds.visibleIds)}
+			{@render actionMenu([...actionIds.barIds, ...actionIds.menuIds])}
 		{:else}
 			<div class="title-actions inline" data-tauri-drag-region>
-				{@render actionItems(configuredActionIds.barIds)}
+				{@render actionItems(actionIds.barIds)}
 			</div>
 
-			{@render actionMenu(configuredActionIds.menuIds)}
+			{@render actionMenu(actionIds.menuIds)}
 		{/if}
 	</div>
 
@@ -669,9 +630,6 @@ import { TitleBarPopovers, containClick } from '../stores/titleBarPopovers.svelt
 		pointer-events: none;
 	}
 
-	.custom-title-bar.scrolled {
-		border-bottom-color: var(--color-border-muted);
-	}
 
 	/*
 	 * What the window tag covers, drawn once for the whole strip.

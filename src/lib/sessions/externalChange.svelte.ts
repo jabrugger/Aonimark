@@ -1,10 +1,9 @@
 import type { LanguageCode, TranslationKey } from '../utils/i18n.js';
 import type { LoadMarkdownOptions } from './documentSession.svelte.js';
-import { refetchLocalImages } from '../utils/markdown.js';
 
 type ConflictTab = { id: string; path: string; originalContent: string; rawContent: string; isDirty: boolean };
 
-export type ExternalChangeOptions = {
+type ExternalChangeOptions = {
 	tabManager: {
 		readonly tabs: ConflictTab[];
 		readonly activeTab: ConflictTab | null | undefined;
@@ -22,12 +21,10 @@ export type ExternalChangeOptions = {
 	canCloseTab: (tabId: string) => Promise<boolean>;
 	/** `read_file_content_checked`: the file as it is on disk now. */
 	readFile: (path: string) => Promise<[string, boolean, string]>;
-	editorLanguageFor: (path: string) => string;
 	addToast: (message: string, type?: 'info' | 'error' | 'warning') => unknown;
 	t: (key: TranslationKey, language: LanguageCode) => string;
 };
 
-export type Comparison = { tabId: string; onDisk: string; mine: string; language: string };
 
 /**
  * The viewer's saves and the external-change conflict bar they answer to:
@@ -146,13 +143,10 @@ export function createExternalChange(options: ExternalChangeOptions) {
 		// The reload lands in the active tab, so it is refused for any other.
 		const tab = tabManager.activeTab;
 		if (!tab?.path || tab.id !== tabId) return;
-		comparison = null;
 		clearExternalChangeConflict(tab.id);
-		refetchLocalImages();
 		await loadMarkdown(tab.path, {
 			preserveEditState: true,
 			skipTabManagement: true,
-			resetScrollHistory: true,
 			// The user answered "the file changed under your edits" with the
 			// disk version. Every other caller of loadMarkdown is an OPEN and
 			// must leave an edited buffer alone; this one is the revert, and
@@ -167,11 +161,9 @@ export function createExternalChange(options: ExternalChangeOptions) {
 		if (!activeId || !tab?.path) return;
 		if (!(await options.canCloseTab(activeId))) return;
 
-		refetchLocalImages();
 		await loadMarkdown(tab.path, {
 			preserveEditState: true,
 			skipTabManagement: true,
-			resetScrollHistory: true,
 			// canCloseTab has already resolved the buffer, so normally there is
 			// nothing left to discard — but the user can type during that await,
 			// and a reload that silently did nothing would be worse than one
@@ -181,44 +173,6 @@ export function createExternalChange(options: ExternalChangeOptions) {
 		addToast(t('toast.reloadedFromDisk', settings.language), 'info');
 	}
 
-	/**
-	 * The two versions the conflict bar is asking about, once the user has
-	 * asked to see them.
-	 *
-	 * Read on demand rather than kept alongside the flag: the bar can stand for
-	 * a while, and what matters is what the file says when the question is
-	 * actually being answered, not what it said when it was raised.
-	 */
-	let comparison = $state<Comparison | null>(null);
-
-	// The overlay answers for the tab it was opened on. Switching tabs, or that
-	// tab's conflict going void, closes it rather than letting its buttons land
-	// on whatever is in front. The viewer runs this in an `$effect`.
-	function closeStaleComparison() {
-		if (comparison && (comparison.tabId !== tabManager.activeTabId || !hasExternalChangeConflict(comparison.tabId))) {
-			comparison = null;
-		}
-	}
-
-	/** "Compare": show what Reload would replace, before it is irreversible. */
-	async function compareExternalChange() {
-		const tab = tabManager.activeTab;
-		if (!tab?.path) return;
-		try {
-			const [onDisk] = await options.readFile(tab.path);
-			if (tabManager.activeTabId !== tab.id) return;
-			comparison = {
-				tabId: tab.id,
-				onDisk,
-				mine: tab.rawContent,
-				language: options.editorLanguageFor(tab.path),
-			};
-		} catch (error) {
-			console.error('Failed to read the file for comparison', error);
-			addToast(`${t('externalChange.compare', settings.language)}: ${String(error)}`, 'error');
-		}
-	}
-
 	/** "Keep my version": dismiss. The buffer stays dirty and saveable. */
 	function resolveExternalChangeByKeepingBuffer(id: string) {
 		// The answer is about a write, not about a bar: the next save has to be
@@ -226,7 +180,6 @@ export function createExternalChange(options: ExternalChangeOptions) {
 		// changed file. One save only — a third program writing a minute later
 		// is a new question, and the user has not answered that one.
 		documentSession.allowOverwriteOnce(id);
-		comparison = null;
 		clearExternalChangeConflict(id);
 	}
 
@@ -249,11 +202,6 @@ export function createExternalChange(options: ExternalChangeOptions) {
 	}
 
 	return {
-		get comparison() {
-			return comparison;
-		},
-		closeComparison: () => void (comparison = null),
-		closeStaleComparison,
 		saveContent,
 		saveActiveTab,
 		saveSilently,
@@ -263,7 +211,6 @@ export function createExternalChange(options: ExternalChangeOptions) {
 		clearExternalChangeConflict,
 		resolveExternalChangeByReloading,
 		reloadFromDisk,
-		compareExternalChange,
 		resolveExternalChangeByKeepingBuffer,
 		handleFileChanged,
 	};

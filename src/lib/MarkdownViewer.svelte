@@ -1,139 +1,49 @@
 <script lang="ts">
 	import { commands, events, type Appearance } from './bindings.js';
-	import { getAllWindows, getCurrentWindow } from '@tauri-apps/api/window';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 	import { onMount, tick, untrack } from 'svelte';
 import { fade } from 'svelte/transition';
-import { openPath } from '@tauri-apps/plugin-opener';
 	import { open, save, ask } from '@tauri-apps/plugin-dialog';
 	import Settings from './components/Settings.svelte';
 	import TitleBar from './components/TitleBar.svelte';
-import { folderManager, snapshotFolder } from './stores/folder.svelte.js';
 	import WysiwygEditor from './components/WysiwygEditor.svelte';
 	import Modal from './components/Modal.svelte';
 	import UpdateDialog from './components/UpdateDialog.svelte';
 	import { updateStore } from './stores/update.svelte.js';
-	import ContextMenu, { type ContextMenuItem } from './components/ContextMenu.svelte';
 	import Toast from './components/Toast.svelte';
 	import { createWindowExit } from './sessions/windowExit.js';
 	import { createExternalChange } from './sessions/externalChange.svelte.js';
-	import { createViewMode } from './sessions/viewMode.svelte.js';
-import { createFrontMatterEdit } from './sessions/frontMatterEdit.js';
-import { createColdEnrichmentRestore } from './sessions/coldEnrichmentRestore.js';
 	import { autoSaveFailureNeedsToast, isAutoSaveEligible } from './utils/autoSaveTimer.js';
-	import { showsHomeScreen } from './utils/homeTab.js';
-	import { editorLanguageFor } from './utils/editorLanguage.js';
 	import { buildMenuModel, installAppMenu, type MenuAction } from './utils/appMenu.js';
-import { MARKDOWN_OPEN_FILTERS } from './utils/markdownLinks.js';
-import {
-	resolveMermaidTheme,
-} from './utils/mermaidPrint.js';
-import {
-	flashCopiedLabel,
-	renderRichContent as renderRichContentInto,
-} from './utils/richContent.js';
-import { type FoldLayoutObservation } from './utils/foldLayout.js';
-import { stampImageGeneration } from './utils/markdown.js';
-import {
-	measureAnchorBox,
-	restorePreviewReadingPosition,
-	anchorScrollTop,
-	type AnchorBox,
-	type AnchorNode,
-	type OffsetLayoutNode,
-} from './utils/previewAnchor.js';
-import { type SourceLineReader } from './utils/previewCursor.js';
-import { asRendererLine, lineCoordinates, type RendererLine } from './utils/lineCoordinates.js';
-import { getMarkdownBodyWithoutFrontMatter, updateFrontMatterField, type FrontMatterField } from './utils/frontMatter.js';
-import { FrontMatterFieldState } from './utils/frontMatterFieldState.svelte.js';
-import { anchorIdCandidates, hasMarkdownLinkExtension, type MarkdownLinkTarget as RelativeMarkdownTarget } from './utils/markdownLinks.js';
-import { diagramToPngBase64 } from './utils/diagramImage.js';
-import { openRelativeMarkdownTarget as openRelativeTarget, openWithSystem as openPathWithSystem } from './utils/previewLinks.js';
-import { canonicalizePath } from './utils/pathIdentity.js';
+import { hasMarkdownLinkExtension, MARKDOWN_OPEN_FILTERS } from './utils/markdownLinks.js';
 import { ChoiceDialog } from './utils/choiceDialog.svelte.js';
-import { saveImageAs as saveImageAsFile } from './utils/viewerContextMenu.js';
-import { createRecentFiles } from './utils/recentFiles.js';
 
 	const appWindow = getCurrentWindow();
 
-import { pinnedTagFromWindowLabel } from './utils/pinnedTagWindow.js';
-import { tabManager, type Tab } from './stores/tabs.svelte.js';
-import { createTabMovers, createTransferOptions } from './sessions/windowTransfer.js';
+import { tabManager } from './stores/tabs.svelte.js';
 import { viewerCommandTable } from './utils/viewerCommands.js';
-import { previewAppearanceFrom } from './utils/previewLayout.js';
 import { dispatchViewerKey, type KeyContext, type ViewerCommand } from './utils/viewerKeymap.js';
-import {
-	getPreviewScrollAnchor as previewScrollAnchor,
-	getPreviewScrollSyncPosition as previewScrollSyncPosition,
-	getPreviewScrollTopForSyncPosition,
-} from './utils/previewScrollSync.js';
-import { type ScrollSyncPosition } from './utils/scrollSync.js';
 import { resolveTheme, settings, wheelZoomFactor } from './stores/settings.svelte.js';
 import { t } from './utils/i18n.js';
-import { commitWithoutTransitions, jumpScrollBehavior } from './utils/motion.js';
 import { createWindowSession } from './sessions/windowSession.svelte.js';
-import { reportWindowMeta } from './sessions/windowMeta.svelte.js';
 import { createBoundedWriter, restoreRecords, recoverySnapshot } from './sessions/unsavedRecovery.js';
 import { createDocumentSession, type LoadMarkdownOptions } from './sessions/documentSession.svelte.js';
 import { followActiveFile } from './sessions/fileWatch.svelte.js';
 
-	import 'highlight.js/styles/github-dark.css';
-	import 'katex/dist/katex.min.css';
+import { followTheme } from './utils/themeEffect.svelte.js';
 
 	let mode = $state<'loading' | 'app'>('loading');
 	let isDisposed = false;
-
 	let showSettings = $state(false);
-
-	let recentFiles = $state<string[]>([]);
-	const recentFileList = createRecentFiles((files) => (recentFiles = files));
 	let isFocused = $state(true);
-	
-	let markdownBody: HTMLElement | null = $state(null);
-	let layoutContainerEl: HTMLElement | null = $state(null);
-	/**
-	 * One host per tab, holding that tab's rendered document. `previewPatch.ts`
-	 * owns their children, not Svelte: an `{@html}` here would rebuild the
-	 * article on every keystroke.
-	 *
-	 * One per tab so a tab switch patches nothing: the host still holds that
-	 * document, so no nodes are replaced or re-enriched.
-	 *
-	 * Only the active host is patched or observed. A hidden host is
-	 * `display: none`, so everything in it measures 0, and `updateFoldHeights`
-	 * would write that into `--fold-content-height` and collapse its folds. A
-	 * background tab catches up when it is next shown.
-	 */
-	let previewHosts = $state<Record<string, HTMLElement | null>>({});
-	// Filled by `exportAsPdf` for the duration of a print and emptied again;
-	// `@media print` reveals it and hides everything else under `#app`.
-	
-	let previewBlocks = $derived(
-		tabManager.activeTabId ? (previewHosts[tabManager.activeTabId] ?? null) : null,
-	);
-	const foldLayout: { current: FoldLayoutObservation | null } = { current: null };
-	
-	// On by default, as in VS Code: a clean tab follows the file on disk.
+	// A clean document follows its file on disk.
 	let liveMode = $state(true);
-
-	// One decision, asked by the four jumps below and handed to `FindBar` and
-	// `Editor` for theirs. See `utils/motion.ts`.
-	const jumpBehavior = $derived(jumpScrollBehavior(settings.animateJumpScroll));
-
-
 	let isDragging = $state(false);
-		
-	/**
-	 * The reference for a heading of THIS document, in the spelling this
-	 * document is written in. See `headingReference.ts` — the inference falls
-	 * back to what the menu has always produced.
-	 */
-	
+
 	function reportUnsupportedDrop(path: string) {
 		const filename = path.split(/[/\\]/).pop() || 'File';
 		addToast(t('toast.unsupportedFile', settings.language).replace('{{filename}}', filename), 'error');
 	}
-	let editorPaneEl = $state<HTMLElement>();
-		let isProgrammaticScroll = false;
 
 	let toasts = $state<{ id: string; message: string; type: 'info' | 'error' | 'warning'; sticky?: boolean }[]>([]);
 	function addToast(message: string, type: 'info' | 'error' | 'warning' = 'info', sticky = false): string {
@@ -145,166 +55,44 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		toasts = toasts.filter((toast) => toast.id !== id);
 	}
 
-	// --- Auto-save bookkeeping (see saveContent + auto-save $effect below) ---
-	// Per-tab debounce timers so switching tabs cannot kill another tab's pending save.
+	// Auto-save bookkeeping (see the auto-save $effect below).
 	const autoSaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
-	// Per-tab last-seen rawContent value, used by the auto-save effect to
-	// detect which tab actually changed in this run. JS string `===` is a
-	// value compare, so any edit yields a different value — including
-	// same-length ones (overwriting characters, formatting toggles) that
-	// a length-based tick would miss.
+	// Last-seen rawContent per tab. A string compare, so any edit counts, including same-length ones.
 	const lastContentRefByTab = new Map<string, string>();
 	const AUTO_SAVE_DEBOUNCE_MS = 1500;
 
-	// Cancel a pending auto-save for a tab. Call this only on paths that
-	// COMMIT to a save or discard outcome — never before showing a modal,
-	// because if the user picks Cancel, the timer is gone forever and
-	// background auto-save is silently disabled for that tab until the
-	// next keystroke.
-	//
-	// The *save* half is no longer a call-site duty: `saveContent` cancels the
-	// tab's timer itself, past the point where it can still bail out. Only the
-	// discard path still calls this directly, because nothing saves on its
-	// behalf. Do not re-add a cancel before a `saveContent` — it is redundant,
-	// and reintroduces the question of whether every new entry point remembered.
+	/**
+	 * Cancels a pending auto-save. Call it only on paths that commit to a save
+	 * or discard outcome, never before a modal: a Cancel would leave auto-save
+	 * silently off until the next keystroke. `saveContent` cancels its own timer.
+	 */
 	function cancelPendingAutoSave(tabId: string) {
-		const t = autoSaveTimers.get(tabId);
-		if (t) {
-			clearTimeout(t);
+		const timer = autoSaveTimers.get(tabId);
+		if (timer) {
+			clearTimeout(timer);
 			autoSaveTimers.delete(tabId);
 		}
 	}
 
-	
-	// What a document with no tab behind it has folded. Never written to — every
-	// write goes through `foldHost.setFolds`, which needs an active tab.
-	
-	let activeTab = $derived(tabManager.activeTab);
-	// Fold state belongs to the document, so it lives on the tab (see
-	// `Tab.foldOverrides`). Reading it through a derived is what makes a tab
-	// switch swap the whole set: the preview render, the table of contents and
-	// find all see the folds of the document on screen and no other document's.
-		let isEditing = $derived(activeTab?.isEditing ?? false);
-	let rawContent = $derived(activeTab?.rawContent ?? '');
-	let isSplit = $derived(activeTab?.isSplit ?? false);
-	/**
-	 * Which editor the edit pane shows. WYSIWYG only replaces the Monaco editor
-	 * in single-pane edit mode: split view keeps Monaco, because its scroll
-	 * sync and shared cursor are built around Monaco's line model.
-	 */
-			/**
-	 * Is there an editor on screen? The two flags are independent — split
-	 * view is `isSplit` alone when entered from reading mode — so anything
-	 * that hands the reader over to the editor has to ask both. The outline
-	 * asked only `isEditing`, and a click on it in split view moved the
-	 * preview but not the editor beside it (#744).
-	 */
-			
 	let currentFile = $derived(tabManager.activeTab?.path ?? '');
-	let frontMatterPanelKey = $derived(currentFile || tabManager.activeTabId || 'untitled');
-		const frontMatterFields = new FrontMatterFieldState(() => frontMatterPanelKey);
-		// An untitled tab is Markdown until saved under another name; see `editorLanguageFor`.
-		let editorLanguage = $derived(editorLanguageFor(currentFile));
-		let scrollTop = $derived(tabManager.activeTab?.scrollTop ?? 0);
-	let isScrolled = $derived(scrollTop > 0);
-	let windowTitle = $derived(tabManager.activeTab?.title ?? 'Markpad');
-	let isScrollSynced = $derived(tabManager.activeTab?.isScrollSynced ?? false);
-		
-	let loadingTabs = $state<string[]>([]);
-	
-	let showHome = $state(false);
-	// Which side the tab column is on, or null while the tabs are across the
-	// title bar or hidden (#884). Zen mode clears `showTabs`, so it hides the
-	// column through the same switch it uses for the strip, and hides the folder too.
-			// With the tabs in a column the folder stacks into it; otherwise it takes its own side.
-			// The bounds come from TOC_WIDTH_RANGE, the same object settings.setTocWidth
-	// clamps against, so the handle cannot offer a width persistence would shrink.
-	// The keyboard increment stays local: TOC_WIDTH_RANGE.step is 1, the spin-button
-	// granularity of the numeric settings input, and arrow keys move the splitter 16px.
-				
-	/*
-	 * How tall the editor toolbar currently is, measured rather than assumed.
-	 *
-	 * The floating table-of-contents toggle is absolutely positioned against
-	 * `.layout-container`, and its `top` used to be the literal 48px — the 36px
-	 * title bar plus a 12px inset. That is the right answer only in preview,
-	 * where the title bar is the whole of the chrome above the document. In edit
-	 * mode the toolbar occupies exactly that strip, so the toggle landed on top
-	 * of its first button.
-	 *
-	 * Reading the height keeps one answer to "where does the chrome end": the
-	 * toolbar's own layout. A second literal here would have to be re-derived
-	 * every time its padding, border or font changed, and nothing would fail
-	 * when it was not — the toggle would just start overlapping again.
-	 *
-	 * The `{#if}` around the toolbar is mirrored rather than the height: a
-	 * `clientHeight` binding keeps its last value when the element it measured
-	 * goes away, so the toggle would stay pushed down after the toolbar was
-	 * hidden or the tab returned to preview.
-	 */
+	let windowTitle = $derived(tabManager.activeTab?.title ?? 'Aonimark');
+
+	/** How tall the editor toolbar is, measured: the external-change bar sits under it. */
 	let editorToolbarHeight = $state(0);
-	let paneTopChrome = $derived(editorToolbarHeight);
-	let previewAppearance = $derived(previewAppearanceFrom(settings));
-	// Content zoom by font size, as Zed and JetBrains do it: nothing on screen carries a CSS zoom (#1071).
-	let contentZoom = $derived(settings.zoomLevel / 100);
-	// A zoom step reflows the preview under a scrollTop that stays put. CSS zoom used to
-	// scale that offset with the text; now the line at the top is taken before the
-	// reflow and put back after it, where WebKit has no scroll anchoring to do it.
-					
-	/**
-	 * Reaching past a floating outline to touch what it is covering is a request
-	 * for it to move. Only while it IS covering something: pinned it is a
-	 * sidebar, and one sitting in the margin is not in anybody's way.
-	 */
-	
-	
-	import { followTheme } from './utils/themeEffect.svelte.js';
 
 	onMount(() => {
 		// Clear the forced background color from app.html
 		document.documentElement.style.removeProperty('background-color');
 	});
 
-	/**
-	 * What Rust should paint the next window's background before any webview
-	 * exists — the appearance, not the theme.
-	 *
-	 * `theme.txt` is read in exactly one place (`app.rs`, at window creation) and
-	 * for exactly one purpose, and its vocabulary there is "dark", "light" and
-	 * "anything else means ask the OS". A `vscode:` name fell into that last
-	 * branch, so choosing a dark VS Code theme on a light desktop flashed a white
-	 * window on every launch. Whether such a theme is dark is knowable only after
-	 * its JSON has been parsed — which happens here — so the resolved answer is
-	 * what gets stored, instead of a name Rust would have to learn to parse.
-	 */
+	/** What Rust paints the next window's background from, before any webview exists. */
 	function saveStartupAppearance(appearance: Appearance) {
 		commands.saveTheme(appearance).catch(console.error);
 	}
 
-	followTheme(() => settings.theme, {
-		saveStartupAppearance,
-		readVscodeTheme: (name) => commands.readVscodeTheme(name),
-		recolourDiagrams: () => { if (markdownBody) renderRichContent(); },
-		onLoadFailed: (e) => {
-			console.error("Failed to load vscode theme", e);
-			settings.theme = 'system';
-		},
-	});
+	followTheme(() => settings.theme, saveStartupAppearance);
 
-	let tooltip = $state({ show: false, text: '', shortcut: '', html: '', isFootnote: false, x: 0, y: 0, align: 'top' as 'top' | 'right' | 'left' | 'below' });
 	const modalState = new ChoiceDialog();
-
-	let docContextMenu = $state<{
-		show: boolean;
-		x: number;
-		y: number;
-		items: ContextMenuItem[];
-	}>({
-		show: false,
-		x: 0,
-		y: 0,
-		items: [],
-	});
 
 	function askCustom(message: string, options: { title: string; kind: 'info' | 'warning' | 'error'; showSave?: boolean }): Promise<'save' | 'discard' | 'cancel'> {
 		return modalState.ask(message, options);
@@ -338,9 +126,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		promptModal.show = false;
 	}
 
-	// How long a window waits for `windows-restored` before asking anyway: a
-	// reopened window that never finishes loading would otherwise hold back
-	// every file opened from outside.
 	
 	function closeModal(choice: 'save' | 'cancel') {
 		modalState.close(choice);
@@ -352,7 +137,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 
 	
 	
-		let identifyFlashTimer: ReturnType<typeof setTimeout> | undefined;
 
 	const RESTORE_IN_PROGRESS_KEY = 'markpad-window-restore-in-progress';
 
@@ -400,38 +184,18 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		}
 	}
 
-	// The snapshot: window shape only, never document content. `folderRoot`
-	// rides along so each window gets its own folder back.
-	const windowStateJson = () => tabManager.serializeState({ folderRoot: folderManager.root });
-	let restoredFolder: string | null = null;
-
-	const transferOptions = createTransferOptions({
-		windowStateJson,
-		isCloseWalkActive: () => windowExit.isCloseWalkActive(),
-		isDisposed: () => isDisposed,
-		renderPreview: renderTabPreviewFromRaw,
-		restoreReadingPosition: (tab) => {
-			if (markdownBody) restorePreviewReadingPosition(markdownBody, tab, getPreviewScrollMax(markdownBody), measurePreviewBox);
-		},
-	});
+	// The snapshot: which document is open, never its content.
+	const windowStateJson = () => tabManager.serializeState();
 
 	const windowSession = createWindowSession({
 		restoreInProgressKey: RESTORE_IN_PROGRESS_KEY,
-		serializeState: transferOptions.serializeState,
+		serializeState: windowStateJson,
 		shouldRestoreState: () => settings.restoreStateOnReopen,
 		isDisposed: () => isDisposed,
-		restoreState: (json) => {
-			tabManager.restoreState(json);
-			restoredFolder = snapshotFolder(json);
-		},
+		restoreState: (json) => tabManager.restoreState(json),
 		restoredTabs: () => tabManager.tabs.map((tab) => ({ id: tab.id, path: tab.path })),
 		loadRestoredTab: (tabId) => documentSession.readRestoredTab(tabId),
 		dropRestoredTab: (tabId) => tabManager.closeTab(tabId),
-		canTransfer: transferOptions.canTransfer,
-		canDetach: transferOptions.canDetach,
-		transferPayload: transferOptions.transferPayload,
-		onTransferClaimed: (tabId) => tabManager.closeTab(tabId),
-		acceptTransferredTab: transferOptions.acceptTransferredTab,
 		onError: (message, error) => {
 			console.error(message, error);
 			// eslint-disable-next-line markpad/toasts-are-translated -- a pass-through: the sessions pass t() text, and the rest is developer detail beside String(error).
@@ -450,11 +214,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 				'warning',
 			),
 	});
-	const { handleDetach, moveTabToWindow } = createTabMovers({
-		ensureFullContent: (tabId) => documentSession.ensureFullContent(tabId),
-		onPartialDocument: () => addToast(t('toast.partialDocument', settings.language), 'error'),
-		session: windowSession,
-	});
 
 	// The session is recorded as it changes, so a crash or kill brings this
 	// window back as it was. Tracks the window's shape only: which tabs, in
@@ -464,51 +223,20 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	// (focus loss, hide, close, quit).
 	$effect(() => {
 		for (const tab of tabManager.tabs) {
-			void [tab.id, tab.path, tab.title, tab.isEditing, tab.isSplit, tab.splitRatio, tab.isScrollSynced];
+			void [tab.id, tab.path, tab.title];
 		}
-		const tag = tabManager.windowTag;
-		void [tabManager.activeTabId, tag?.name, tag?.color, tag?.pinned, folderManager.root];
+		void tabManager.activeTabId;
 		// Not `serializeState`: its editor flush is only sound when no tab
 		// switch is under way, and this runs on one.
 		windowSession.record(untrack(windowStateJson));
 	});
 
-	const windowMeta = reportWindowMeta(tabManager, pinnedTagFromWindowLabel(appWindow.label) === null);
-
 	$effect(() => {
-		const tag = tabManager.windowTag;
-		appWindow.setTitle(tag ? `${tag.name} — ${windowTitle}` : windowTitle).catch(() => {});
-	});
-
-	let pinnedTags = $state<Array<{ name: string; color: string; files: string[] }>>([]);
-
-	async function refreshPinnedTags() {
-		pinnedTags = (await commands.listPinnedTags()) as typeof pinnedTags;
-	}
-
-	
-	// The template's HomePage gate: an empty window or the home tab shows Home
-	// without `showHome`, which is the cold-start case.
-	// Reading the window tag re-runs this when the title bar pins or unpins it.
-	// The pin's IPC is sent first and sync commands run in order, so the list sees it.
-	$effect(() => {
-		void tabManager.windowTag?.pinned;
-		if (showsHomeScreen(() => tabManager.activeTab, showHome)) refreshPinnedTags().catch(console.error);
+		appWindow.setTitle(windowTitle).catch(() => {});
 	});
 
 	const documentSession = createDocumentSession({
-		setShowHome: (value) => (showHome = value),
-		currentFile: () => currentFile,
-		resetScrollHistory: () => {
-			if (tabManager.activeTabId) tabManager.clearScrollHistory(tabManager.activeTabId);
-		},
-		renderMarkdown: renderMarkdownPreview,
 		afterLoad: tick,
-		saveRecentFile,
-		deleteRecentFile,
-		setLoadingTabs: (tabIds) => (loadingTabs = tabIds),
-		measureInitialViewport: () => {},
-		isScrolling: () => isScrolling,
 		onError: (message, error) => {
 			console.error(message, error);
 			// eslint-disable-next-line markpad/toasts-are-translated -- a pass-through: the sessions pass t() text, and the rest is developer detail beside String(error).
@@ -547,7 +275,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		loadMarkdown,
 		canCloseTab,
 		readFile: (path) => commands.readFileContentChecked(path),
-		editorLanguageFor,
 		addToast,
 		t,
 	});
@@ -555,7 +282,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		saveContent,
 		saveActiveTab,
 		saveSilently,
-		flushBeforeLeavingEditableMode,
 		hasExternalChangeConflict,
 		noteExternalChangeConflict,
 		resolveExternalChangeByReloading,
@@ -563,32 +289,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		resolveExternalChangeByKeepingBuffer,
 	} = externalChange;
 
-	const viewMode = createViewMode({
-		tabManager,
-		settings,
-		documentSession,
-		flushBeforeLeavingEditableMode,
-		readFile: (path) => commands.readFileContentChecked(path),
-		renderTabPreviewFromRaw,
-		tick,
-		addToast,
-		t,
-		editorPane: null,
-		get markdownBody() {
-			return markdownBody;
-		},
-		get previewBlocks() {
-			return previewBlocks;
-		},
-		get lineCoords() {
-			return lineCoords;
-		},
-		readRendererLine: (line) => readRendererLine(line),
-		getPreviewScrollSyncPosition,
-		scrollPreviewToSyncPosition,
-		getPreviewScrollAnchor,
-	});
-	
+		
 	// Persisted through Rust, not localStorage: setItem is an async message
 	// to the WebKit storage process that dies in transit when the last
 	// window's close ends the process (reproduced in QA as "close secondary
@@ -601,16 +302,14 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	// `remember` false: this window closed on its own while others stay, so it
 	// is forgotten — even with restore off, or a later quit with it back on
 	// would reopen it from a stale snapshot.
-	async function persistWindowState(remember: boolean) {
-		if (!remember) await windowSession.persistState(false);
-		else if (settings.restoreStateOnReopen) await windowSession.persistState(true);
+	async function persistWindowState() {
+		if (settings.restoreStateOnReopen) await windowSession.persistState();
 	}
 
 	const windowExit = createWindowExit({
 		tabManager,
 		settings,
 		appWindow,
-		allWindows: getAllWindows,
 		recovery: {
 			isReady: () => recoveryReady,
 			keep: () => unsavedRecovery.flush(recoverySnapshot(tabManager.tabs)),
@@ -622,104 +321,26 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		hasExternalChangeConflict,
 		onAutoSaveFailed: () => addToast(t('toast.autoSaveFailed', settings.language), 'error'),
 		settle: tick,
-		loadMarkdown,
-		setShowHome: (value) => (showHome = value),
-		moveTabToWindow,
 	});
 	const {
 		settleForUpdate,
 		appExit,
 	} = windowExit;
 
-	/**
-	 * A tab switch must not animate. Switching to a tab in another mode changes
-	 * the values a mode toggle changes, so the outline's shadow and the toggle
-	 * button's position would transition. Add `tab-switching` (transitions off,
-	 * see styles.css), force a style recompute, remove it: the new values commit
-	 * without animating. It must happen here, before the browser recomputes
-	 * style; a `class:` directive would land a flush too late. The pane slide
-	 * skips tab switches itself.
-	 */
-	$effect(() => {
-		const _ = tabManager.activeTabId;
-		const container = untrack(() => layoutContainerEl);
-		if (container) commitWithoutTransitions(container);
-		showHome = false;
-	});
-
-	/*
-	 * A view mode switch slides its panes; `utils/paneSlide.ts` says how. The
-	 * boxes and the editor's content are read before the DOM update, the slide
-	 * starts after it. A tab switch is not a mode switch and does not slide
-	 * (see the effect above).
-	 */
 		
 	
 	
 	followActiveFile(() => currentFile);
 
-	// The preview and the export run the same filter in opposite orders, on
-	// purpose. The export sanitizes the renderer output first and processes
-	// afterwards, because the bytes it writes are read by another program and
-	// running the filter over Markpad's own generated markup would let a future
-	// tightening of the policy silently delete parts of the exported file; the
-	// exported document carries a CSP as the second line of defence.
-	//
-	// The preview has no second line: what it produces becomes nodes in the live
-	// application document, so the filter runs last. `tab.content` holds the
-	// renderer's own output, split into top-level blocks, and the patch effect
-	// hands it to `patchPreview`, which processes and sanitizes only the blocks
-	// that changed and moves DOMPurify's own nodes into the article. No
-	// parse/serialize round trip happens after the sanitizer has had its say.
-	//
-	// The document's path and folds are read when the patch runs, from the tab
-	// on screen, which is the document being patched: a navigation has already
-	// moved the tab to the new file and cleared its folds by then.
-	async function renderMarkdownPreview(raw: string) {
-		const body = getMarkdownBodyWithoutFrontMatter(raw);
-		return stampImageGeneration(await commands.renderMarkdown(body, true));
-	}
-
-	async function renderTabPreviewFromRaw(tab: Tab) {
-		const rendered = await renderMarkdownPreview(tab.rawContent);
-		tabManager.updateTabContent(tab.id, rendered);
-		tab.previewedRawContent = tab.rawContent;
-		// The patch effect turns the new `tab.content` into DOM and enriches what
-		// it changed, so this only has to wait for the flush. It used to call
-		// `renderRichContent()` here as well, over the whole article — a second
-		// pass that now competes with the first one for the same nodes.
-		await tick();
-	}
-
 	
 	
 	
 	
-	function clearFrontMatterEditError(field: FrontMatterField) {
-		frontMatterFields.clearEditError(field);
-	}
-
-	// `nextValue` runs inside the try so a parse error lands on the field.
-	async function applyFrontMatter(tab: Tab, field: FrontMatterField, nextValue: () => unknown) {
-		try {
-			const nextRaw = updateFrontMatterField(tab.rawContent, field.key, nextValue());
-			tabManager.updateTabRawContent(tab.id, nextRaw);
-			clearFrontMatterEditError(field);
-			await renderTabPreviewFromRaw(tab);
-		} catch (error) {
-			frontMatterFields.setEditError(field, error);
-		}
-	}
-
-	const { handleFrontMatterEdit, handleFrontMatterListChange } = createFrontMatterEdit({
-		tabManager,
-		settings,
-		documentSession,
-		addToast,
-		t,
-		applyFrontMatter,
-	});
-
+	
+	
+	
+	
+	
 	
 	
 	
@@ -737,268 +358,58 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		return documentSession.loadMarkdown(filePath, options);
 	}
 
-	function currentMermaidTheme() {
-		return resolveMermaidTheme({
-			theme: settings.theme,
-			datasetThemeType: document.documentElement.dataset.themeType,
-			systemPrefersDark: window.matchMedia('(prefers-color-scheme: dark)').matches,
-		});
-	}
-
-	/**
-	 * The preview half of the shared renderer: same function the HTML export
-	 * calls, pointed at the live preview element and given the copy-to-clipboard
-	 * behaviour an exported file cannot have.
-	 *
-	 * `roots` is what the block patch just inserted. Omitting it means the whole
-	 * article, which is what a theme change (Mermaid bakes its colours into the
-	 * SVG) and the pre-export refresh need; passing it is what makes a keystroke
-	 * typeset one paragraph.
-	 */
-	async function renderRichContent(roots?: HTMLElement[]) {
-		if (!markdownBody) return;
-		const targets = roots ?? [markdownBody];
-		if (targets.length === 0) return;
-
-		await renderRichContentInto({
-			roots: targets,
-			mermaidTheme: currentMermaidTheme(),
-			onCopyCode: (code, label) => {
-				commands.clipboardWriteText(code.replace(/\n$/, ''))
-					.then(() => flashCopiedLabel(label))
-					.catch((err) => {
-						console.error('Failed to copy code:', err);
-					});
-			},
-			onCopyDiagram: (container, button) => copyDiagram(container, button),
-		});
-	}
-
-	/**
-	 * The one place a rendered document becomes preview DOM: patch, then enrich
-	 * only what the patch inserted.
-	 *
-	 * Cold start: the rich-content libraries a document needs are imported by
-	 * its first enrichment, which lands after the first patch, so that one
-	 * restores the reading position again, because KaTeX and Mermaid can push
-	 * the anchor down by hundreds of pixels.
-	 */
-	
-	const coldRestore = createColdEnrichmentRestore({
-		tabManager,
-		tick,
-		get markdownBody() {
-			return markdownBody;
-		},
-		restore: (body, tab) => restorePreviewReadingPosition(body, tab, getPreviewScrollMax(body), measurePreviewBox),
-	});
-
-	// A hidden host is not observed: its boxes measure 0 (see `previewHosts`).
-	
-	
-	function getPreviewScrollMax(target: HTMLElement) {
-		return Math.max(0, target.scrollHeight - target.clientHeight);
-	}
-
-	// Not `element.offsetTop`: that is measured from the element's offset parent,
-	// and the preview is full of them — every `<table>` is the offset parent of
-	// its own rows and cells, and `.code-block-shell` is positioned. See
-	// `measureAnchorBox` for what reading those raw does to the mapping.
-	function measurePreviewBox(node: AnchorNode): AnchorBox {
-		if (!markdownBody) return { top: Number.NaN, height: Number.NaN };
-		return measureAnchorBox(
-			node as unknown as OffsetLayoutNode,
-			markdownBody as unknown as OffsetLayoutNode,
-		);
-	}
-
-	function getPreviewScrollSyncPosition(target: HTMLElement): ScrollSyncPosition {
-		return previewScrollSyncPosition(target, getPreviewScrollMax(target), lineCoords, measurePreviewBox);
-	}
-
-	function scrollPreviewToSyncPosition(position: ScrollSyncPosition) {
-		if (!markdownBody) return;
-		const targetScroll = getPreviewScrollTopForSyncPosition(
-			markdownBody,
-			getPreviewScrollMax(markdownBody),
-			position,
-			lineCoords,
-			measurePreviewBox,
-		);
-		if (targetScroll === null) return;
-
-		const before = markdownBody.scrollTop;
-		isProgrammaticScroll = true;
-		markdownBody.scrollTop = targetScroll;
-		// Unmoved, there is no scroll event to clear the flag, and it would swallow the reader's next scroll.
-		if (markdownBody.scrollTop === before) isProgrammaticScroll = false;
-	}
-
-	let bufferLines = $derived(rawContent.split('\n'));
-	const readRendererLine: SourceLineReader = (line) => bufferLines[lineCoords.toBufferLine(asRendererLine(line)) - 1];
-
-	/** The drawn cursor, in the article's scroll content; null while it isn't shown. */
-	
-	/**
-	 * Bumped whenever the document on screen changes size: a rewrap when split
-	 * view narrows the pane, a fold, an image arriving. The drawn cursor is
-	 * measured in that layout, so it has to be measured again.
-	 */
 	
 	
 	
 	
-	/**
-	 * The reader's highlights, per tab, for this session only. Each list is
-	 * tied to the source it was made on: once the text changes its points no
-	 * longer name the same words, so the list is dropped rather than drawn on
-	 * the wrong ones.
-	 */
-			const canAnnotate = typeof CSS !== 'undefined' && 'highlights' in CSS;
-
-	
-	/** The preview selection as source points, or null when it is empty or outside the document. */
 	
 	
-	/**
-	 * One Highlight per kind, kept and refilled. WebKit repaints when a
-	 * Highlight's ranges change, but not when the registry entry is swapped
-	 * for a new one: a removed highlight stayed on screen until the next click.
-	 */
+	
+	
+	
+	
+		
+	
+	
+	
+	
+	
 			
 	
 	
-	/** Longer selections are passages, not words to look for. */
-		
-	/** The preview selection's text when it is one to look for copies of, else null. */
 	
-	/** Every copy of `text` not already highlighted, as annotations. */
+			
 	
 	
-	function getPreviewScrollAnchor(target: HTMLElement): RendererLine | null {
-		return previewScrollAnchor(target, measurePreviewBox);
-	}
-
-	let isScrolling = $state(false);
-	
-	// Whether the reader's last input in the panes was outside the editor: in the
-	// preview, its outline or find bar. Only then is a preview scroll theirs for the
-	// editor to follow; one that arrives while they type is the browser keeping
-	// re-rendered content in place, and following it fought Monaco's cursor reveal on
-	// every keystroke (#1071). Input elsewhere, the title bar or a dialog, leaves it.
 		
 	
-	/**
-	 * What the fold drivers in `foldState.ts` act on: the document on screen,
-	 * and the tab that document belongs to.
-	 *
-	 * The write goes to the tab the user is looking at, which is the document
-	 * the fold is a fold OF — a fold is per document (see `Tab.foldOverrides`),
-	 * and the read above is what makes a tab switch swap the whole set.
-	 */
 	
-	// Looked up in the visible host, not the article. Heading ids are minted per
-	// document, so with a host per open tab the same `#id` exists once per tab
-	// that has that heading; the article would hand back whichever came first in
-	// the DOM, which is not the document on screen.
-	function findAnchorTarget(anchor: string): HTMLElement | null {
-		for (const id of anchorIdCandidates(anchor)) {
-			const el =
-				(previewBlocks?.querySelector(`[id="${CSS.escape(id)}"]`) as HTMLElement | null) ||
-				(previewBlocks?.querySelector(`[name="${CSS.escape(id)}"]`) as HTMLElement | null);
-			if (el) return el;
-		}
-		return null;
-	}
-
-	function scrollToAnchor(anchor: string, options: { pushHistory?: boolean } = {}) {
-		const el = findAnchorTarget(anchor);
-		if (el && markdownBody) {
-			if (options.pushHistory !== false) pushScrollHistory();
-			markdownBody.scrollTo({ top: anchorScrollTop(markdownBody, el), behavior: jumpBehavior });
-			return true;
-		}
-		return false;
-	}
-
-	async function scrollToAnchorWhenReady(anchor: string, options: { pushHistory?: boolean } = {}, expectedFile = currentFile) {
-		const baseAttempts = 20;
-		const maxAttempts = 60;
-		for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-			if (expectedFile && currentFile !== expectedFile) return false;
-			await tick();
-			if (scrollToAnchor(anchor, options)) return true;
-			const isFullDocumentLoading = tabManager.activeTabId ? loadingTabs.includes(tabManager.activeTabId) : false;
-			if (attempt >= baseAttempts && !isFullDocumentLoading) return false;
-			await new Promise((resolve) => setTimeout(resolve, attempt < 5 ? 50 : 250));
-		}
-		return false;
-	}
-
-	function openRelativeMarkdownTarget(target: RelativeMarkdownTarget) {
-		return openRelativeTarget(target, {
-			currentFile,
-			canonicalizePath,
-			scrollToAnchorWhenReady,
-			scrollToTop: () => {
-				if (!markdownBody) return;
-				pushScrollHistory();
-				markdownBody.scrollTo({ top: 0, behavior: jumpBehavior });
-			},
-			get activeTabId() { return tabManager.activeTabId; },
-			canCloseTab,
-			loadMarkdown: (path) => loadMarkdown(path, { navigate: true }),
-		});
-	}
-
+	
+	
+		
+		
+	
+	
+	
+	
+	
+	
 	
 	
 	
 	
 	
 
-
-	function saveRecentFile(path: string) {
-		recentFileList.save(path);
-	}
-
-	function loadRecentFiles() {
-		recentFileList.load();
-	}
-
-	function deleteRecentFile(path: string) {
-		recentFileList.remove(path);
-	}
-
-	$effect(() => {
-		if (typeof window === 'undefined') return;
-		return recentFileList.listen(window);
-	});
-
+	
+	
+	
+	
 	
 	async function canCloseTab(tabId: string): Promise<boolean> {
 		return documentSession.canCloseTab(tabId);
 	}
 
-	/**
-	 * This document's two line numberings, and the only thing that converts
-	 * between them.
-	 *
-	 * `data-sourcepos` counts from the first line of the BODY, because that is
-	 * what `renderMarkdownPreview` hands comrak — front matter is stripped
-	 * first. The editor holds the whole file. The shift between the two used to
-	 * be spelled out by hand at each of the five places they meet, and a place
-	 * that forgot it landed every jump that many lines early — which the outline
-	 * did for as long as it existed. `lineCoordinates.ts` owns the shift now,
-	 * and the two numberings are different TYPES, so a crossing that forgets to
-	 * convert no longer compiles.
-	 *
-	 * Derived from `rawContent`, which is the buffer: measuring the render would
-	 * answer 0 forever, since the render is what the front matter was stripped
-	 * out of.
-	 */
-	let lineCoords = $derived(lineCoordinates(rawContent));
-
+	
 	async function saveContentAs(): Promise<boolean> {
 		return documentSession.saveContentAs();
 	}
@@ -1044,7 +455,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 			id: tab.id,
 			path: tab.path,
 			isDirty: tab.isDirty,
-			editable: tab.isEditing || tab.isSplit,
+			editable: true,
 			contentRef: tab.rawContent,
 			// Reactive too: clearing a conflict re-arms the timer on the next
 			// keystroke, so answering the bar resumes normal auto-save.
@@ -1127,7 +538,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	});
 
 	
-	// One export at a time: a second would refill `#print-root` under the first.
 		
 	/** A window holds one document: replacing it asks about unsaved changes first. */
 	async function replaceDocument(replace: () => unknown) {
@@ -1141,20 +551,10 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	}
 
 	async function openDocument(path: string) {
-		await replaceDocument(() => loadMarkdown(path));
+		await replaceDocument(() => documentSession.openFile(path));
 	}
 
-	function openWithSystem(path: string) {
-		return openPathWithSystem(path, {
-			isLaunchable: (p) => commands.isLaunchablePath(p),
-			reveal: (p) => commands.openFileFolder(p),
-			openPath,
-			revealed: (p) => addToast(t('toast.launchableLinkRevealed', settings.language).replace('{{target}}', p), 'info'),
-			openFailed: (p) => addToast(t('toast.openFailed', settings.language).replace('{{target}}', p), 'error'),
-		});
-	}
-
-
+	
 
 	async function selectFile() {
 		const selected = await open({
@@ -1164,12 +564,9 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		if (typeof selected === 'string') await openDocument(selected);
 	}
 
-
 	async function closeFile() {
 		await appWindow.close();
 	}
-
-
 
 	async function openFileLocation() {
 		if (currentFile) await commands.openFileFolder(currentFile);
@@ -1187,37 +584,11 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		});
 	}
 
-	async function saveImageAs(src: string) {
-		await saveImageAsFile(src, {
-			save,
-			copyFile: (from, dest) => commands.copyFile(from, dest),
-			toast: addToast,
-			language: () => settings.language,
-		});
-	}
-
-	
-	/** A diagram onto the clipboard as a PNG (#1085). The button flashes "Copied!"; the menu item toasts. */
-	async function copyDiagram(container: HTMLElement, button?: HTMLElement) {
-		try {
-			await commands.clipboardWriteImage(await diagramToPngBase64(container));
-			if (button) flashCopiedLabel(button);
-			else addToast(t('toast.diagramCopied', settings.language));
-		} catch (e) {
-			addToast(`${t('toast.failedToCopyDiagram', settings.language)}: ${e}`, 'error');
-		}
-	}
-
-	/**
-	 * The preview's copy: plain text plus HTML, from `copyableFlavours`.
-	 * Cancelling the native copy stops WebKit from also writing a WebArchive,
-	 * which measured 19 MB under `tauri dev` (#549). Text fields and Monaco's
-	 * hidden textarea are skipped: `getSelection()` cannot read their
-	 * selection, so cancelling there would copy an empty string.
-	 */
 	
 	
-	// HTML links only: an SVG `<a>` (inside a diagram) is not handled.
+	
+	
+	
 	
 	
 	
@@ -1233,14 +604,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	
 	
 	
-	// Lazy restore: a restored tab is read when it is first shown (`Tab.unread`).
-	$effect(() => {
-		if (!tabManager.activeTab?.unread) return;
-		untrack(() => void documentSession.readActiveIfUnread().then((anchor) => {
-			if (anchor) void scrollToAnchorWhenReady(anchor, { pushHistory: false }, tabManager.activeTab?.path);
-		}));
-	});
-
 	/*
 	 * `viewerKeymap.ts` decides which command a keystroke means. This maps each
 	 * command to the function that runs it. Every command is preventDefaulted
@@ -1259,7 +622,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 
 	const viewerCommands = viewerCommandTable({
 		settings,
-		tabManager,
 		reloadFromDisk,
 		closeFile,
 		handleNewFile,
@@ -1314,19 +676,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	}
 
 	
-	// The in-page jump stacks belong to the tab the offsets were measured in —
-	// see `Tab.scrollHistory`. These three wrappers exist only to name that tab
-	// and to read the offset off the preview, which the store cannot see.
-	function pushScrollHistory() {
-		if (markdownBody && tabManager.activeTabId) {
-			tabManager.pushScrollHistory(tabManager.activeTabId, markdownBody.scrollTop);
-		}
-	}
-
-	/**
-	 * Where an in-page back/forward would land, or null if this tab has no jump
-	 * to walk — the caller then falls through to the FILE history.
-	 */
+	
 	
 	
 	
@@ -1335,7 +685,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	
 	
 	onMount(() => {
-		loadRecentFiles();
 		isDisposed = false;
 
 		let unlisteners: (() => void)[] = [];
@@ -1359,7 +708,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 			if (isDisposed) return;
 			if (settings.persistOpenEditors) await restoreUnsavedChanges();
 			if (isDisposed) return;
-			windowMeta.markReady();
 			if (isDisposed) return;
 
 			const urlParams = new URLSearchParams(window.location.search);
@@ -1429,7 +777,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		return () => {
 			isDisposed = true;
 			unsavedRecovery.dispose();
-			clearTimeout(identifyFlashTimer);
 			unlisteners.forEach((u) => u());
 		};
 	});
@@ -1440,7 +787,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 {#if mode === 'loading'}
 	<TitleBar
 		{isFocused}
-		isScrolled={false}
 		currentFile={''}
 		{liveMode}
 		windowTitle="Aonimark"
@@ -1465,7 +811,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 {:else}
 	<TitleBar
 		{isFocused}
-		{isScrolled}
 		{currentFile}
 		{liveMode}
 		{windowTitle}
@@ -1487,7 +832,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 
 	<div class="content-area">
 	{#if activeExternalChangeConflict}
-		<div class="external-change-bar" role="status" style:top="{36 + paneTopChrome}px">
+		<div class="external-change-bar" role="status" style:top="{36 + editorToolbarHeight}px">
 			<span class="external-change-text">{t('externalChange.message', settings.language)}</span>
 				<button class="external-change-action" onclick={() => resolveExternalChangeByReloading(tabManager.activeTabId ?? '')}>
 				{t('externalChange.reload', settings.language)}
@@ -1500,20 +845,17 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	{#if tabManager.activeTab}
 			<div
 				class="markdown-container"
-				style="--code-font: {previewAppearance.codeFontFamily}; --code-font-size: {previewAppearance.codeFontSize * contentZoom}px; --highlight-color: {previewAppearance.highlightColor};"
+				style="--editor-zoom: {settings.zoomLevel / 100};"
 				onwheel={handleWheel}
 				role="presentation">
-				<div class="layout-container" bind:this={layoutContainerEl} class:editing={isEditing} style="--pane-top-chrome: {paneTopChrome}px;">
-					<!-- Editor Pane -->
-					<div bind:this={editorPaneEl} class="pane editor-pane">
+				<div class="layout-container">
+					<div class="pane editor-pane">
 						{#key tabManager.activeTabId}
 							{@const tabId = tabManager.activeTabId}
 							<WysiwygEditor
 								value={tabManager.activeTab.rawContent}
 								readOnly={tabManager.activeTab.isTruncated === true}
 								language={settings.language}
-								initialLine={viewMode.activeCursor?.line ?? 1}
-								initialColumn={viewMode.activeCursor?.column ?? 1}
 								onchange={(markdown) => tabManager.updateTabRawContent(tabId ?? '', markdown)}
 								onrequesturl={requestLinkUrl}
 								bind:toolbarHeight={editorToolbarHeight} />
@@ -1522,20 +864,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 				</div>
 			</div>
 	{/if}
-	</div>
-
-	<div 
-		class="tooltip align-{tooltip.align} {tooltip.show ? 'visible' : ''}" 
-		class:footnote-tooltip={tooltip.isFootnote} 
-		style="left: {tooltip.x}px; top: {tooltip.y}px;">
-		{#if tooltip.isFootnote}
-			{@html tooltip.html}
-		{:else}
-			<span class="tooltip-text">{tooltip.text}</span>
-			{#if tooltip.shortcut}
-				<span class="tooltip-shortcut">{tooltip.shortcut}</span>
-			{/if}
-		{/if}
 	</div>
 
 	<!-- Before the modals: installing runs the unsaved-tab review, whose dialogs
@@ -1562,7 +890,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		onconfirm={() => closePrompt(promptModal.value)}
 		oncancel={() => closePrompt(null)} />
 
-
 	<div class="toast-container">
 		{#each toasts as toast (toast.id)}
 			<Toast 
@@ -1586,8 +913,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	{/if}
 {/if}
 
-<ContextMenu {...docContextMenu} onhide={() => (docContextMenu.show = false)} />
-
 <style>
 	:root {
 		scroll-behavior: smooth !important;
@@ -1602,299 +927,10 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		overflow: hidden;
 	}
 
-	/*
-	 * The article is the scroller, so anything it clips cannot be wider than it.
-	 * It fills the pane and its padding centres the text column instead of a
-	 * `max-width` doing so; that leaves the side margins inside the article for
-	 * a wide table to extend into (#811).
-	 */
-	.viewer-content {
-		container-type: inline-size;
-	}
-
-	.markdown-body {
-		--gutter: clamp(24px, 5vw, 50px);
-		--measure: min(100cqi, var(--preview-max-width, 880px));
-		--breakout-inset: var(--gutter);
-		box-sizing: border-box;
-		min-width: 200px;
-		padding: 50px max(var(--gutter), (100cqi - var(--measure)) / 2 + var(--gutter));
-		height: 100%;
-		overflow-y: auto;
-		overflow-x: hidden;
-		transform: translate3d(0, 0, 0);
-		text-align: left;
-		overflow-wrap: anywhere;
-	}
-
-	/* An outline floating in the margin keeps a wide table from sliding under it. */
-
-	/*
-	 * With Wide Tables Can Exceed Max Width on, a table wider than the column
-	 * grows into the margins, centred on the column, up to `--breakout-inset`
-	 * from the pane edge; past that it scrolls.
-	 * `translate` because only it can use the table's own width: the shift is
-	 * half of what the table exceeds the column by, and 0 for one that fits.
-	 * Nested tables are left out, since their column does not start where the
-	 * text column does. With the setting off, the base rule in styles.css
-	 * keeps the table in the column.
-	 */
-	.viewer-content :global(.markdown-body.table-breakout table:not(:is(li, blockquote, td, th, details, .markdown-alert, .footnotes) table)) {
-		max-width: max(100%, 100cqi - 2 * var(--breakout-inset));
-		translate: min(0px, (var(--measure) - 2 * var(--gutter)) / 2 - 50%);
-	}
-
-	/*
-	 * With Scroll Wide Tables off, a cell may break inside a word, so the table
-	 * shrinks to fit instead of scrolling. A short column next to a long one
-	 * can then break mid-word too (#927).
-	 */
-	.viewer-content :global(.markdown-body.table-fit table :is(td, th)) {
-		overflow-wrap: anywhere;
-	}
-
-	.loading-chip {
-		position: absolute;
-		bottom: 30px;
-		left: 50%;
-		transform: translateX(-50%);
-		background: var(--color-canvas-overlay);
-		border: 1px solid var(--color-border-default);
-		border-radius: 20px;
-		padding: 8px 16px;
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-		z-index: 100;
-		color: var(--color-fg-muted);
-		font-size: 13px;
-		font-family: var(--win-font), sans-serif;
-	}
-
-	.loading-spinner {
-		width: 14px;
-		height: 14px;
-		border: 2px solid var(--color-border-muted);
-		border-top-color: var(--color-accent-fg);
-		border-radius: 50%;
-		animation: spin 1s linear infinite;
-	}
-
 	@keyframes spin {
 		to {
 			transform: rotate(360deg);
 		}
-	}
-
-	/* Not under `.markdown-container`: the exported article is outside it. */
-	:global(.markdown-body pre),
-	:global(.markdown-body pre code),
-	:global(.markdown-body pre tt),
-	:global(.markdown-body code) {
-		font-family: var(--code-font, Consolas, monospace) !important;
-		font-size: var(--code-font-size, 14px) !important;
-	}
-
-	/*
-	 * The Code Font Size setting is an absolute px, which is what a reader wants
-	 * for code sitting in prose — and wrong for code sitting in a heading, where
-	 * it does not scale with the words around it: 14px inside a 24px `##` (#681),
-	 * 14px inside a 32px `#`. GitHub sizes inline code at 85% of whatever
-	 * contains it, and that is the rule the setting was overriding here.
-	 *
-	 * Scoped to headings so the setting keeps meaning what it says everywhere a
-	 * reader actually reads code, and `!important` because the rule above is —
-	 * specificity alone cannot answer it.
-	 */
-	:global(.markdown-body :is(h1, h2, h3, h4, h5, h6) code) {
-		font-size: 0.85em !important;
-	}
-
-	/*
-	 * The shared cursor in the preview (#799), drawn like the editor's: a caret
-	 * and a faint current-line band. It does not blink, which is what says the
-	 * preview is not the place to type.
-	 */
-	.preview-cursor {
-		position: absolute;
-		left: 0;
-		right: 0;
-		pointer-events: none;
-	}
-
-	.preview-cursor-line {
-		position: absolute;
-		inset: 0;
-		background: color-mix(in srgb, var(--color-fg-default) 7%, transparent);
-	}
-
-	.preview-cursor-caret {
-		position: absolute;
-		top: 0;
-		bottom: 0;
-		width: 2px;
-		margin-left: -1px;
-		background: var(--color-accent-fg);
-	}
-
-	@media print {
-		.preview-cursor {
-			display: none;
-		}
-	}
-
-	.markdown-body.full-width {
-		--measure: 100cqi;
-	}
-
-	:global(.youtube-link) {
-		display: block;
-		max-width: 100%;
-		margin: 1em 0;
-	}
-
-	:global(.youtube-link img) {
-		display: block;
-		width: 100%;
-		aspect-ratio: 16 / 9;
-		object-fit: cover;
-		border-radius: 8px;
-	}
-
-	/*
-	 * A measurable position for a soft line break, so split-view scroll sync
-	 * can resolve a line inside a long paragraph instead of interpolating
-	 * across the whole block. See `processSoftLineAnchors`.
-	 *
-	 * `inline-block` is the point — it is what gives the element a CSS box, and
-	 * therefore an `offsetTop` the anchor lookup can read. Everything else here
-	 * is about taking that box back out of the layout: no width, no height, and
-	 * `vertical-align: top` so a zero-height box cannot sit on the baseline and
-	 * push the line it is on. It holds no text, so selection and copy step over
-	 * it.
-	 */
-	:global(.source-line-anchor) {
-		display: inline-block;
-		width: 0;
-		height: 0;
-		vertical-align: top;
-	}
-
-	:global(.mermaid-diagram) {
-		position: relative;
-		margin: 1em 0;
-		display: flex;
-		justify-content: center;
-		overflow-x: auto;
-	}
-
-	:global(.mermaid-diagram svg) {
-		max-width: 100%;
-		height: auto;
-	}
-
-	.tooltip {
-		position: fixed;
-		background: var(--color-canvas-overlay);
-		color: var(--color-fg-default);
-		padding: 4px 8px;
-		border-radius: 6px;
-		font-size: 11px;
-		pointer-events: none;
-		z-index: 10007;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-		border: 1px solid var(--color-border-default);
-		font-family: var(--win-font), 'Segoe UI', sans-serif;
-		white-space: nowrap;
-		max-width: 400px;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		transform: translateX(-50%) translateY(calc(-100% + 4px));
-		opacity: 0;
-		transition: 
-			top 0.15s ease;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 2px;
-	}
-
-	.tooltip.visible {
-		opacity: 1;
-		transform: translateX(-50%) translateY(-100%);
-	}
-
-	.tooltip.align-below {
-		transform: translateX(-50%) translateY(-4px);
-	}
-
-	.tooltip.align-below.visible {
-		transform: translateX(-50%) translateY(0);
-	}
-
-	.tooltip-text {
-		display: block;
-	}
-
-	.tooltip-shortcut {
-		color: var(--color-fg-muted);
-		font-size: 10px;
-		font-family: inherit;
-	}
-
-	.tooltip.align-right {
-		transform: translateX(4px) translateY(-50%);
-	}
-
-	.tooltip.align-right.visible {
-		transform: translateX(0) translateY(-50%);
-		align-items: flex-start;
-	}
-
-	.tooltip.align-left {
-		transform: translateX(calc(-100% - 4px)) translateY(-50%);
-	}
-
-	.tooltip.align-left.visible {
-		transform: translateX(-100%) translateY(-50%);
-		align-items: flex-end;
-	}
-
-	.tooltip.footnote-tooltip {
-		white-space: normal;
-		max-width: 500px;
-		text-align: left;
-		line-height: 1.5;
-		padding: 10px 14px;
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-		transform: translate(-50%, calc(-100% + 4px));
-		margin-top: -8px;
-		display: block; /* reset flex for footnotes */
-	}
-
-	.tooltip.footnote-tooltip.visible {
-		transform: translate(-50%, -100%);
-	}
-	
-	:global(.tooltip.footnote-tooltip p) {
-		margin: 0;
-		padding: 0;
-	}
-
-    :global(.tooltip.footnote-tooltip p + p) {
-        margin-top: 8px;
-    }
-
-	.tooltip.footnote-tooltip::after {
-		content: '';
-		position: absolute;
-		bottom: -6px;
-		left: 50%;
-		transform: translateX(-50%);
-		border-left: 6px solid transparent;
-		border-right: 6px solid transparent;
-		border-top: 6px solid var(--color-canvas-overlay);
 	}
 
 	.drag-overlay {
@@ -2004,14 +1040,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	/* Layout System */
 	/* Absolute, not fixed: with no z-index it opens no stacking context, so
 	   menus inside it still stack against the title bar and the tab column. */
-	.content-area.beside-tab-column {
-		position: absolute;
-		top: 0;
-		bottom: 0;
-		left: 0;
-		right: 0;
-	}
-
 	.layout-container {
 		display: flex;
 		width: 100%;
@@ -2024,37 +1052,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		overflow: hidden;
 	}
 
-	/**
-	 * Swapping the panes reverses the row rather than reordering the markup
-	 * (#184). The editor keeps its place in the DOM, so focus order, the drag
-	 * hit test — which reads each pane's own `getBoundingClientRect()` — and
-	 * every `.editor-pane` / `.viewer-pane` rule carry over untouched. The
-	 * padding that a pinned outline adds is on the container and is unaffected
-	 * by the direction, so the outline stays on the side it is pinned to.
-	 */
-	.layout-container.editor-on-right,
-	.drag-zones.editor-on-right {
-		flex-direction: row-reverse;
-	}
-
-	.pane {
-		display: flex;
-		flex-direction: column;
-		overflow: hidden;
-		min-width: 0;
-		height: 100%;
-		position: relative;
-		background: var(--color-canvas-default);
-	}
-
-	.viewer-content {
-		display: flex;
-		flex-direction: row;
-		width: 100%;
-		height: 100%;
-		overflow: hidden;
-	}
-
 	/* View Mode */
 	.layout-container:not(.split):not(.editing) .editor-pane {
 		width: 0 !important;
@@ -2062,52 +1059,9 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		opacity: 0;
 	}
 
-	/* Edit Mode */
-	.layout-container:not(.split).editing .editor-pane {
-		width: 100%;
-		flex: 1 !important;
-	}
-
-	.split-bar {
-		width: 4px;
-		background: var(--color-border-default);
-		cursor: col-resize;
-		position: relative;
-		z-index: 100;
-		transition: background 0.2s;
-	}
-
-	.split-bar:hover {
-		background: var(--color-accent-fg);
-	}
-
 	@keyframes fadeIn {
 		from { opacity: 0; }
 		to { opacity: 1; }
-	}
-
-	.identify-flash {
-		position: fixed;
-		inset: 0;
-		z-index: 40000;
-		pointer-events: none;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		box-shadow: inset 0 0 0 3px var(--color-accent-fg);
-		border-radius: 8px;
-		font-family: var(--win-font);
-	}
-
-	.identify-flash span {
-		padding: 10px 22px;
-		border-radius: 10px;
-		background: var(--color-accent-fg);
-		color: #fff;
-		font-size: 20px;
-		font-weight: 600;
-		box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
-		font-family: var(--win-font);
 	}
 
 	/*
@@ -2165,17 +1119,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		align-items: flex-end;
 		pointer-events: none;
 	}
-	.top-fade-mask {
-		position: absolute;
-		top: 0;
-		left: 0;
-		width: 60px;
-		height: 52px;
-		background: linear-gradient(to bottom, var(--color-canvas-default) 40%, transparent 100%);
-		pointer-events: none;
-		z-index: 50;
-	}
-
 	
 
 	/**

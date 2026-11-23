@@ -99,11 +99,6 @@ fn refuses_unc(path: &str, trusted: &HashSet<String>) -> bool {
     unc_host(path).is_some_and(|host| !trusted.contains(&host))
 }
 
-#[cfg(test)]
-pub(crate) fn is_trusted_host(path: &str) -> bool {
-    !refuses_unc(path, &lock_recover(&DOCUMENT_UNC_HOSTS))
-}
-
 /// Answers one `asset:` request. Blocking: the caller is expected to be on a
 /// thread that may wait on the filesystem.
 ///

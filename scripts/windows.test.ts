@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { reviewDirtyTabs, type ReviewTab } from '../src/lib/sessions/closeReview.js';
-import { pinnedTagFromWindowLabel, pinnedWindowToken } from '../src/lib/utils/pinnedTagWindow.js';
 import { readSource } from './sourceTree.js';
 
 // Window close (issue #189): instead of one aggregate "you have N unsaved
@@ -93,22 +92,6 @@ describe('closing a window walks its dirty tabs', () => {
 		assert.equal(await reviewDirtyTabs(review), true);
 		assert.deepEqual(log, ['active:t0', 'ask:t0'], 'resolved, not closed');
 		assert.equal(tabs.length, 1);
-	});
-});
-
-describe('a pinned group travels in its window label', () => {
-	test('a pinned group name survives the trip through a window label', () => {
-		for (const name of ['work', '文献管理', 'a b/c:d-1', '🎬 movie']) {
-			const label = `window-${pinnedWindowToken(name, 42)}`;
-			assert.match(label, /^[A-Za-z0-9\-/:_]+$/, `Tauri label charset for ${name}`);
-			assert.equal(pinnedTagFromWindowLabel(label), name);
-		}
-	});
-
-	test('other windows are not read as pinned groups', () => {
-		for (const label of ['main', 'window-3f2a9c', 'window-pinned--1', 'window-pinned-abc-1', 'window-pinned-6869']) {
-			assert.equal(pinnedTagFromWindowLabel(label), null, label);
-		}
 	});
 });
 

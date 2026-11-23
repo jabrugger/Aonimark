@@ -252,20 +252,6 @@ const CONVENTIONS = {
 				'KaTeX glyphs reach past their box, so scrollHeight overshoots what height:auto resolves to and the fold jumps; measure getBoundingClientRect().height.',
 		},
 	},
-	'markdown-extensions-from-bindings': {
-		ignores: [BINDINGS],
-		ban: {
-			"Literal[value='mdown']":
-				'The Markdown extension list is the Rust renderer\'s, generated into bindings.ts and re-exported by markdownLinks.ts (#611).',
-		},
-	},
-	'list-marker-grammar-from-bindings': {
-		ignores: [BINDINGS],
-		ban: {
-			"Literal[regex.pattern=/\\[ xX\\]|\\\\d\\+\\[\\.\\)\\]/], Literal[value=/\\[ xX\\]|\\\\d\\+\\[\\.\\)\\]/], TemplateElement[value.raw=/\\[ xX\\]|\\\\d\\+\\[\\.\\)\\]/]":
-				'The list marker and task box are the Rust renderer\'s fragments (bindings.ts, re-exported by listSyntax.ts); a third spelling is #451.',
-		},
-	},
 	'no-embedded-frames': {
 		ban: {
 			"CallExpression[callee.property.name='createElement'][arguments.0.value='iframe']":

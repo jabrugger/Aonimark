@@ -105,21 +105,12 @@ describe('Rust conventions', () => {
 				.map((entry) => entry.trim().split('::').pop())
 				.filter(Boolean),
 		);
-		assert.ok(declared.length > 30, `found ${declared.length} commands`);
+		assert.ok(declared.length > 15, `found ${declared.length} commands`);
 		assert.deepEqual(
 			declared.filter((entry) => !registered.has(entry.split(' ')[0])),
 			[],
 			'marked #[tauri::command] but missing from collect_commands!, so the frontend cannot reach it',
 		);
-	});
-
-	test('the copy command keeps X11 clipboard ownership past its own return', () => {
-		// #729: X11 has no clipboard store, and arboard drops the CLIPBOARD
-		// selection with its last `Clipboard` handle, which was the moment the
-		// command returned. The failure needs an X server and a desktop without a
-		// clipboard manager, which CI has neither of, so this names the private
-		// helper on purpose: nothing but the call connects the two.
-		assert.match(fnBody(backend, 'clipboard_write_text'), /\bretain_clipboard_ownership\s*\(\s*\)/);
 	});
 
 	test('nothing looks a window back up and unwraps it', () => {

@@ -5,24 +5,8 @@ import { t, type LanguageCode } from './i18n.js';
 import { SHORTCUTS } from './shortcuts.js';
 import type { ViewerCommand } from './viewerKeymap.js';
 
-/*
- * The macOS menu bar, as data.
- *
- * Every window builds this from its own state and installs it when it gains
- * focus, so a click always reaches the window the user is looking at. The
- * accelerators come from `SHORTCUTS`, the same rows the shortcuts panel prints
- * and `shortcuts.test.ts` holds to the handlers.
- *
- * NO DOUBLE FIRING. WKWebView offers a key equivalent to the page first and
- * only hands it to the menu if the page did not `preventDefault` it. The page
- * prevents every chord it answers (`handleKeyDown`, Monaco's keybindings), so
- * an accelerator below fires from the menu only where the page left it alone:
- * an editor chord outside the editor, ⌘Q, ⌘M, or any chord while a dialog is
- * up, which `MarkdownViewer`'s menu handler refuses.
- */
-
 /** What a menu click runs that `ViewerCommand` has no name for. */
-export type AppMenuCommand = 'check-updates';
+type AppMenuCommand = 'check-updates';
 
 export type MenuAction =
 	| { readonly viewer: ViewerCommand }

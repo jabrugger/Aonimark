@@ -77,28 +77,6 @@ describe('an update settles the window before it installs', () => {
 		assert.deepEqual(log, ['settled', 'settled', 'install', 'relaunch'], 'and it can still be installed');
 	});
 
-	// #767. The install ends every window, and only the one it starts from reviews
-	// its tabs, so another open window has to close first.
-	test('with another window open, nothing is reviewed or installed until it has closed', async () => {
-		await offered();
-		windows.push({ label: 'window-abc' });
-		try {
-			await updateStore.startDownload(settleAnswering(true));
-			assert.deepEqual(log, []);
-			assert.equal(updateStore.phase, 'available', 'the update stays on offer');
-			assert.deepEqual(
-				updateStore.otherWindows.map((window) => window.label),
-				['window-abc'],
-				'and the dialog can name the window in the way',
-			);
-		} finally {
-			windows.pop();
-		}
-
-		await updateStore.startDownload(settleAnswering(true));
-		assert.deepEqual(log, ['settled', 'install', 'relaunch'], 'once it has closed, the install goes ahead');
-		assert.equal(updateStore.otherWindows.length, 0);
-	});
 });
 
 describe('package-managed installs', () => {
@@ -167,24 +145,4 @@ describe('the update dialog', () => {
 		assert.equal(updateStore.show, false, 'OK dismisses the dialog');
 	});
 
-	test('the dialog promises reopened tabs only when restore is on', () => {
-		// With "Restore windows on launch" off nothing writes the snapshot, so the
-		// relaunched app opens empty and must not have been told otherwise.
-		const restore = settings.restoreStateOnReopen;
-		try {
-			for (const on of [true, false]) {
-				settings.restoreStateOnReopen = on;
-				updateStore.close();
-				updateStore.show = true;
-				updateStore.phase = 'available';
-				updateStore.otherWindows = [{ label: 'window-abc' } as any];
-				using view = mountDialog();
-				const alert = view.target.querySelector('.other-windows')?.textContent ?? '';
-				assert.ok(alert.includes(tk('closeOtherWindows')), 'the other windows are named either way');
-				assert.equal(alert.includes(tk('reopensTabs')), on, `restore ${on ? 'on' : 'off'}`);
-			}
-		} finally {
-			settings.restoreStateOnReopen = restore;
-		}
-	});
 });

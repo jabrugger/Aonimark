@@ -1,50 +1,67 @@
 import type { Tab } from '../stores/tabs.svelte.js';
-import { isHomePath } from '../utils/homeTab.js';
-import { snapshotTab, validateTransferPayload, type TransferableTab } from '../utils/tabTransfer.js';
 
-type PersistedEditor = TransferableTab & { isTruncated?: boolean };
+/** What a backup keeps of a document: enough to put its unsaved buffer back. */
+export type RecoveredDocument = Pick<Tab, 'path' | 'title' | 'rawContent' | 'originalContent' | 'hasReplacementChars' | 'encoding'> & {
+	isTruncated?: boolean;
+};
 
-/** Only what a close would otherwise ask about: dirty buffers and non-empty
- * untitled text. Clean files reopen from disk through the session restore.
- * Partial reads carry their guard so they never restore as complete documents. */
+const STRING_FIELDS = ['path', 'title', 'rawContent', 'originalContent', 'encoding'] as const;
+
+/** Only what a close would otherwise ask about: a dirty buffer, or untitled text.
+ * A clean file reopens from disk through the session restore. A partial read
+ * carries its guard so it never restores as a complete document. */
 export function recoverySnapshot(tabs: readonly Tab[]): string {
 	return JSON.stringify(tabs
-		.filter((tab) => !isHomePath(tab.path) && (tab.isDirty || (tab.path === '' && tab.rawContent !== '')))
-		.map((tab) => ({ ...snapshotTab(tab), ...(tab.isTruncated ? { isTruncated: true } : {}) })));
+		.filter((tab) => tab.isDirty || (tab.path === '' && tab.rawContent !== ''))
+		.map((tab): RecoveredDocument => ({
+			path: tab.path,
+			title: tab.title,
+			rawContent: tab.rawContent,
+			originalContent: tab.originalContent,
+			hasReplacementChars: tab.hasReplacementChars,
+			encoding: tab.encoding,
+			...(tab.isTruncated ? { isTruncated: true } : {}),
+		})));
 }
 
-export function parseRecovery(json: string): PersistedEditor[] {
+export function parseRecovery(json: string): RecoveredDocument[] {
 	const value: unknown = JSON.parse(json);
 	if (!Array.isArray(value)) throw new Error('Invalid recovery snapshot');
 	return value.map((entry) => {
-		const tab = validateTransferPayload(JSON.stringify(entry));
-		if (!tab || isHomePath(tab.path) || (entry.isTruncated !== undefined && typeof entry.isTruncated !== 'boolean')) {
-			throw new Error('Invalid recovery document');
-		}
-		return { ...tab, ...(entry.isTruncated ? { isTruncated: true } : {}) };
+		const valid =
+			typeof entry === 'object' &&
+			entry !== null &&
+			STRING_FIELDS.every((field) => typeof entry[field] === 'string') &&
+			typeof entry.hasReplacementChars === 'boolean' &&
+			(entry.isTruncated === undefined || typeof entry.isTruncated === 'boolean');
+		if (!valid) throw new Error('Invalid recovery document');
+		return {
+			path: entry.path,
+			title: entry.title,
+			rawContent: entry.rawContent,
+			originalContent: entry.originalContent,
+			hasReplacementChars: entry.hasReplacementChars,
+			encoding: entry.encoding,
+			...(entry.isTruncated ? { isTruncated: true } : {}),
+		};
 	});
 }
 
 type RecoveryTarget = {
 	tabs: Tab[];
-	closeTab: (id: string) => void;
-	insertTransferredTab: (snapshot: TransferableTab) => string;
+	restoreDocument: (document: RecoveredDocument) => void;
 };
 
-/** Restore over clean session tabs only; never merge two unsaved buffers. The
- * saved baseline travels too, so a save still meets the external-change check. */
-function restoreRecoveryTabs(manager: RecoveryTarget, json: string) {
-	// Validate the entire record before changing any tabs.
-	for (const snapshot of parseRecovery(json)) {
-		const existing = snapshot.path
-			? manager.tabs.find((tab) => tab.path === snapshot.path && !tab.isDirty)
-			: undefined;
-		if (existing) manager.closeTab(existing.id);
-		// Editor-first keeps potentially pathological preview input out of startup.
-		const id = manager.insertTransferredTab({ ...snapshot, isEditing: true, isSplit: false });
-		const tab = manager.tabs.find((tab) => tab.id === id);
-		if (tab && snapshot.isTruncated) tab.isTruncated = true;
-	}
+/** A window holds one document, so a backup only goes back over a clean one; two
+ * unsaved buffers are never merged. The saved baseline travels too, so a save
+ * still meets the external-change check. Returns whether it was restored. */
+function restoreRecoveryTabs(manager: RecoveryTarget, json: string): boolean {
+	// Validate the entire record before changing anything.
+	const documents = parseRecovery(json);
+	if (manager.tabs.some((tab) => tab.isDirty)) return false;
+	const [document] = documents;
+	if (document) manager.restoreDocument(document);
+	return true;
 }
 
 /** Restore the given records and return the other labels consumed.
@@ -59,7 +76,7 @@ export function restoreRecords(
 	const consumed: string[] = [];
 	for (const [label, json] of records) {
 		try {
-			restoreRecoveryTabs(manager, json);
+			if (!restoreRecoveryTabs(manager, json)) continue;
 		} catch (error) {
 			if (label === ownLabel) throw error;
 			onError(error);

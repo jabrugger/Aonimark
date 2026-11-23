@@ -2,19 +2,8 @@ import type { Options } from 'remark-stringify';
 
 import { parseFrontMatter } from './frontMatter.js';
 
-/**
- * remark-stringify options for the WYSIWYG editor.
- *
- * Milkdown re-serializes a document through remark-stringify whenever it saves
- * or reports its content. remark-stringify's defaults (`*` bullets and rules,
- * `*` emphasis) differ from the spelling most Markdown is written in, so an
- * untouched file comes back reformatted. These options pin the serializer to
- * the markers the document already uses, so the round trip is a byte-for-byte
- * no-op wherever Milkdown's parser preserves the construct.
- */
-
-export type EmphasisMarker = '*' | '_';
-export type OrderedMarker = '.' | ')';
+type EmphasisMarker = '*' | '_';
+type OrderedMarker = '.' | ')';
 
 /**
  * Count the emphasis/strong runs opened with `marker`.

@@ -5,61 +5,7 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 
 /** Commands */
 export const commands = {
-	clipboardWriteText: (text: string) => __TAURI_INVOKE<null>("clipboard_write_text", { text }),
-	/**
-	 *  A PNG, base64-encoded, put on the clipboard as an image: a Mermaid diagram
-	 *  the preview drew onto a canvas (#1085). Through arboard, like the text, so
-	 *  it survives on X11 the same way; the webview's own clipboard is not used.
-	 */
-	clipboardWriteImage: (pngBase64: string) => __TAURI_INVOKE<null>("clipboard_write_image", { pngBase64 }),
-	clipboardReadText: () => __TAURI_INVOKE<string>("clipboard_read_text"),
-	/**
-	 *  Async so the resize and PNG encode of a screenshot-sized image run on the
-	 *  blocking pool: a sync command runs on the main thread and freezes the window.
-	 */
-	clipboardReadImage: (macosImageScaling: boolean) => __TAURI_INVOKE<string>("clipboard_read_image", { macosImageScaling }),
-	/**
-	 *  Files copied in Explorer or Finder: the clipboard holds their paths, not
-	 *  their pixels (#768). A path that is not valid UTF-8 is skipped, since the
-	 *  frontend could not hand it back to `copy_file_to_img`.
-	 */
-	clipboardReadFileList: () => __TAURI_INVOKE<string[]>("clipboard_read_file_list"),
-	/**
-	 *  Returns `(content, is_full, lossy, encoding)`. See `DecodedText`: the
-	 *  frontend refuses to write a `lossy` buffer back over its file, and saves a
-	 *  faithful one as the `encoding` it came in.
-	 */
-	openMarkdownPreview: (path: string, maxBytes: number) => __TAURI_INVOKE<[string, boolean, boolean, string]>("open_markdown_preview", { path, maxBytes }),
-	/**
-	 *  `split_blocks`: the preview's form, with `BLOCK_SEPARATOR` between
-	 *  top-level blocks. The export asks for the plain document.
-	 */
-	renderMarkdown: (content: string, splitBlocks: boolean | null) => __TAURI_INVOKE<string>("render_markdown", { content, splitBlocks }),
-	/**
-	 *  The ranges the editor should colour, from the same parse the preview uses.
-	 * 
-	 *  Off the main thread like `render_markdown`: measured at 0.7 ms for a 500-line
-	 *  document and 24 ms for a 1.7 MB one, which is small but not nothing, and
-	 *  Monaco asks for this on every edit.
-	 */
-	markdownSemanticSpans: (content: string, frontMatterLines: number) => __TAURI_INVOKE<SemanticSpan[]>("markdown_semantic_spans", { content, frontMatterLines }),
-	/**
-	 *  `front_matter_lines` is how many leading lines are front matter, which the
-	 *  frontend decides (`frontMatterFenceLines`); the same for the one below.
-	 *  Off the main thread like `markdown_semantic_spans`: Monaco asks on every edit.
-	 */
-	markdownOutline: (markdown: string, frontMatterLines: number) => __TAURI_INVOKE<Outline>("markdown_outline", { markdown, frontMatterLines }),
-	/**
-	 *  The launch's files, handed once to the launch window. Every window asks;
-	 *  the others, and any later ask, get nothing, so a new window never reopens
-	 *  the files the app was started with.
-	 * 
-	 *  Except the ones a reopened window (#990) is restoring a tab on: those go to
-	 *  that window instead of becoming a second copy in the launch window (#1001
-	 *  sends every launch file here). The other windows may not have restored, or
-	 *  even started, yet, so `held_files` reads their snapshots. A window that
-	 *  asks later takes its share here; one that already asked is sent it.
-	 */
+	/**  The launch's files, handed once to the window. Any later ask gets nothing. */
 	sendMarkdownPath: () => __TAURI_INVOKE<string[]>("send_markdown_path"),
 	/**
 	 *  Reads a file, with the fidelity of the decode and the encoding it was
@@ -86,7 +32,6 @@ export const commands = {
 	 *  a network volume that is slow or unreachable.
 	 */
 	canonicalizePath: (path: string) => __TAURI_INVOKE<string>("canonicalize_path", { path }),
-	readFileAsDataUrl: (path: string) => __TAURI_INVOKE<string>("read_file_as_data_url", { path }),
 	/**
 	 *  Writes `content` to `path` as `encoding` — the label the file was decoded
 	 *  from, so a legacy document is saved as the bytes it arrived as instead of
@@ -105,8 +50,6 @@ export const commands = {
 	 *  the main thread it would stall every window until the save completes.
 	 */
 	saveFileContent: (path: string, content: string, encoding: string) => __TAURI_INVOKE<null>("save_file_content", { path, content, encoding }),
-	exportPdfWindows: (path: string) => __TAURI_INVOKE<null>("export_pdf_windows", { path }),
-	printPdf: () => __TAURI_INVOKE<null>("print_pdf"),
 	isWin11: () => __TAURI_INVOKE<boolean>("is_win11"),
 	/**
 	 *  Async because `reveal` blocks its caller until the file manager answers:
@@ -116,12 +59,6 @@ export const commands = {
 	 *  every window until it returns.
 	 */
 	openFileFolder: (path: string) => __TAURI_INVOKE<null>("open_file_folder", { path }),
-	/**
-	 *  Asked before a local-file link is handed to `openPath`: a launchable
-	 *  target is revealed in the file manager instead of run. Async because the
-	 *  metadata read waits on whatever volume holds the path.
-	 */
-	isLaunchablePath: (path: string) => __TAURI_INVOKE<boolean>("is_launchable_path", { path }),
 	/**
 	 *  Async because a rename is a round trip to whatever holds the path — on a
 	 *  network or removable volume, seconds of blocking I/O for a metadata
@@ -141,10 +78,6 @@ export const commands = {
 	 */
 	watchFile: (path: string) => __TAURI_INVOKE<null>("watch_file", { path }),
 	unwatchFile: () => __TAURI_INVOKE<null>("unwatch_file"),
-	readFolderEntries: (path: string) => __TAURI_INVOKE<FolderEntry[]>("read_folder_entries", { path }),
-	watchFolder: (path: string) => __TAURI_INVOKE<null>("watch_folder", { path }),
-	unwatchFolder: (path: string) => __TAURI_INVOKE<null>("unwatch_folder", { path }),
-	unwatchAllFolders: () => __TAURI_INVOKE<null>("unwatch_all_folders"),
 	/**
 	 *  Reveals a window that was built hidden.
 	 * 
@@ -177,13 +110,6 @@ export const commands = {
 	 *  `app.rs` is the only reader — see the background colour it picks at startup.
 	 */
 	saveTheme: (theme: Appearance) => __TAURI_INVOKE<null>("save_theme", { theme }),
-	/**
-	 *  Async because enumerating every installed font family is a slow,
-	 *  filesystem-heavy call (fontconfig on Linux, DirectWrite on Windows,
-	 *  CoreText on macOS) and the settings dialog invokes it on open. On the main
-	 *  thread it stalls every window for the duration.
-	 */
-	getSystemFonts: () => __TAURI_INVOKE<string[]>("get_system_fonts"),
 	getOsType: () => __TAURI_INVOKE<string>("get_os_type"),
 	/**
 	 *  Whether this install is able to replace its own binary.
@@ -213,58 +139,6 @@ export const commands = {
 	 *  platform where `bundle_type()` answers without the patch.
 	 */
 	selfUpdateSupported: () => __TAURI_INVOKE<boolean>("self_update_supported"),
-	fetchVscodeTheme: (url: string) => __TAURI_INVOKE<string>("fetch_vscode_theme", { url }),
-	getSavedVscodeThemes: () => __TAURI_INVOKE<string[]>("get_saved_vscode_themes"),
-	readVscodeTheme: (name: string) => __TAURI_INVOKE<string>("read_vscode_theme", { name }),
-	/**
-	 *  Installs a theme carried in a settings file (#134), so importing settings
-	 *  on another machine does not mean finding the theme on vscodethemes.com again.
-	 *  The file may come from anyone: the name is one path component and the JSON
-	 *  is held to the same size limit as a downloaded theme.
-	 */
-	installVscodeTheme: (name: string, json: string) => __TAURI_INVOKE<null>("install_vscode_theme", { name, json }),
-	deleteVscodeTheme: (name: string) => __TAURI_INVOKE<null>("delete_vscode_theme", { name }),
-	saveImage: (parentDir: string, filename: string, base64Data: string, imageDirectory: string) => __TAURI_INVOKE<string>("save_image", { parentDir, filename, base64Data, imageDirectory }),
-	copyFileToImg: (srcPath: string, parentDir: string, imageDirectory: string) => __TAURI_INVOKE<string>("copy_file_to_img", { srcPath, parentDir, imageDirectory }),
-	/**
-	 *  Async because `fs::copy` streams the whole file. On a network or removable
-	 *  volume that is seconds of blocking I/O, and on the main thread it would
-	 *  stall every window until the copy completes — the same reason its sibling
-	 *  `copy_file_to_img` already runs on the blocking pool.
-	 */
-	copyFile: (src: string, dest: string) => __TAURI_INVOKE<null>("copy_file", { src, dest }),
-	listDirectoryContents: (path: string) => __TAURI_INVOKE<string[]>("list_directory_contents", { path }),
-	stageDetachedTab: (payload: string) => __TAURI_INVOKE<string>("stage_detached_tab", { payload }),
-	claimDetachedTab: (token: string) => __TAURI_INVOKE<string | null>("claim_detached_tab", { token }),
-	completeDetachedTab: (token: string) => __TAURI_INVOKE<null>("complete_detached_tab", { token }),
-	cancelDetachedTab: (token: string) => __TAURI_INVOKE<CancelOutcome>("cancel_detached_tab", { token }),
-	refreshDetachedTab: (token: string, payload: string) => __TAURI_INVOKE<RefreshOutcome>("refresh_detached_tab", { token, payload }),
-	/**
-	 *  Creates the destination window for a tab transfer. Its label carries the
-	 *  token, so the new frontend knows which transfer to claim.
-	 * 
-	 *  `tag_name` is the pinned group a window opened from Home or the title bar
-	 *  will adopt. It is recorded as that window's tag before the window exists,
-	 *  because the window reports its own tag only once it has mounted and read
-	 *  the group, and a second click on the group before then found no holder and
-	 *  opened the group again.
-	 * 
-	 *  Async on purpose: a sync command runs on the main thread, and WebView2
-	 *  deadlocks building a window there (tauri-apps/tauri#12521).
-	 */
-	createTransferWindow: (token: string, tagName: string | null) => __TAURI_INVOKE<null>("create_transfer_window", { token, tagName }),
-	setWindowMeta: (tagName: string | null, tagColor: string | null, activeTabTitle: string, tabCount: number) => __TAURI_INVOKE<void>("set_window_meta", { tagName, tagColor, activeTabTitle, tabCount }),
-	/**
-	 *  A viewer window's report of the files it has open, sent once its restore
-	 *  has finished and again whenever its tabs change. See `file_holder`.
-	 */
-	setWindowFiles: (files: string[]) => __TAURI_INVOKE<void>("set_window_files", { files }),
-	/**  Whether `windows-restored` has been sent, for a window that started after it. */
-	windowsRestored: () => __TAURI_INVOKE<boolean>("windows_restored"),
-	listViewerWindows: () => __TAURI_INVOKE<WindowListEntry[]>("list_viewer_windows"),
-	isWindowTagTaken: (name: string) => __TAURI_INVOKE<boolean>("is_window_tag_taken", { name }),
-	offerTabToWindow: (targetLabel: string, token: string) => __TAURI_INVOKE<null>("offer_tab_to_window", { targetLabel, token }),
-	focusWindow: (label: string) => __TAURI_INVOKE<null>("focus_window", { label }),
 	/**
 	 *  Asked once per file a window opens from outside the app. `None` for a file
 	 *  no command line named, which opens as before.
@@ -272,12 +146,6 @@ export const commands = {
 	takeCommandLineOpen: (path: string) => __TAURI_INVOKE<CommandLineOpen | null>("take_command_line_open", { path }),
 	/**  Whether `path` names no file yet. Asked by a save that is to create it. */
 	pathIsMissing: (path: string) => __TAURI_INVOKE<boolean>("path_is_missing", { path }),
-	listPinnedTags: () => __TAURI_INVOKE<PinnedTag[]>("list_pinned_tags"),
-	/**  `false` when another pin already holds the name. */
-	savePinnedTag: (name: string, color: string, files: string[]) => __TAURI_INVOKE<boolean>("save_pinned_tag", { name, color, files }),
-	updatePinnedTag: (name: string, color: string, files: string[]) => __TAURI_INVOKE<boolean>("update_pinned_tag", { name, color, files }),
-	renamePinnedTag: (oldName: string, name: string, color: string) => __TAURI_INVOKE<PinnedTagRename>("rename_pinned_tag", { oldName, name, color }),
-	removePinnedTag: (name: string) => __TAURI_INVOKE<null>("remove_pinned_tag", { name }),
 	/**
 	 *  Persists the calling window's restore snapshot atomically.
 	 * 
@@ -295,16 +163,6 @@ export const commands = {
 	saveWindowState: (json: string) => __TAURI_INVOKE<null>("save_window_state", { json }),
 	loadWindowState: () => __TAURI_INVOKE<string | null>("load_window_state"),
 	clearWindowState: () => __TAURI_INVOKE<null>("clear_window_state"),
-	forgetWindowState: () => __TAURI_INVOKE<null>("forget_window_state"),
-	/**
-	 *  Rebuilds each remembered secondary window under its saved label. Each one
-	 *  restores its own snapshot and unsaved backup. Every window asks after its
-	 *  own restore; only the first call of a launch does anything, so a window
-	 *  opened later cannot resurrect one that is closing.
-	 * 
-	 *  Async for the reason `create_transfer_window` is.
-	 */
-	reopenRememberedWindows: () => __TAURI_INVOKE<null>("reopen_remembered_windows"),
 	saveUnsavedRecovery: (json: string) => __TAURI_INVOKE<null>("save_unsaved_recovery", { json }),
 	/**
 	 *  Whichever window asks first gets the orphans, once: two windows starting
@@ -312,16 +170,6 @@ export const commands = {
 	 */
 	claimUnsavedRecovery: () => __TAURI_INVOKE<([string, string])[]>("claim_unsaved_recovery"),
 	clearUnsavedRecovery: (labels: string[]) => __TAURI_INVOKE<null>("clear_unsaved_recovery", { labels }),
-	/**
-	 *  A window closed during a quit keeps its snapshot, since the session ends
-	 *  with it. If the quit is then cancelled the user carries on without those
-	 *  windows, so they are forgotten as if each had been closed on its own. Their
-	 *  unsaved backups stay: with no snapshot they are orphans the next launch adopts.
-	 *  ponytail: a window whose close was already under way when the quit was
-	 *  cancelled, and is destroyed after, is still remembered.
-	 */
-	setQuitting: (quitting: boolean) => __TAURI_INVOKE<null>("set_quitting", { quitting }),
-	keepsUnsavedOnClose: () => __TAURI_INVOKE<boolean>("keeps_unsaved_on_close"),
 	/**  Each window guards its own restore: the breadcrumb is keyed by the caller's label. */
 	saveRestoreProgress: (json: string) => __TAURI_INVOKE<null>("save_restore_progress", { json }),
 	loadRestoreProgress: () => __TAURI_INVOKE<string | null>("load_restore_progress"),
@@ -332,42 +180,18 @@ export const commands = {
 export const events = {
 	fileChanged: makeEvent<FileChanged, FileChanged>("file-changed"),
 	filePath: makeEvent<FilePath, FilePath>("file-path"),
-	folderChanged: makeEvent<FolderChanged, FolderChanged>("folder-changed"),
-	tabTransferClaimed: makeEvent<TabTransferClaimed, TabTransferClaimed>("tab-transfer-claimed"),
-	tabTransferOffer: makeEvent<TabTransferOffer, TabTransferOffer>("tab-transfer-offer"),
-	windowsRestored: makeEvent<WindowsRestored, WindowsRestored>("windows-restored"),
 };
 
 /* Constants */
-export const BULLET_MARKER = "[-+*]" as const;
-
-export const MARKDOWN_LINK_EXTENSIONS = ["md","markdown","mdown","mkd","txt"] as const;
-
-export const ORDERED_MARKER = "\\d+[.)]" as const;
-
-export const TASK_BOX = "\\[[ xX]\\]" as const;
-
 export const UNMAPPABLE_CODE = "ENCODING_UNMAPPABLE" as const;
 
 /* Types */
 /**  What `save_theme` writes to `theme.txt` and `app.rs` reads back, one word. */
 export type Appearance = "system" | "light" | "dark";
 
-/**
- *  Result of `cancel_detached_tab`. `cancelled == false && claimed == true`
- *  means the destination already took the payload and is still finishing:
- *  the source must keep waiting for `tab-transfer-claimed`, and ask again
- *  later, instead of restoring its tab.
- */
-export type CancelOutcome = {
-	cancelled: boolean,
-	claimed: boolean,
-};
-
 /**  A file a command line named, as the window opening it needs to know it. */
 export type CommandLineOpen = {
-	mode: OpenFileMode | null,
-	/**  No file there yet: open an empty tab that creates it on first save. */
+	/**  No file there yet: open an empty document that creates it on first save. */
 	missing: boolean,
 };
 
@@ -376,123 +200,6 @@ export type FileChanged = string;
 
 /**  `file-path`: a file the OS asked this window to open. */
 export type FilePath = string;
-
-/**  Lines the editor can fold, 1-based and inclusive. */
-export type FoldRange = {
-	start: number,
-	end: number,
-};
-
-/**  `folder-changed`: a watched folder of this window gained or lost an entry. */
-export type FolderChanged = string;
-
-export type FolderEntry = {
-	name: string,
-	path: string,
-	isDir: boolean,
-};
-
-/**  A heading, and the id a link has to name to reach it. */
-export type HeadingAnchor = {
-	/**  1-based line in the buffer the caller passed, for ordering the list. */
-	line: number,
-	level: number,
-	/**
-	 *  What the heading reads as — the completion's label, and what a
-	 *  `[[#…]]` wikilink is written with.
-	 */
-	text: string,
-	/**
-	 *  What `[…](#…)` has to say. This is the id comrak renders, duplicates
-	 *  included: a second "Objectives" is `objectives-1`, and offering the
-	 *  bare slug for it would link to the first one.
-	 */
-	slug: string,
-};
-
-/**
- *  The view a command line asks its files to open in: `--preview`, `--edit`
- *  or `--split`. Overrides the "Open existing files in" setting for that
- *  launch only (#1051).
- */
-export type OpenFileMode = "preview" | "editor" | "split";
-
-/**
- *  The editor's headings and foldable blocks, from one parse: its folding
- *  provider wants both for the same buffer, and parsing a long document is the
- *  expensive part.
- */
-export type Outline = {
-	anchors: HeadingAnchor[],
-	folds: FoldRange[],
-};
-
-export type PinnedTag = {
-	name: string,
-	color: string,
-	files: string[],
-};
-
-export type PinnedTagRename = "renamed" | 
-/**  Another window unpinned the tag in the meantime. */
-"missing" | 
-/**  Another pin already holds the new name. */
-"taken";
-
-/**
- *  Result of `refresh_detached_tab`. `Gone` means the transfer already
- *  ended: completed (the source is about to hear `tab-transfer-claimed`) or
- *  cancelled.
- */
-export type RefreshOutcome = "updated" | "revoked" | "gone";
-
-/**
- *  What a span is, as the legend in `utils/semanticTokens.ts` spells it: a token
- *  type, plus `.marker` for the `marker` modifier, which is how Monaco's theme
- *  lookup spells it (`tokenTheme._match("heading.marker")`). The frontend gets
- *  this as a string union, so a kind added here without a legend entry fails
- *  svelte-check there.
- */
-export type SemanticKind = "heading" | "heading.marker" | "list.marker" | "task.marker" | "quote.marker" | "rule" | "fence" | "frontmatter" | "table.marker" | "code" | "code.marker" | "strong" | "strong.marker" | "emph" | "emph.marker" | "strongemph" | "strike" | "strike.marker" | "highlight" | "highlight.marker" | "insert" | "insert.marker" | "link" | "link.marker" | "image" | "image.marker" | "math" | "math.marker" | "wikilink" | "wikilink.marker" | "footnote" | "html";
-
-/**
- *  One coloured range, in the coordinates Monaco's semantic tokens speak:
- *  zero-based line, zero-based UTF-16 column, length in UTF-16 code units.
- */
-export type SemanticSpan = {
-	kind: SemanticKind,
-	line: number,
-	start: number,
-	len: number,
-};
-
-/**
- *  `tab-transfer-claimed`: the destination finished taking the tab, so the
- *  source window may drop it.
- */
-export type TabTransferClaimed = string;
-
-/**  `tab-transfer-offer`: another window offers this one a staged tab (its token). */
-export type TabTransferOffer = string;
-
-export type WindowListEntry = {
-	label: string,
-} & WindowMeta;
-
-export type WindowMeta = {
-	number: number,
-	tag_name: string | null,
-	tag_color: string | null,
-	active_tab_title: string,
-	tab_count: number,
-};
-
-/**
- *  `windows-restored`: every window of the launch has finished its restore, so
- *  the window list is complete. Sent once, to every window. See
- *  `announce_restored`.
- */
-export type WindowsRestored = null;
 
 /* Tauri Specta runtime */
 type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;

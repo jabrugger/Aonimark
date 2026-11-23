@@ -1,10 +1,7 @@
-import { untrack } from 'svelte';
-import { commands, events } from '../bindings.js';
+import { commands } from '../bindings.js';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { tabManager } from '../stores/tabs.svelte.js';
-import { isNewWindowLabel } from '../utils/pinnedTagWindow.js';
 import { hasRealFilePath } from '../utils/tabFileActions.js';
-import { validateTransferPayload, type TransferableTab } from '../utils/tabTransfer.js';
 import { createBoundedWriter } from './unsavedRecovery.js';
 
 type RestoredTab = {
@@ -40,7 +37,7 @@ type RestoreProgress = {
  * also goes to `onWarning`, which stays detailed and English because its
  * destination is a developer console.
  */
-export type RestoreInterruption = {
+type RestoreInterruption = {
 	/** The document the dead launch was reading, if it got far enough to name one. */
 	deferredPath: string | null;
 };
@@ -74,12 +71,6 @@ type WindowSessionOptions = {
 	/** Read a restored tab the way an open reads it. Never throws. */
 	loadRestoredTab: (tabId: string) => Promise<void>;
 	dropRestoredTab: (tabId: string) => void;
-	canTransfer: (tabId: string) => boolean;
-	canDetach: (tabId: string) => boolean;
-	transferPayload: (tabId: string) => string;
-	onTransferClaimed: (tabId: string) => void;
-	/** Builds the arriving tab and returns its id, or null if it refused. */
-	acceptTransferredTab: (tab: TransferableTab) => Promise<string | null>;
 	onError: (message: string, error: unknown) => void;
 	onWarning: (message: string, error?: unknown) => void;
 	/**
@@ -214,16 +205,7 @@ export function createWindowSession(options: WindowSessionOptions) {
 	 * so no window can overwrite another's. `remember` false is a window closed
 	 * on its own while others stay: it is not reopened next launch.
 	 */
-	async function persistState(remember: boolean) {
-		if (!remember) {
-			await snapshots.dispose();
-			try {
-				await commands.forgetWindowState();
-			} catch (error) {
-				options.onError('Failed to forget window state on close', error);
-			}
-			return;
-		}
+	async function persistState() {
 		await releaseReadableDeferrals();
 		if (!(await snapshots.flush(options.serializeState()))) {
 			options.onError('Failed to save window state on close', 'the write was refused');
@@ -356,194 +338,11 @@ export function createWindowSession(options: WindowSessionOptions) {
 		// Every window has a snapshot from here on, an empty one included: the
 		// set of snapshots is the list of windows the next launch reopens.
 		recording = true;
-		await persistState(true);
+		await persistState();
 		localStorage.removeItem(WINDOW_STATE_KEY);
 		localStorage.removeItem(LEGACY_STATE_KEY);
 		return Boolean(savedData);
 	}
 
-	/**
-	 * Hand the claim back so the source can recover its tab. A claimed
-	 * transfer is deliberately immune to the source's timeout — otherwise a
-	 * slow render would race it — which means the destination is the only
-	 * party that can end a claim it cannot finish. Skipping this is what
-	 * left the tab present in both windows.
-	 */
-	async function releaseClaim(token: string) {
-		try {
-			await commands.cancelDetachedTab(token);
-		} catch (error) {
-			options.onError('Failed to release tab transfer claim', error);
-		}
-	}
-
-	async function acceptOfferedTransfer(token: string): Promise<boolean> {
-		let claimed = false;
-		try {
-			const payload = await commands.claimDetachedTab(token);
-			// Distinguish "no such token" from a claim that succeeded: only the
-			// latter leaves something to release.
-			if (payload === null) {
-				options.onWarning('Tab transfer claim failed; opening empty window');
-				return false;
-			}
-			claimed = true;
-			const tab = validateTransferPayload(payload);
-			if (!tab) {
-				options.onWarning('Tab transfer payload invalid; opening empty window');
-				await releaseClaim(token);
-				return false;
-			}
-			const tabId = await options.acceptTransferredTab(tab);
-			if (tabId === null) {
-				await releaseClaim(token);
-				return false;
-			}
-			try {
-				await commands.completeDetachedTab(token);
-			} catch (error) {
-				// The source withdrew the transfer (it kept editing, or its
-				// claim grace ran out) and still has the tab. Keeping this copy
-				// would leave the document open in both windows.
-				tabManager.closeTab(tabId);
-				throw error;
-			}
-			return true;
-		} catch (error) {
-			options.onError('Tab transfer claim error', error);
-			if (claimed) await releaseClaim(token);
-			return false;
-		}
-	}
-
-	async function claimTransferredTab() {
-		const claimToken = appWindow.label.startsWith('window-')
-			? appWindow.label.slice('window-'.length)
-			: null;
-		if (!claimToken || isNewWindowLabel(appWindow.label)) return;
-		await acceptOfferedTransfer(claimToken);
-	}
-
-	// A transfer stays open until the destination claims it or the timeout
-	// gives up, so the menu entry that started it is clickable again long
-	// before it resolves. Starting a second transfer for the same tab stages a
-	// second payload: two windows each claim one, both build the tab, and the
-	// source only removes it once -- leaving the same document open twice,
-	// each copy with its own auto-save timer.
-	const transfersInFlight = new Set<string>();
-
-	async function transfer(tabId: string, deliver: (token: string) => Promise<unknown>): Promise<boolean> {
-		if (!options.canTransfer(tabId)) return false;
-		if (transfersInFlight.has(tabId)) return false;
-		transfersInFlight.add(tabId);
-		try {
-			return await stageTransfer(tabId, deliver);
-		} finally {
-			transfersInFlight.delete(tabId);
-		}
-	}
-
-	/**
-	 * What a transfer must not lose: the buffer, the baseline the next save is
-	 * checked against, and the file both belong to. Scroll position is left
-	 * out, so reading on in the source does not withdraw a claimed transfer.
-	 */
-	function transferRevision(tabId: string): string {
-		const tab = tabManager.tabs.find((item) => item.id === tabId);
-		return tab ? JSON.stringify([tab.path, tab.encoding, tab.rawContent, tab.originalContent]) : '';
-	}
-
-	async function stageTransfer(tabId: string, deliver: (token: string) => Promise<unknown>): Promise<boolean> {
-		// The payload is a snapshot, and the source tab stays live until the
-		// destination completes -- one to two seconds for a new window to
-		// boot. Typing there, or an auto-save resetting `originalContent`,
-		// would be closed away with the tab, and the destination's stale
-		// baseline would turn its next save into a false conflict. So every
-		// change is pushed to the broker as it happens: before the claim it
-		// replaces the payload, after it the broker withdraws the transfer.
-		let sent = transferRevision(tabId);
-		const token = await commands.stageDetachedTab(options.transferPayload(tabId));
-		let settled = false;
-		let resolveTransfer: (moved: boolean) => void;
-		const settle = (moved: boolean) => {
-			if (settled) return;
-			settled = true;
-			unlisten();
-			stopWatching();
-			resolveTransfer(moved);
-		};
-		const unlisten = await events.tabTransferClaimed(appWindow).listen((event) => {
-			if (settled || event.payload !== token) return;
-			// A change whose refresh reached the broker after the completion:
-			// the destination has the older copy. Keeping this tab too leaves
-			// the document in both windows, which the save-time conflict check
-			// covers; closing it would lose the edit outright.
-			if (transferRevision(tabId) !== sent) {
-				options.onWarning('Tab changed while it was being moved; kept it in this window');
-				settle(false);
-				return;
-			}
-			options.onTransferClaimed(tabId);
-			settle(true);
-		});
-		const stopWatching = $effect.root(() => {
-			$effect(() => {
-				const revision = transferRevision(tabId);
-				// '' is a tab closed mid-transfer: nothing left to send.
-				if (revision === sent || revision === '' || settled) return;
-				const payload = untrack(() => options.transferPayload(tabId));
-				void (async () => {
-					try {
-						const outcome = (await commands.refreshDetachedTab(token, payload)) as
-							'updated' | 'revoked' | 'gone';
-						if (outcome === 'updated') sent = revision;
-						else if (outcome === 'revoked') settle(false);
-						// `gone`: completed or cancelled, and either one settles
-						// through its own path.
-					} catch (error) {
-						options.onError('Failed to refresh tab transfer', error);
-					}
-				})();
-			});
-		});
-		return new Promise<boolean>((resolve) => {
-			resolveTransfer = resolve;
-			// The timeout is a guess about the destination, so it asks rather
-			// than assumes. `claimed` means the payload is already gone into
-			// the other window and only slow to render: giving up here would
-			// leave the same document open in both, and whichever auto-saves
-			// last wins. Keep waiting for `tab-transfer-claimed`, and keep
-			// asking: a destination that closed or crashed after its claim
-			// never completes, and the broker hands the transfer back once
-			// its claim grace runs out.
-			const cancel = async () => {
-				if (settled) return;
-				try {
-					const outcome = (await commands.cancelDetachedTab(token)) as {
-						cancelled: boolean;
-						claimed: boolean;
-					};
-					if (!outcome.cancelled && outcome.claimed) {
-						setTimeout(cancel, 15_000);
-						return;
-					}
-				} catch (error) {
-					options.onError('Failed to cancel tab transfer', error);
-				}
-				settle(false);
-			};
-			setTimeout(cancel, 15_000);
-			deliver(token).catch((error) => {
-				options.onError('Failed to deliver tab transfer', error);
-				void cancel();
-			});
-		});
-	}
-
-	async function detach(tabId: string) {
-		if (!options.canDetach(tabId)) return false;
-		return transfer(tabId, (token) => commands.createTransferWindow(token, null));
-	}
-
-	return { discardPersistedState, persistState, record, checkpoint, restore, claimTransferredTab, acceptOfferedTransfer, detach, transfer };
+	return { discardPersistedState, persistState, record, checkpoint, restore };
 }

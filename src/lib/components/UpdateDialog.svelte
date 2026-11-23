@@ -3,7 +3,6 @@
 	import { updateStore } from '../stores/update.svelte.js';
 	import { settings } from '../stores/settings.svelte.js';
 	import { t, type TranslationKeyIn } from '../utils/i18n.js';
-	import { windowDisplay } from '../utils/viewerWindows.js';
 
 	let { settleForExit } = $props<{ settleForExit: () => Promise<boolean> }>();
 
@@ -200,18 +199,6 @@
 							<pre>{updateStore.notes}</pre>
 						</details>
 					{/if}
-					{#if updateStore.otherWindows.length > 0}
-						<div class="other-windows" role="alert">
-							<p>{tk('closeOtherWindows')}</p>
-							<!-- Only restore brings the tabs back: with it off, the relaunch opens empty. -->
-							{#if settings.restoreStateOnReopen}<p>{tk('reopensTabs')}</p>{/if}
-							<ul>
-								{#each updateStore.otherWindows as other (other.label)}
-									<li>{windowDisplay(other, settings.language)}</li>
-								{/each}
-							</ul>
-						</div>
-					{/if}
 				{:else if updateStore.phase === 'package-managed'}
 					<p>{tk('packageManagedBody')}</p>
 				{:else if updateStore.phase === 'downloading'}
@@ -380,22 +367,6 @@
 		white-space: pre-wrap;
 		word-break: break-word;
 		color: var(--color-fg-muted);
-	}
-
-	.other-windows {
-		margin-top: 12px;
-		padding: 8px 12px;
-		background: var(--color-canvas-subtle);
-		border: 1px solid var(--color-border-muted);
-		border-radius: 6px;
-		color: var(--color-fg-default);
-	}
-	.other-windows p {
-		margin: 0;
-	}
-	.other-windows ul {
-		margin: 4px 0 0 0;
-		padding-left: 20px;
 	}
 
 	.centered-row {

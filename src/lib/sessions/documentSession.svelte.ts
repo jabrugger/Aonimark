@@ -4,26 +4,12 @@ import { settings } from '../stores/settings.svelte.js';
 import { createsItsFile, tabManager, type Tab } from '../stores/tabs.svelte.js';
 import { getMarkdownBodyWithoutFrontMatter } from '../utils/frontMatter.js';
 import { t } from '../utils/i18n.js';
-import { LIST_MARKER, LIST_MARKER_PREFIX, TASK_BOX } from '../utils/listSyntax.js';
 import { hasMarkdownLinkExtension, MARKDOWN_LINK_EXTENSIONS } from '../utils/markdownLinks.js';
-import type { OpenFileMode } from '../utils/openFileMode.js';
 import { canonicalizePath, isSameFilePath } from '../utils/pathIdentity.js';
 
 export type LoadMarkdownOptions = {
-	navigate?: boolean;
 	skipTabManagement?: boolean;
 	preserveEditState?: boolean;
-	/**
-	 * Drop the receiving tab's in-page jump stacks (`Tab.scrollHistory`).
-	 *
-	 * Only the two reloads ask for it: the tab keeps the document it already
-	 * had, so nothing repoints it and `clearReadingPosition` never runs, but
-	 * the text underneath is about to be replaced by whatever is on disk now
-	 * and the recorded offsets describe the version being thrown away. A caller
-	 * that changes which document a tab holds does not belong here — that route
-	 * clears the stacks with the rest of the reading position.
-	 */
-	resetScrollHistory?: boolean;
 	/**
 	 * The file opens beside the one on screen (a link opened in a new tab), so
 	 * the tab being left keeps its in-page jump stacks.
@@ -48,8 +34,6 @@ export type LoadMarkdownOptions = {
 	 * its file to the top of the list.
 	 */
 	skipRecentFile?: boolean;
-	/** What a new tab opens as, in place of the setting: a command line's `--edit` (#1051). */
-	openFileMode?: OpenFileMode;
 };
 
 /**
@@ -63,16 +47,7 @@ type ExternalChangeOutcome =
 	| { action: 'conflict'; tabId: string; path: string };
 
 type DocumentSessionOptions = {
-	setShowHome: (value: boolean) => void;
-	currentFile: () => string;
-	resetScrollHistory: () => void;
-	renderMarkdown: (raw: string) => Promise<string>;
 	afterLoad: () => Promise<unknown>;
-	saveRecentFile: (path: string) => void;
-	deleteRecentFile: (path: string) => void;
-	setLoadingTabs: (tabIds: string[]) => void;
-	measureInitialViewport: () => void;
-	isScrolling: () => boolean;
 	onError: (message: string, error: unknown) => void;
 	/** The disk moved under a save, which was refused. Raise the conflict bar. */
 	onDiskChangedUnderSave: (tabId: string) => void;
@@ -471,31 +446,15 @@ export function createDocumentSession(options: DocumentSessionOptions) {
 		return tab?.hasReplacementChars === true;
 	}
 
-	function updateLoading(tabId: string, loading: boolean) {
-		if (loading) loadingTabs.add(tabId);
-		else loadingTabs.delete(tabId);
-		options.setLoadingTabs([...loadingTabs]);
-	}
-
 	async function loadMarkdown(filePath: string, loadOptions: LoadMarkdownOptions = {}) {
-		options.setShowHome(false);
 		let existing = null;
 		try {
-			// The second arm predates the stacks being per tab and is kept as it
-			// was: this runs before tab management, so the tab it reaches is the
-			// one being LEFT, and opening another file has always cleared the
-			// in-page stacks of whatever was on screen. Narrowing that to "only
-			// the tab whose text actually changes" is a behaviour change on its
-			// own terms, not part of making the stacks per tab.
-			if (loadOptions.resetScrollHistory || (!loadOptions.inNewTab && filePath !== options.currentFile())) {
-				options.resetScrollHistory();
-			}
 			// Navigation, back/forward and Reload act on the tab they were
 			// called from, so it is pinned here, ahead of the first await.
 			// Taking `activeTabId` after it took the tab the user had switched
 			// to meanwhile: the other document's text landed in it, clean, and
 			// its next auto-save wrote that text over its own file.
-			const pinnedId = loadOptions.navigate || loadOptions.skipTabManagement ? tabManager.activeTabId : null;
+			const pinnedId = loadOptions.skipTabManagement ? tabManager.activeTabId : null;
 			const pinnedRead = pinnedId ? claimTabForRead(pinnedId, loadOptions.discardUnsavedBuffer) : null;
 			// Ask the filesystem what file this path names, ONCE, before any of
 			// the decisions below. Every one of them is really a "same file?"
@@ -513,7 +472,6 @@ export function createDocumentSession(options: DocumentSessionOptions) {
 			const target = { path: filePath, pathKey };
 
 			if (pinnedRead && !pinnedRead()) return;
-			const pendingNavigateTabId = loadOptions.navigate ? pinnedId : null;
 			let targetId = pinnedId;
 			if (!pinnedId && !loadOptions.skipTabManagement) {
 				existing = tabManager.tabs.find((tab) => isSameFilePath(tab, target));
@@ -557,7 +515,6 @@ export function createDocumentSession(options: DocumentSessionOptions) {
 			// and comparing the spellings would miss it and overwrite the buffer.
 			const receiving = tabManager.tabs.find((item) => item.id === activeId);
 			if (receiving && receiving.isDirty && isSameFilePath(receiving, target) && !loadOptions.discardUnsavedBuffer) {
-				if (filePath && !loadOptions.skipRecentFile) options.saveRecentFile(filePath);
 				await options.afterLoad();
 				return;
 			}
@@ -573,136 +530,25 @@ export function createDocumentSession(options: DocumentSessionOptions) {
 			// test refuses a result that would land on typing done during the
 			// read (with Auto-Reload on, every external change reloads).
 			const mayApply = pinnedRead ?? claimTabForRead(activeId, loadOptions.discardUnsavedBuffer);
-			const isMarkdown = hasMarkdownLinkExtension(filePath);
 			const tab = tabManager.tabs.find((item) => item.id === activeId);
-
-			if (isMarkdown) {
-				if (tab && !loadOptions.preserveEditState && !existing) {
-					// Every document opens editable, and this is applied BEFORE
-					// `initialIsEditing` is read, so it takes the full-read branch
-					// below: the editor can write, and an editor bound to the 5MB
-					// preview slice is one keystroke away from auto-saving it back
-					// over the whole file.
-					tab.isEditing = true;
-				}
-				const initialIsEditing = tab?.isEditing ?? false;
-				const initialIsSplit = tab?.isSplit ?? false;
-				// `open_markdown_preview` returns only the first 5MB of a large
-				// file, which is fine behind a read-only preview because the
-				// background read below completes it. An editor bound to that
-				// partial buffer is one keystroke away from auto-saving it back
-				// over the whole document, so a pane that can write always gets
-				// the complete file up front — this is the path F5 and "reload
-				// from disk" take while edit or split mode is preserved.
-				let content: string;
-				let isFull: boolean;
-				let lossy: boolean;
-				let encoding: string;
-				if (initialIsEditing || initialIsSplit) {
-					[content, lossy, encoding] = await commands.readFileContentChecked(filePath);
-					isFull = true;
-				} else {
-					[content, isFull, lossy, encoding] = await commands.openMarkdownPreview(filePath, 5_000_000);
-				}
-				if (!mayApply()) return;
-				const rendered = await options.renderMarkdown(content);
-				// Every write this stage makes comes after this one test, in one
-				// synchronous block. The encoding included: a prefix's detected
-				// encoding can differ from the whole file's, and `tab.encoding` is
-				// what the save writes with. And the navigation included: it moves
-				// the tab to the new file, so a refusal after it would leave the
-				// old document's buffer under the new path for auto-save to write.
-				if (!mayApply()) return;
-				// Decided on every load, before the buffer can reach a writer.
-				// Both branches report both, so this also CLEARS the flag on a
-				// file the user has since converted to UTF-8 — and repoints the
-				// save at the encoding it converted to.
-				tabManager.setTabDecodedLossy(activeId, lossy);
-				tabManager.setTabEncoding(activeId, encoding);
-				lossySaveWarnedTabs.delete(activeId);
-				if (pendingNavigateTabId) tabManager.navigate(pendingNavigateTabId, filePath, pathKey);
-				tabManager.updateTabContent(activeId, rendered);
-				// `isFull === false` means this is only the leading slice of a
-				// large file. Marking the tab keeps anything downstream from
-				// mistaking it for the whole document and writing it back.
-				tabManager.setTabRawContent(activeId, content, !isFull);
-
-				if (!isFull) {
-					// A read of its own, claimed now that the preview is the buffer:
-					// it lands only on that untouched preview.
-					const mayApplyFull = claimTabForRead(activeId);
-					const canApplyFullLoad = () => {
-						const targetTab = tabManager.tabs.find((item) => item.id === activeId);
-						return mayApplyFull() && targetTab?.isEditing === initialIsEditing && targetTab?.isSplit === initialIsSplit;
-					};
-					updateLoading(activeId, true);
-					// Everything above addresses the tab by id, so a switch during
-					// the two reads costs nothing. This one cannot: it measures the
-					// single article on screen and writes the single `isAtBottom`
-					// flag, which gates the "loading full document" chip for
-					// whichever tab is active. Taken while another tab is showing,
-					// it answers for that document — a short one sets the flag, and
-					// switching back raises the chip at the top of a slice the
-					// reader has not scrolled. Same test as the full-load
-					// completion below, for the same reason: a measurement of the
-					// view only speaks for this load while this load's tab is the
-					// view.
-					if (tabManager.activeTabId === activeId) options.measureInitialViewport();
-					commands.readFileContentChecked(filePath)
-						.then(([fullContent, fullLossy, fullEncoding]) => {
-							const applyFull = () => {
-								try {
-									if (options.isScrolling()) return void setTimeout(applyFull, 100);
-									if (!canApplyFullLoad()) return updateLoading(activeId, false);
-									options.renderMarkdown(fullContent)
-										.then((fullRendered) => {
-											if (!canApplyFullLoad()) return updateLoading(activeId, false);
-											tabManager.updateTabContent(activeId, fullRendered);
-											tabManager.setTabRawContent(activeId, fullContent);
-											// This buffer REPLACES the preview's, so it
-											// carries its own verdict — the preview only
-											// saw the first 5MB, and both the fidelity
-											// and the detected encoding of a prefix can
-											// differ from the whole file's.
-											tabManager.setTabDecodedLossy(activeId, fullLossy);
-											tabManager.setTabEncoding(activeId, fullEncoding);
-											updateLoading(activeId, false);
-										})
-										.catch((error) => {
-											options.onError('Error processing full markdown', error);
-											updateLoading(activeId, false);
-										});
-								} catch (error) {
-									options.onError('Error processing full markdown', error);
-									updateLoading(activeId, false);
-								}
-							};
-							if ('requestIdleCallback' in window) (window as any).requestIdleCallback(applyFull, { timeout: 2000 });
-							else setTimeout(applyFull, 100);
-						})
-						.catch((error) => {
-							options.onError('Backend Error loading full markdown', error);
-							updateLoading(activeId, false);
-						});
-				}
-			} else {
-				const [content, lossy, encoding] = await commands.readFileContentChecked(filePath);
-				// Same race, same guard: this branch reads the whole file, so it
-				// cannot strand a slice, but a stale one still overwrites the
-				// winner's buffer and encoding and flips the tab into the editor.
-				if (!mayApply()) return;
-				tabManager.setTabDecodedLossy(activeId, lossy);
-				tabManager.setTabEncoding(activeId, encoding);
-				lossySaveWarnedTabs.delete(activeId);
-				if (pendingNavigateTabId) tabManager.navigate(pendingNavigateTabId, filePath, pathKey);
-				if (tab) tab.isEditing = true;
-				tabManager.setTabRawContent(activeId, content);
-			}
+			const [content, lossy, encoding] = await commands.readFileContentChecked(filePath);
+			// Every write below comes after this one test, in one synchronous block.
+			// The encoding included: `tab.encoding` is what the save writes with. And
+			// the navigation included: it moves the tab to the new file, so a refusal
+			// after it would leave the old document's buffer under the new path for
+			// auto-save to write.
+			if (!mayApply()) return;
+			// Decided on every load, before the buffer can reach a writer. This also
+			// CLEARS the flag on a file the user has since converted to UTF-8, and
+			// repoints the save at the encoding it converted to.
+			tabManager.setTabDecodedLossy(activeId, lossy);
+			tabManager.setTabEncoding(activeId, encoding);
+			lossySaveWarnedTabs.delete(activeId);
+			tabManager.setTabRawContent(activeId, content);
 			// Read from disk, so the file this tab was to create is there now.
 			const loaded = tabManager.tabs.find((item) => item.id === activeId);
 			if (loaded) loaded.createsFile = undefined;
 			await options.afterLoad();
-			if (filePath && !loadOptions.skipRecentFile) options.saveRecentFile(filePath);
 		} catch (error) {
 			console.error('Error loading file:', error);
 			// A watcher can observe a transient gap while another process replaces
@@ -803,7 +649,6 @@ export function createDocumentSession(options: DocumentSessionOptions) {
 				await commands.saveFileContent(targetPath, snapshot, tab.encoding);
 				if (tab.path === '') {
 					tabManager.updateTabPath(tab.id, targetPath, targetKey);
-					options.saveRecentFile(targetPath);
 				}
 				tab.createsFile = undefined;
 				// The baseline is the text that reached the file, not the buffer:
@@ -885,7 +730,6 @@ export function createDocumentSession(options: DocumentSessionOptions) {
 				// `setTabRawContent`, which would also reset the baseline the two
 				// lines below set on purpose.
 				tab.isTruncated = false;
-				options.saveRecentFile(selected);
 				// Same as the ordinary save: the baseline is what was written,
 				// and edits made during the write stay dirty against it.
 				tab.originalContent = snapshot;
@@ -925,59 +769,6 @@ export function createDocumentSession(options: DocumentSessionOptions) {
 		});
 	}
 
-	async function toggleTaskCheckbox(sourceLine: number, nowChecked: boolean) {
-		const tab = tabManager.activeTab;
-		if (!tab) return false;
-		// Reading mode can reach a large file before its full buffer arrives.
-		// Editing and saving the preview slice would drop everything past it.
-		if (!(await ensureFullContent(tab.id))) return false;
-		const raw = tab.rawContent;
-		const body = getMarkdownBodyWithoutFrontMatter(raw);
-		// The marker grammar comes from `listSyntax.ts`, shared with the editor
-		// toolbar's line-marker toggles; what surrounds it does not. Here the
-		// prefix is *captured* and written back out, because this rewrite replaces
-		// the box in the middle of the line rather than the head of it.
-		//
-		// Horizontal whitespace only, and it has to stay that way. `\s` matches
-		// `\r` as well as `\n`, and JavaScript's `/m` `^` also matches at the
-		// position *between* a `\r` and its `\n`. With `\s*` greedy, every match
-		// in a CRLF buffer began one character early — on the previous line's
-		// `\n` — so `body.slice(0, offset)` held one `\n` too few and every task
-		// resolved to line N-1. On the last task that is a no-op the user reads
-		// as "the checkbox does not work" (#148); anywhere else the off-by-one
-		// lands on a *real* task line and silently toggles the wrong one. Every
-		// CRLF document was affected, which is to say every Windows author.
-		const updatedBody = body.replace(
-			new RegExp(String.raw`^(${LIST_MARKER_PREFIX}${LIST_MARKER}[ \t]+)${TASK_BOX}`, 'gm'),
-			(match, prefix, offset) => {
-				const line = body.slice(0, offset).split('\n').length;
-				if (line === sourceLine) return `${prefix}[${nowChecked ? 'x' : ' '}]`;
-				return match;
-			},
-		);
-		const updated = `${raw.slice(0, raw.length - body.length)}${updatedBody}`;
-		if (updated === raw) return false;
-		tabManager.updateTabRawContent(tab.id, updated);
-		// The preview is already showing this content: the browser has drawn
-		// the native checkbox, and the caller adds `task-done` to the item. A
-		// re-render would rebuild the whole article to arrive at the DOM that
-		// is on screen, and rebuilding it drops the reader's scroll position —
-		// ticking something in a long document threw the view somewhere else
-		// entirely, which is worse than the missing render would be.
-		//
-		// In the same synchronous block as the write, deliberately. The render
-		// effect reads `previewedRawContent` and, if it does not match, arms a
-		// 16ms timer BEFORE anything can be awaited — so marking this after an
-		// `await` would be too late to stop the render it schedules. This is
-		// the one place outside the viewer that may claim the preview is
-		// current, because it is the one place that knows the DOM was updated
-		// by hand.
-		tab.previewedRawContent = updated;
-		// Saved here rather than left to the auto-save timer, which skips a tab
-		// in reading mode. With auto-save off the toggle is an unsaved edit (#804).
-		if (settings.autoSave && tab.path) await saveContent(tab.id);
-		return true;
-	}
 
 	async function canCloseTab(tabId: string): Promise<boolean> {
 		const tab = tabManager.tabs.find((item) => item.id === tabId);
@@ -1031,113 +822,43 @@ export function createDocumentSession(options: DocumentSessionOptions) {
 	 * `loadMarkdown` fills the ACTIVE tab. If another tab became active while
 	 * the caller awaited, this one is owed its read again, on activation.
 	 */
-	function readRestoredTab(tabId: string, recordRecent = false): Promise<void> {
+	function readRestoredTab(tabId: string): Promise<void> {
 		const tab = tabManager.activeTab;
 		if (!tab || tab.id !== tabId) {
 			tabManager.markTabUnread(tabId);
 			return Promise.resolve();
 		}
-		return loadMarkdown(tab.path, { skipTabManagement: true, preserveEditState: true, skipRecentFile: !recordRecent });
+		return loadMarkdown(tab.path, { skipTabManagement: true, preserveEditState: true });
 	}
 
-	/**
-	 * The activation half of lazy restore: read the tab on screen if it is still
-	 * owed one. Answers the heading to show once that read has landed
-	 * (`Tab.pendingAnchor`), or null.
-	 */
-	async function readActiveIfUnread(): Promise<string | null> {
-		const tab = tabManager.activeTab;
-		if (!tab || !tabManager.takeUnread(tab.id)) return null;
-		await readRestoredTab(tab.id, tab.recordRecent);
-		// Switched away mid-read: the tab is owed its read again, and the heading with it.
-		if (tab.unread || tabManager.activeTabId !== tab.id) return null;
-		const anchor = tab.pendingAnchor ?? null;
-		tab.pendingAnchor = undefined;
-		tab.recordRecent = undefined;
-		return anchor;
-	}
 
-	/**
-	 * A link opened in a new tab. The ordinary open path, as the Open dialog
-	 * takes it: `loadMarkdown` resolves the file's identity first, so a tab
-	 * already holding it under another spelling is activated instead of a
-	 * second tab being built.
-	 */
-	function openInNewTab(filePath: string) {
-		return loadMarkdown(filePath, { inNewTab: true });
-	}
 
-	/**
-	 * A link middle-clicked (#1087): a tab behind the one on screen, as a
-	 * browser opens one. It is read when first shown, as a restored tab is
-	 * (`Tab.unread`), so nothing lands in the tab being read. A file already
-	 * open keeps its tab where it is, and that tab flashes to say so.
-	 */
-	async function openInBackgroundTab(filePath: string, anchor?: string) {
-		const pathKey = await canonicalizePath(filePath);
-		const open = tabManager.tabs.find((tab) => isSameFilePath(tab, { path: filePath, pathKey }));
-		if (open) {
-			tabManager.flashTab(open.id);
-			return;
-		}
-		const id = tabManager.addTab(filePath, '', pathKey, false);
-		const tab = tabManager.tabs.find((item) => item.id === id);
-		if (tab) {
-			tab.isEditing = true;
-			if (anchor) tab.pendingAnchor = anchor;
-			tab.recordRecent = true;
-		}
-		tabManager.markTabUnread(id);
-	}
 
 	/**
 	 * A command line named a file that does not exist yet (#1051): an empty tab
 	 * at that path, as `vim` and `code` give. The first save creates the file,
 	 * and closing the tab untouched leaves nothing behind.
 	 */
-	async function openMissingFile(filePath: string, mode: OpenFileMode | null) {
-		options.setShowHome(false);
+	async function openMissingFile(filePath: string) {
 		const pathKey = await canonicalizePath(filePath);
 		const existing = tabManager.tabs.some((tab) => isSameFilePath(tab, { path: filePath, pathKey }));
 		tabManager.addTab(filePath, '', pathKey);
 		const tab = tabManager.activeTab;
 		if (tab && !existing) {
 			tab.createsFile = filePath;
-			tab.isEditing = true;
 		}
 		await options.afterLoad();
 	}
 
 	/**
-	 * Files the OS or another window handed this one, in order. A file named on
-	 * a command line carries the view it asked for (`--edit`, #1051), which a
-	 * tab already open on it switches to through `setViewMode`, and may not
-	 * exist yet.
+	 * A file the OS or the file picker handed over. One a command line named may
+	 * not exist yet, which opens an empty document that creates it on first save.
 	 */
-	async function openFiles(filePaths: readonly string[], setViewMode?: (mode: OpenFileMode) => Promise<unknown>) {
-		for (const filePath of filePaths) {
-			const request = await commands.takeCommandLineOpen(filePath).catch(() => null);
-			const mode = request?.mode ?? undefined;
-			const pathKey = await canonicalizePath(filePath);
-			const open = tabManager.tabs.find((tab) => isSameFilePath(tab, { path: filePath, pathKey }));
-			// A file with nothing on disk to read: one a tab is still to create
-			// (a launch can deliver one path twice, `send_markdown_path` and
-			// `file-path`, and the second has no request left), or one a command
-			// line named that is gone. Reading it would only report it missing.
-			if (open && (request?.missing || createsItsFile(open))) {
-				options.setShowHome(false);
-				tabManager.setActive(open.id);
-				if (mode) await setViewMode?.(mode);
-				continue;
-			}
-			if (request?.missing) {
-				await openMissingFile(filePath, request.mode);
-				continue;
-			}
-			await loadMarkdown(filePath, { openFileMode: mode });
-			if (open && mode) await setViewMode?.(mode);
-		}
+	async function openFile(filePath: string) {
+		const request = await commands.takeCommandLineOpen(filePath).catch(() => null);
+		if (request?.missing) await openMissingFile(filePath);
+		else await loadMarkdown(filePath);
 	}
 
-	return { loadMarkdown, openInNewTab, openInBackgroundTab, openFiles, openMissingFile, readRestoredTab, readActiveIfUnread, saveContent, saveContentAs, renameFile, toggleTaskCheckbox, allowOverwriteOnce, resolveExternalChange, dirtyTabsChangedOnDisk, ensureFullContent, canCloseTab, isLossySaveRefused };
+	return { loadMarkdown, openFile, readRestoredTab, saveContent, saveContentAs, renameFile, allowOverwriteOnce, resolveExternalChange, dirtyTabsChangedOnDisk, ensureFullContent, canCloseTab, isLossySaveRefused };
 }

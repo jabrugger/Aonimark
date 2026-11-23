@@ -32,7 +32,6 @@
 	import { cursor } from '@milkdown/kit/plugin/cursor';
 	import { trailing } from '@milkdown/kit/plugin/trailing';
 	import { callCommand, getMarkdown, insert, replaceAll } from '@milkdown/kit/utils';
-	import { TextSelection } from '@milkdown/prose/state';
 	import type { EditorView } from '@milkdown/prose/view';
 	import { t, type LanguageCode } from '../utils/i18n.js';
 	import { splitFrontMatter, withLineEnding, wysiwygStringifyOptions } from '../utils/wysiwygMarkdown.js';
@@ -44,8 +43,6 @@
 		value,
 		readOnly = false,
 		language = 'en',
-		initialLine = 1,
-		initialColumn = 1,
 		onchange,
 		onrequesturl,
 		toolbarHeight = $bindable(0),
@@ -53,8 +50,6 @@
 		value: string;
 		readOnly?: boolean;
 		language?: LanguageCode;
-		initialLine?: number;
-		initialColumn?: number;
 		onchange: (markdown: string) => void;
 		onrequesturl: (defaultText: string) => Promise<string | null>;
 		toolbarHeight?: number;
@@ -152,7 +147,6 @@
 			.create()
 			.then((created) => {
 				editor = created;
-				placeInitialCursor();
 			});
 
 		return () => {
@@ -188,28 +182,6 @@
 		lineEnding = seed.lineEnding;
 		current.action(replaceAll(seed.body, true));
 	});
-
-	/** The character offset of a 1-based source line/column, for a best-effort cursor. */
-	function lineColumnToPos(markdown: string, line: number, column: number): number {
-		const lines = markdown.split('\n');
-		let offset = 0;
-		for (let i = 0; i < Math.min(Math.max(0, line - 1), lines.length); i++) {
-			offset += lines[i].length + 1;
-		}
-		return offset + Math.max(0, column - 1);
-	}
-
-	function placeInitialCursor() {
-		const current = editor;
-		if (!current || initialLine <= 1) return;
-		current.action((ctx) => {
-			const view = ctx.get(editorViewCtx);
-			const pos = Math.min(lineColumnToPos(value, initialLine, initialColumn), view.state.doc.content.size);
-			const resolved = view.state.doc.resolve(pos);
-			view.dispatch(view.state.tr.setSelection(TextSelection.near(resolved)));
-			view.focus();
-		});
-	}
 
 	function runCmd<T>(command: { key: CmdKey<T> }, payload?: T) {
 		const current = editor;

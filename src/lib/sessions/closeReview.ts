@@ -1,7 +1,7 @@
 /** The fields the review needs from a tab. */
 export type ReviewTab = { id: string; path: string };
 
-export type CloseReview = {
+type CloseReview = {
 	/** The leftmost tab still holding unsaved changes, or undefined when none do. */
 	nextDirtyTab: () => ReviewTab | undefined;
 	setActive: (id: string) => void;

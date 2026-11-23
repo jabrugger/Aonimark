@@ -535,11 +535,9 @@ type EditorMenuLabel = 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll' 
 
 /**
  * The shape a locale file `satisfies`. A language may leave keys untranslated
- * (`t()` falls back to English) but may not file a key English does not have,
- * and must translate every editor menu label: a missing one showed English
- * in a menu that is otherwise translated (#261).
+ * (`t()` falls back to English) but may not file a key English does not have.
  */
-export type LocaleTable = PartialTable<typeof en> & { menu: Record<EditorMenuLabel, string> };
+export type LocaleTable = PartialTable<typeof en>;
 
 const dictionaries = new Map<LanguageCode, Translation>([['en', en]]);
 let localeLoaded = () => {};

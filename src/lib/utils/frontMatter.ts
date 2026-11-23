@@ -2,7 +2,7 @@ import { parseDocument } from 'yaml';
 
 type FrontMatterValueKind = 'string' | 'number' | 'boolean' | 'list' | 'object' | 'null';
 
-export type FrontMatterField = {
+type FrontMatterField = {
 	key: string;
 	value: unknown;
 	kind: FrontMatterValueKind;
@@ -10,7 +10,7 @@ export type FrontMatterField = {
 	editable: boolean;
 };
 
-export type FrontMatterParseResult = {
+type FrontMatterParseResult = {
 	exists: boolean;
 	valid: boolean;
 	raw: string;
@@ -163,80 +163,6 @@ export function getMarkdownBodyWithoutFrontMatter(content: string): string {
 	return parseFrontMatter(content).body;
 }
 
-/**
- * How many buffer lines sit above the body — the number to add to any line
- * number that came out of the renderer to get back to the buffer.
- *
- * The preview renders `getMarkdownBodyWithoutFrontMatter(raw)`, so every
- * `data-sourcepos` comrak emits counts from the first line of the BODY. The
- * editor holds the whole file. Nothing in the attribute says which of the two
- * it means, and the difference is invisible in any document without front
- * matter — which is most documents, and was every test fixture.
- *
- * `parseFrontMatter` returns the body as a suffix of the content, so the
- * offset is the newline count of everything before it. Counting `\n` alone is
- * correct for CRLF too, since `\r\n` contains one.
- */
-export function frontMatterLineOffset(content: string): number {
-	const { body } = parseFrontMatter(content);
-	if (body.length === content.length) return 0;
-	return content.slice(0, content.length - body.length).split('\n').length - 1;
-}
-
-/**
- * How many lines the front matter spans, opening fence through closing fence,
- * or 0 when the document has none — the lines the editor's Rust analyses
- * (headings, folds, colours) blank before they parse the buffer, so the
- * closing `---` does not underline the YAML into a setext heading.
- *
- * Rust is told rather than left to find them because this is the rule the
- * preview strips by: a leading `---` block counts only when its YAML is a
- * mapping (or empty, or malformed). A copy of that rule without a YAML parser
- * blanked a thematic break and the prose under it.
- *
- * Not `frontMatterLineOffset`: that also counts the blank line after the
- * closing fence, and misses the fence itself when no newline follows it.
- * `raw` is every line between the fences, each with its line ending.
- */
-export function frontMatterFenceLines(content: string): number {
-	const { exists, raw } = parseFrontMatter(content);
-	return exists ? raw.split('\n').length + 1 : 0;
-}
-
-export function parseFrontMatterEditableValue(field: FrontMatterField, value: string): unknown {
-	const trimmed = value.trim();
-	switch (field.kind) {
-		case 'boolean':
-			return trimmed.toLowerCase() === 'true';
-		case 'number': {
-			const parsed = Number(trimmed);
-			return Number.isFinite(parsed) ? parsed : value;
-		}
-		case 'list':
-			return parseFrontMatterTagInput(value);
-		case 'null':
-			return trimmed === '' ? null : value;
-		case 'string':
-		default:
-			return value;
-	}
-}
-
-export function updateFrontMatterField(content: string, key: string, value: unknown): string {
-	const parsed = parseFrontMatter(content);
-	if (!parsed.exists) return content;
-	if (!parsed.valid) throw new Error(parsed.error || 'Invalid front matter');
-
-	const doc = parseDocument(parsed.raw, { prettyErrors: false });
-	if (doc.errors.length > 0) throw new Error(doc.errors.map((error) => error.message).join('\n'));
-
-	doc.set(key, value);
-	let serialized = doc.toString({ lineWidth: 0 }).trimEnd();
-	if (parsed.lineEnding === '\r\n') serialized = serialized.replace(/\n/g, '\r\n');
-
-	return `---${parsed.lineEnding}${serialized}${parsed.lineEnding}---${parsed.lineEnding}${parsed.lineEnding}${parsed.body}`;
-}
-
 function parseFrontMatterTagInput(value: string): string[] {
 	return value
 		.split(',')
@@ -244,29 +170,3 @@ function parseFrontMatterTagInput(value: string): string[] {
 		.filter(Boolean);
 }
 
-export function getFrontMatterListItems(field: FrontMatterField): string[] {
-	if (!Array.isArray(field.value)) return [];
-	return field.value
-		.map((item) => stringifyDisplayValue(item).trim())
-		.filter(Boolean);
-}
-
-export function addFrontMatterListItems(items: string[], values: string[]): string[] {
-	return [...new Set([...items, ...values.flatMap(parseFrontMatterTagInput)])];
-}
-
-export function removeFrontMatterListItem(items: string[], index: number): string[] {
-	if (index < 0 || index >= items.length) return items;
-	return items.filter((_, itemIndex) => itemIndex !== index);
-}
-
-export function updateFrontMatterListItem(items: string[], index: number, value: string): string[] {
-	if (index < 0 || index >= items.length) return items;
-
-	const trimmed = value.trim();
-	if (!trimmed || items.some((item, itemIndex) => itemIndex !== index && item === trimmed)) return items;
-
-	const next = [...items];
-	next[index] = trimmed;
-	return next;
-}

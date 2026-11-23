@@ -2,7 +2,7 @@
 //! The macOS menu bar is built by each window's frontend (`appMenu.ts`).
 
 use crate::window_runtime::{AppState, WatcherState};
-use crate::{asset_protocol, commands, tab_transfer, window_runtime};
+use crate::{asset_protocol, commands, window_runtime};
 use std::fs;
 use tauri::{Manager, Runtime};
 use tauri_specta::{collect_commands, collect_events, Event};
@@ -31,8 +31,6 @@ pub fn run() {
         .enable_macos_default_menu(false)
         .manage(AppState::new())
         .manage(WatcherState::new())
-        .manage(crate::folder::FolderWatcherState::new())
-        .manage(tab_transfer::TabTransferBroker::new())
         // Replaces Tauri's own `asset:` handler so UNC hosts go through
         // `asset_protocol`'s trust rule. Registering the scheme here is what
         // suppresses the built-in one.
@@ -49,17 +47,6 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             window_runtime::handle_single_instance(app, args, cwd);
         }))
-        // After single-instance, which ends a second launch in its setup, and
-        // before window-state reads its file: adoption moves files, geometry
-        // included, and only the instance that stays may touch them.
-        .plugin(
-            tauri::plugin::Builder::<_, ()>::new("launch-session")
-                .setup(|app, _| {
-                    window_runtime::adopt_remembered_window(app);
-                    Ok(())
-                })
-                .build(),
-        )
         .plugin(tauri_plugin_prevent_default::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
@@ -99,97 +86,37 @@ pub fn run() {
 fn bindings_builder() -> tauri_specta::Builder<tauri::Wry> {
     tauri_specta::Builder::<tauri::Wry>::new()
         .commands(collect_commands![
-            commands::clipboard_write_text,
-            commands::clipboard_write_image,
-            commands::clipboard_read_text,
-            commands::clipboard_read_image,
-            commands::clipboard_read_file_list,
-            commands::open_markdown_preview,
-            commands::render_markdown,
-            commands::markdown_semantic_spans,
-            commands::markdown_outline,
             window_runtime::send_markdown_path,
             commands::read_file_content_checked,
             commands::canonicalize_path,
-            commands::read_file_as_data_url,
             commands::save_file_content,
-            commands::export_pdf_windows,
-            commands::print_pdf,
             commands::is_win11,
             commands::open_file_folder,
-            commands::is_launchable_path,
             commands::rename_file,
             commands::watch_file,
             window_runtime::unwatch_file,
-            crate::folder::read_folder_entries,
-            crate::folder::watch_folder,
-            crate::folder::unwatch_folder,
-            crate::folder::unwatch_all_folders,
             window_runtime::show_window,
             commands::save_theme,
-            commands::get_system_fonts,
             commands::get_os_type,
             commands::self_update_supported,
-            commands::fetch_vscode_theme,
-            commands::get_saved_vscode_themes,
-            commands::read_vscode_theme,
-            commands::install_vscode_theme,
-            commands::delete_vscode_theme,
-            commands::save_image,
-            commands::copy_file_to_img,
-            commands::copy_file,
-            commands::list_directory_contents,
-            tab_transfer::stage_detached_tab,
-            tab_transfer::claim_detached_tab,
-            tab_transfer::complete_detached_tab,
-            tab_transfer::cancel_detached_tab,
-            tab_transfer::refresh_detached_tab,
-            window_runtime::create_transfer_window,
-            window_runtime::set_window_meta,
-            window_runtime::set_window_files,
-            window_runtime::windows_restored,
-            window_runtime::list_viewer_windows,
-            window_runtime::is_window_tag_taken,
-            window_runtime::offer_tab_to_window,
-            window_runtime::focus_window,
             window_runtime::take_command_line_open,
             window_runtime::path_is_missing,
-            window_runtime::list_pinned_tags,
-            window_runtime::save_pinned_tag,
-            window_runtime::update_pinned_tag,
-            window_runtime::rename_pinned_tag,
-            window_runtime::remove_pinned_tag,
             window_runtime::save_window_state,
             window_runtime::load_window_state,
             window_runtime::clear_window_state,
-            window_runtime::forget_window_state,
-            window_runtime::reopen_remembered_windows,
             window_runtime::save_unsaved_recovery,
             window_runtime::claim_unsaved_recovery,
             window_runtime::clear_unsaved_recovery,
-            window_runtime::set_quitting,
-            window_runtime::keeps_unsaved_on_close,
             window_runtime::save_restore_progress,
             window_runtime::load_restore_progress,
             window_runtime::clear_restore_progress,
         ])
         .events(collect_events![
-            crate::folder::FolderChanged,
             window_runtime::FileChanged,
             window_runtime::FilePath,
-            window_runtime::WindowsRestored,
-            window_runtime::TabTransferOffer,
-            tab_transfer::TabTransferClaimed,
         ])
         // Vocabulary the frontend matches against, so it has one definition.
         .constant("UNMAPPABLE_CODE", crate::fs_safety::UNMAPPABLE_CODE)
-        .constant("BULLET_MARKER", crate::markdown::BULLET_MARKER)
-        .constant("ORDERED_MARKER", crate::markdown::ORDERED_MARKER)
-        .constant("TASK_BOX", crate::markdown::TASK_BOX)
-        .constant(
-            "MARKDOWN_LINK_EXTENSIONS",
-            crate::markdown::MARKDOWN_LINK_EXTENSIONS,
-        )
         // Commands reject with their error string, as `invoke` always did.
         .error_handling(tauri_specta::ErrorHandlingMode::Throw)
         // One type per Rust type: a command type is either only returned or
@@ -278,10 +205,7 @@ fn setup<R: Runtime>(app: &mut tauri::App<R>) -> Result<(), Box<dyn std::error::
         &std::env::current_dir().unwrap_or_default(),
     );
 
-    if let Some(path) = startup_files
-        .first()
-        .filter(|path| !window_runtime::reopened_window_restores(app.handle(), path))
-    {
+    if let Some(path) = startup_files.first() {
         let _ = window_runtime::FilePath(path.clone()).emit(&window);
         window_runtime::bring_to_front(&window);
     }

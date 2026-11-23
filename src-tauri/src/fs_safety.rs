@@ -422,87 +422,6 @@ pub(crate) fn read_to_string_lossy(path: &str) -> std::io::Result<DecodedText> {
     Ok(decode_text(&fs::read(path)?))
 }
 
-/// Length of `bytes` with an incomplete trailing UTF-8 sequence removed.
-/// Truncating a file at a raw byte offset can split a multi-byte character;
-/// dropping the partial tail keeps the preview from ending in a replacement
-/// character. Only the tail is inspected — a file that is not UTF-8 at all
-/// must still produce a full-length (lossy) preview, so earlier bytes are
-/// left alone.
-pub(crate) fn utf8_truncation_boundary(bytes: &[u8]) -> usize {
-    let len = bytes.len();
-    // A UTF-8 sequence is at most four bytes, so at most three trailing bytes
-    // can belong to an unfinished one.
-    for back in 1..=3.min(len) {
-        let index = len - back;
-        let byte = bytes[index];
-        if byte & 0b1100_0000 == 0b1000_0000 {
-            // Continuation byte; keep walking left for its lead byte.
-            continue;
-        }
-        let needed = if byte & 0b1000_0000 == 0 {
-            1
-        } else if byte & 0b1110_0000 == 0b1100_0000 {
-            2
-        } else if byte & 0b1111_0000 == 0b1110_0000 {
-            3
-        } else if byte & 0b1111_1000 == 0b1111_0000 {
-            4
-        } else {
-            // Not a valid lead byte, so this is not a split character.
-            return len;
-        };
-        return if back < needed { index } else { len };
-    }
-    len
-}
-
-pub(crate) fn safe_path_component<'a>(value: &'a str, label: &str) -> Result<&'a str, String> {
-    if value.is_empty()
-        || value == "."
-        || value == ".."
-        || value.contains(['/', '\\'])
-        || Path::new(value).is_absolute()
-    {
-        return Err(format!("Invalid {}", label));
-    }
-    Ok(value)
-}
-
-pub(crate) fn resolve_image_directory(
-    parent_dir: &str,
-    image_directory: &str,
-) -> Result<(PathBuf, PathBuf), String> {
-    let root = Path::new(parent_dir)
-        .canonicalize()
-        .map_err(|e| format!("Invalid image parent directory: {}", e))?;
-    let requested_dir = if image_directory.is_empty() {
-        root.clone()
-    } else {
-        root.join(safe_path_component(image_directory, "image directory")?)
-    };
-
-    fs::create_dir_all(&requested_dir).map_err(|e| e.to_string())?;
-    let image_dir = requested_dir.canonicalize().map_err(|e| e.to_string())?;
-    if !image_dir.starts_with(&root) {
-        return Err("Image directory must remain inside the document directory".to_string());
-    }
-    Ok((root, image_dir))
-}
-
-pub(crate) fn ensure_path_within_root(root: &Path, path: &Path) -> Result<(), String> {
-    let resolved = match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_symlink() => {
-            path.canonicalize().map_err(|e| e.to_string())?
-        }
-        _ => path.to_path_buf(),
-    };
-    if resolved.starts_with(root) {
-        Ok(())
-    } else {
-        Err("Image path must remain inside the document directory".to_string())
-    }
-}
-
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -972,6 +891,7 @@ pub(crate) mod tests {
         assert_ne!(mojibake.into_bytes(), original);
     }
 
+
     #[test]
     fn valid_utf8_is_never_handed_to_the_detector() {
         // Detection is a heuristic; UTF-8 is not. A file that decodes as UTF-8
@@ -1075,69 +995,5 @@ pub(crate) mod tests {
             encode_text(&decoded.content, &decoded.encoding).unwrap(),
             original,
         );
-    }
-
-    #[test]
-    fn truncation_boundary_drops_only_a_split_trailing_character() {
-        assert_eq!(utf8_truncation_boundary(&[]), 0);
-        assert_eq!(utf8_truncation_boundary(b"ab"), 2);
-
-        let three_byte = "中".as_bytes();
-        assert_eq!(utf8_truncation_boundary(three_byte), 3);
-        assert_eq!(utf8_truncation_boundary(&three_byte[..2]), 0);
-        assert_eq!(utf8_truncation_boundary(&three_byte[..1]), 0);
-
-        let four_byte = "🙂".as_bytes();
-        assert_eq!(utf8_truncation_boundary(four_byte), 4);
-        assert_eq!(utf8_truncation_boundary(&four_byte[..3]), 0);
-
-        // Only the tail is affected; earlier bytes are kept.
-        let mixed = "ab中".as_bytes();
-        assert_eq!(utf8_truncation_boundary(&mixed[..4]), 2);
-
-        // A buffer that is not UTF-8 at all must still yield a full-length
-        // preview; at most the last three bytes can ever be dropped.
-        let gbk = [0xD6u8, 0xD0, 0xCE, 0xC4];
-        assert!(utf8_truncation_boundary(&gbk) >= gbk.len() - 3);
-    }
-
-    #[test]
-    fn path_components_reject_traversal_separators_and_absolute_paths() {
-        for invalid in [
-            "",
-            ".",
-            "..",
-            "../theme",
-            "folder/theme",
-            "folder\\theme",
-            "/tmp/theme",
-        ] {
-            assert!(safe_path_component(invalid, "test").is_err(), "{invalid}");
-        }
-        assert_eq!(
-            safe_path_component("SynthWave '84", "test").unwrap(),
-            "SynthWave '84"
-        );
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn image_directory_rejects_symlink_escape() {
-        use std::os::unix::fs::symlink;
-
-        let nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!("markpad-path-root-{nonce}"));
-        let outside = std::env::temp_dir().join(format!("markpad-path-outside-{nonce}"));
-        fs::create_dir_all(&root).unwrap();
-        fs::create_dir_all(&outside).unwrap();
-        symlink(&outside, root.join("images")).unwrap();
-
-        assert!(resolve_image_directory(root.to_str().unwrap(), "images").is_err());
-
-        fs::remove_dir_all(root).unwrap();
-        fs::remove_dir_all(outside).unwrap();
     }
 }

@@ -1,90 +1,24 @@
 import { commands } from '../bindings.js';
-import {
-	DEFAULT_EDITOR_TOOLBAR_ORDER,
-	applyEditorToolbarMove,
-	getEditorToolbarAdjacentMove,
-	getEditorToolbarReorderMove,
-	normalizeEditorToolbarHidden,
-	normalizeEditorToolbarOrder,
-} from '../utils/editorToolbar.js';
-import {
-	DEFAULT_AUTO_SAVE,
-	resolveAutoSave,
-} from '../utils/autoSaveSetting.js';
-import {
-	DEFAULT_OPEN_FILE_MODE,
-	resolveOpenFileMode,
-	type OpenFileMode,
-} from '../utils/openFileMode.js';
-import {
-	DEFAULT_OPEN_FILE_TARGET,
-	isOpenFileTarget,
-	type OpenFileTarget,
-} from '../utils/openFileTarget.js';
-import {
-	DEFAULT_TITLEBAR_TOOLBAR_ORDER,
-	DEFAULT_TITLEBAR_TOOLBAR_PLACEMENT,
-	applyTitlebarToolbarMove,
-	getTitlebarToolbarAdjacentMove,
-	getTitlebarToolbarReorderMove,
-	normalizeTitlebarToolbarHidden,
-	normalizeTitlebarToolbarOrder,
-	normalizeTitlebarToolbarPlacement,
-	type TitlebarToolbarPlacement,
-} from '../utils/titlebarToolbar.js';
-import {
-	DEFAULT_PREVIEW_MAX_WIDTH,
-	getStoredPreviewFullWidth,
-	normalizePreviewMaxWidth,
-} from '../utils/previewWidth.js';
-import { getSupportedLanguages, type LanguageCode, type TranslationKey } from '../utils/i18n.js';
+import { getSupportedLanguages, type LanguageCode } from '../utils/i18n.js';
 
 export type OSType = 'macos' | 'windows' | 'linux' | 'unknown';
 
 export type { LanguageCode };
 
-/**
- * Everything the appearance `<select>` can be set to: the three built-ins plus
- * one entry per imported VS Code theme, whose names are user data and so cannot
- * be enumerated here.
- *
- * A union rather than `string` for the same reason {@link LanguageCode} is one —
- * `theme` crosses four modules (the viewer's effect, the title bar menu, the
- * settings dialog and `save_theme`), and while it was a bare `string` the
- * dialog needed two `as any` casts to hand a value back.
- */
-export type ThemeSetting = 'system' | 'light' | 'dark' | `vscode:${string}`;
+export type ThemeSetting = 'system' | 'light' | 'dark';
 
-export const DEFAULT_THEME: ThemeSetting = 'system';
+const DEFAULT_THEME: ThemeSetting = 'system';
 
-/**
- * The four the backend can answer `get_os_type` with.
- *
- * Guarded rather than cast, because the failure that reaches here is not a
- * rejection. `initOSType` catches those; what it did not catch was a
- * *successful* `null` or `undefined`, which `as OSType` laundered into the
- * union. `DEFAULT_FONTS[null]` is `undefined`, and the line after it reads
- * `.editorFont` off that — so the store's constructor threw before any
- * setting was applied.
- *
- * Not reachable from the shipped app: the Rust command always answers with a
- * string. It surfaced in #635, when the vitest move started booting the real
- * singleton against a bridge stub that answered `null` to everything.
- */
-export function isOSType(value: unknown): value is OSType {
+/** The four the backend can answer `get_os_type` with. */
+function isOSType(value: unknown): value is OSType {
 	return value === 'macos' || value === 'windows' || value === 'linux' || value === 'unknown';
 }
 
-export function isThemeSetting(value: unknown): value is ThemeSetting {
-	if (value === 'system' || value === 'light' || value === 'dark') return true;
-	return typeof value === 'string' && value.startsWith('vscode:') && value.length > 'vscode:'.length;
+function isThemeSetting(value: unknown): value is ThemeSetting {
+	return value === 'system' || value === 'light' || value === 'dark';
 }
 
-/**
- * Coerces a raw string — from localStorage, from a `<select>`, from a sibling
- * window's `storage` event — to a theme. Anything unrecognised is the default
- * rather than an error: a theme the app cannot apply must not stop it starting.
- */
+/** Anything unrecognised is the default rather than an error: a stored theme must not stop the app starting. */
 export function resolveTheme(value: unknown): ThemeSetting {
 	return isThemeSetting(value) ? value : DEFAULT_THEME;
 }
@@ -175,76 +109,13 @@ export function detectSystemLanguage(): LanguageCode {
 	return resolveLanguageTag(navigator.language) ?? 'en';
 }
 
-export interface DefaultFonts {
-	editorFont: string;
-	previewFont: string;
-	codeFont: string;
+interface NumericSettingRange {
+	min: number;
+	max: number;
+	step: number;
+	default: number;
 }
 
-export const DEFAULT_FONTS: Record<OSType, DefaultFonts> = {
-	macos: {
-		editorFont: 'Menlo',
-		previewFont: 'Helvetica Neue',
-		codeFont: 'Menlo',
-	},
-	windows: {
-		editorFont: 'Consolas',
-		previewFont: 'Segoe UI',
-		codeFont: 'Consolas',
-	},
-	linux: {
-		editorFont: 'Monospace',
-		previewFont: 'system-ui',
-		codeFont: 'Monospace',
-	},
-	unknown: {
-		editorFont: 'Consolas',
-		previewFont: 'Segoe UI',
-		codeFont: 'Consolas',
-	},
-};
-
-export type TabPosition = 'top' | 'left' | 'right';
-export type SidebarStackOrder = 'openFilesTop' | 'folderTop';
-
-export function isTabPosition(value: unknown): value is TabPosition {
-	return value === 'top' || value === 'left' || value === 'right';
-}
-
-/** The Settings select for the tab position, in order. */
-export const TAB_POSITION_OPTIONS: readonly { value: TabPosition; labelKey: TranslationKey }[] = [
-	{ value: 'top', labelKey: 'settings.tabPositionTop' },
-	{ value: 'left', labelKey: 'settings.tabPositionLeft' },
-	{ value: 'right', labelKey: 'settings.tabPositionRight' },
-];
-
-/**
- * The allowed range of a numeric setting. Single source of truth: the settings
- * UI renders `min`/`max`/`step` from it and every write path (typing, spin
- * buttons, reset, load from localStorage) clamps against the same object, so
- * the UI can never offer a value that persistence would silently shrink.
- */
-export interface NumericSettingRange {
-	readonly min: number;
-	readonly max: number;
-	readonly step: number;
-	readonly default: number;
-}
-
-// Upper bound is 48 across all three font sizes: the spin buttons already let
-// users reach 48, so profiles in the wild contain sizes above the old clamp of
-// 24/28. Aligning persistence up to the UI keeps those settings; aligning the
-// UI down to persistence would shrink an existing user's editor on upgrade.
-export const EDITOR_FONT_SIZE_RANGE: NumericSettingRange = { min: 10, max: 48, step: 1, default: 14 };
-export const PREVIEW_FONT_SIZE_RANGE: NumericSettingRange = { min: 12, max: 48, step: 1, default: 16 };
-export const CODE_FONT_SIZE_RANGE: NumericSettingRange = { min: 10, max: 48, step: 1, default: 14 };
-export const EDITOR_MAX_WIDTH_RANGE: NumericSettingRange = { min: 20, max: 500, step: 10, default: 80 };
-export const TOC_WIDTH_RANGE: NumericSettingRange = { min: 180, max: 420, step: 1, default: 240 };
-// Width of the tab column when tabs are drawn down the side of the window (#884).
-export const TAB_COLUMN_WIDTH_RANGE: NumericSettingRange = { min: 140, max: 420, step: 1, default: 200 };
-// Share of the sidebar column the upper section takes when both are shown, in percent.
-export const SIDEBAR_SPLIT_RANGE: NumericSettingRange = { min: 15, max: 85, step: 1, default: 40 };
-// Preview zoom, in percent. The only place its bounds and default live.
 export const ZOOM_LEVEL_RANGE: NumericSettingRange = { min: 25, max: 500, step: 10, default: 100 };
 
 /**
@@ -259,11 +130,6 @@ export const ZOOM_LEVEL_RANGE: NumericSettingRange = { min: 25, max: 500, step: 
  */
 export function wheelZoomFactor(deltaY: number): number {
 	return Math.exp(-Math.max(-10, Math.min(10, deltaY)) / 100);
-}
-
-/** True when `value` is a finite number the user is allowed to commit as-is. */
-export function isWithinRange(value: unknown, range: NumericSettingRange): boolean {
-	return typeof value === 'number' && Number.isFinite(value) && value >= range.min && value <= range.max;
 }
 
 /**
@@ -281,7 +147,7 @@ export function clampToRange(value: unknown, range: NumericSettingRange): number
 }
 
 /** Parses a persisted string. Missing/blank/garbage all fall back to the default. */
-export function parseStoredNumber(raw: string | null, range: NumericSettingRange): number {
+function parseStoredNumber(raw: string | null, range: NumericSettingRange): number {
 	if (raw === null || raw.trim() === '') return range.default;
 	return clampToRange(raw, range);
 }
@@ -291,104 +157,11 @@ export function stepWithinRange(current: unknown, delta: number, range: NumericS
 	return clampToRange(clampToRange(current, range) + delta, range);
 }
 
-const LEGACY_START_IN_EDITOR_KEY = 'editor.startInEditor';
-const LEGACY_PREVIEW_FULL_WIDTH_KEY = 'isFullWidth';
-const LEGACY_AUTO_SAVE_KEY = 'editor.autoSave';
-const LEGACY_CONFIRM_BEFORE_SAVE_KEY = 'editor.confirmBeforeSave';
-
 function hasStorage(): boolean {
 	return typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function';
 }
 
-function readStoredKey(key: string): string | null {
-	if (!hasStorage()) return null;
-	return localStorage.getItem(key);
-}
-
-function parseStoredStringList(value: string | null): string[] | null {
-	if (value === null) return null;
-	try {
-		const parsed = JSON.parse(value);
-		return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : null;
-	} catch {
-		return null;
-	}
-}
-
-function parseStoredRecord(value: string | null): Record<string, unknown> | null {
-	if (value === null) return null;
-	try {
-		const parsed = JSON.parse(value);
-		return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
-	} catch {
-		return null;
-	}
-}
-
-/**
- * The six settings zen mode flattens, as they were the moment it was entered.
- * `null` means "no snapshot": either zen mode is off, or the stored one could
- * not be trusted.
- */
-export interface PreZenState {
-	renderLineHighlight: string;
-	showTabs: boolean;
-	statusBar: boolean;
-	minimap: boolean;
-	lineNumbers: string;
-	showToc: boolean;
-}
-
-/**
- * What leaving zen mode restores when there is no snapshot to restore from.
- *
- * These are the same six values the store's own field initializers use — pinned
- * against drift by a test — because "the setting's own default" is the only
- * answer available once the record of what the user had is gone.
- */
-export const DEFAULT_PRE_ZEN_STATE: PreZenState = {
-	renderLineHighlight: 'line',
-	showTabs: true,
-	statusBar: true,
-	minimap: false,
-	lineNumbers: 'on',
-	showToc: false,
-};
-
-/**
- * Validates a parsed `editor.preZenState`, the way every other entry in
- * {@link createSettingsPersistence} validates its own raw value.
- *
- * All six fields or none. A snapshot missing a field, or carrying one of the
- * wrong type, comes from a version of Markpad this one cannot interpret, and
- * half-applying it produces a state the user never had — so it is rejected
- * whole and zen mode leaves through {@link DEFAULT_PRE_ZEN_STATE} instead.
- *
- * The unvalidated `JSON.parse` this replaces is how the tab bar could vanish
- * for good: a snapshot with no `showTabs` restored `showTabs = undefined`, the
- * write effect stored the string `"undefined"`, and every later launch read
- * that back as `false` with no way out but the settings dialog.
- */
-export function normalizePreZenState(value: unknown): PreZenState | null {
-	if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-	const record = value as Record<string, unknown>;
-	const { renderLineHighlight, showTabs, statusBar, minimap, lineNumbers, showToc } = record;
-	if (typeof renderLineHighlight !== 'string' || typeof lineNumbers !== 'string') return null;
-	if (typeof showTabs !== 'boolean' || typeof statusBar !== 'boolean') return null;
-	if (typeof minimap !== 'boolean' || typeof showToc !== 'boolean') return null;
-	return { renderLineHighlight, showTabs, statusBar, minimap, lineNumbers, showToc };
-}
-
-/**
- * One persisted localStorage entry.
- *
- * `read` must touch **exactly one** field of the target. That is not a style
- * rule: `read` runs inside the entry's own `$effect`, so whatever it reads
- * becomes that effect's dependency set, and every dependency is a field whose
- * change rewrites this key. A `read` that touched two fields would resurrect
- * the multi-window bug this shape exists to fix.
- */
-export interface PersistedSetting<T> {
+interface PersistedSetting<T> {
 	readonly key: string;
 	/** Serializes this entry's single field. `null` means "remove the key". */
 	readonly read: (target: T) => string | null;
@@ -473,380 +246,37 @@ function installPersistedSettings<T>(target: T, entries: readonly PersistedSetti
 }
 
 export class SettingsStore {
-	minimap = $state(false);
-	wordWrap = $state('on');
-	lineNumbers = $state('on');
-	vimMode = $state(false);
-	statusBar = $state(true);
-	wordCount = $state(false);
-	renderLineHighlight = $state('line');
-	highlightColor = $state('yellow');
-	showTabs = $state(true);
 	restoreStateOnReopen = $state(true);
-	closeWindowWithLastTab = $state(true);
 	zenMode = $state(false);
-	/** Keeps the editor's cursor line in the middle of the pane. */
-	typewriterMode = $state(false);
-	/** Dims the editor outside the paragraph the cursor is in (#819). Independent of zen mode. */
-	focusMode = $state(false);
-	showToc = $state(false);
-	preZenState = $state<PreZenState | null>(null);
-	occurrencesHighlight = $state(false);
-	/** The preview's own Highlight Occurrences: copies of the selected text are marked. */
-	previewOccurrences = $state(false);
-	/** Temporary Highlight in the preview's right-click menu; off, the items and the highlights are hidden. */
-	previewAnnotations = $state(false);
-	/** A table wider than the text column grows into the margins (#811). Off, it scrolls inside the column, as on GitHub. */
-	previewTableBreakout = $state(false);
-	/** A table too wide to fit scrolls sideways, as on GitHub. Off, its cells break inside words so it fits. */
-	previewTableScroll = $state(true);
-	/** A newline inside a paragraph renders as a line break. Off, it is a space, as CommonMark says (#967). */
-	previewNewlineBreaks = $state(true);
-	showWhitespace = $state(false);
-	stickyScroll = $state(true);
-	/**
-	 * What the outline marks as the current heading: the heading scrolled to,
-	 * or the one the tab's cursor is in (#799). The cursor is followed only
-	 * where the reader can see it: in the editor, or drawn in the preview with
-	 * `previewCursor` on. Otherwise the outline follows the scroll.
-	 */
-	tocFollows = $state<'scroll' | 'cursor'>('scroll');
-	/** Whether a click in the preview places the tab's cursor, drawn there (#799). */
-	previewCursor = $state(false);
-	/**
-	 * Whether a newly split tab starts with its panes scroll-locked.
-	 *
-	 * A preference, not a tab's state: `Tab.isScrollSynced` is the per-tab
-	 * answer, lives in the window-state snapshot, and is what the title bar
-	 * toggles. This is the sticky default the last toggle left behind, which
-	 * `TabManager.splitScrollSyncPreference` seeds the next split from — one
-	 * scalar shared by every tab and every window, so it belongs here with the
-	 * rest of them rather than in the tab store that reads it.
-	 */
-	splitScrollSync = $state(false);
-	openFileMode = $state<OpenFileMode>(DEFAULT_OPEN_FILE_MODE);
-	/** Where a file opened from outside goes with several windows open. See `OpenFileTarget`. */
-	openFileTarget = $state<OpenFileTarget>(DEFAULT_OPEN_FILE_TARGET);
-	newFileDefaultMode = $state(true);
-	showRecentFiles = $state(true);
-	/**
-	 * On, because the suffix is silent until it is needed: it appears only when
-	 * two tabs in one window hold different files of the same name, which is
-	 * the moment the tab strip stops answering the question it exists to
-	 * answer. The switch is for the reader who would rather keep the strip
-	 * narrow and reach for the tooltip instead.
-	 */
-	showFolderForDuplicateNames = $state(true);
-	/*
-	 * On, so nothing about an existing install changes.
-	 *
-	 * It covers a jump in either pane — a heading from the table of contents, a
-	 * find match, back and forward — because they are one decision the user
-	 * makes once, not a preview one and an editor one. Every jump reads this
-	 * setting and nothing else; the system's reduce-motion preference is not
-	 * consulted (see `utils/motion.ts`).
-	 */
-	animateJumpScroll = $state(true);
-	/*
-	 * On, so nothing about an existing install changes: Monaco's
-	 * `cursorSmoothCaretAnimation` was hard-coded to `'on'` before #710 gave it
-	 * this switch.
-	 *
-	 * Separate from `animateJumpScroll` rather than folded into it. A jump is
-	 * the app moving the view on the user's behalf and happens a few times a
-	 * session; the caret glide is drawn under every arrow key, and someone who
-	 * finds it smeary still has no reason to lose the animated jump.
-	 */
-	animateCursor = $state(true);
-	/*
-	 * Off, so a click on a relative link keeps navigating this tab.
-	 *
-	 * Following a link in place is the only thing that writes a tab's file
-	 * history, and Back and Forward read it — they sit on the title bar by
-	 * default. Turning this on by default would leave both of them permanently
-	 * inert for anyone who never opened this page, which is a capability to
-	 * take away deliberately rather than as the side effect of a new setting.
-	 */
-	linksOpenInNewTab = $state(false);
-	editorMaxWidth = $state(EDITOR_MAX_WIDTH_RANGE.default);
-	previewMaxWidth = $state(DEFAULT_PREVIEW_MAX_WIDTH);
-	// Preview ignores previewMaxWidth and fills the pane.
-	previewFullWidth = $state(false);
-	// Preview zoom, in percent. See ZOOM_LEVEL_RANGE.
 	zoomLevel = $state(ZOOM_LEVEL_RANGE.default);
 	theme = $state<ThemeSetting>(DEFAULT_THEME);
-	pinnedToc = $state(false);
-	tocSide = $state<'left' | 'right'>('left');
-	/**
-	 * Which side of a split the editor takes, and so which side the preview
-	 * takes (#184). Read only while a tab is split: with one pane on screen it
-	 * fills the container and there is no order to state.
-	 *
-	 * Window-wide rather than per tab, like `tocSide` and unlike `splitRatio`.
-	 * A ratio is about one document — how much of it you want to see while you
-	 * write — and a reader sets it again per file. Which hand the editor is
-	 * under is about the reader, and answering it once per tab would mean
-	 * answering it again every time one is opened.
-	 */
-	splitEditorSide = $state<'left' | 'right'>('left');
-	tocWidth = $state(TOC_WIDTH_RANGE.default);
-	/**
-	 * Where the open documents are listed (#884): across the title bar, or as
-	 * a column down one side of the window. A long horizontal strip hides most
-	 * of its tabs once a dozen files are open; a column shows them all by name.
-	 * `showTabs` still decides whether they are shown at all, so zen mode hides
-	 * the column the same way it hides the strip.
-	 */
-	tabPosition = $state<TabPosition>('top');
-	tabColumnWidth = $state(TAB_COLUMN_WIDTH_RANGE.default);
-	/** Where the tabs are drawn, or null with them hidden. Every place that asks where the tabs are reads this. */
-	get tabPlacement(): TabPosition | null {
-		return this.showTabs ? this.tabPosition : null;
-	}
-	/**
-	 * The folder sidebar. When the tabs are in a side column the folder stacks
-	 * into that column, so `folderSide` only places it while they are not.
-	 * `sidebarStackOrder` says which section is upper when both share the column, and `sidebarSplit` how much of it the
-	 * upper one takes.
-	 */
-	folderSide = $state<'left' | 'right'>('left');
-	sidebarStackOrder = $state<SidebarStackOrder>('openFilesTop');
-	sidebarSplit = $state(SIDEBAR_SPLIT_RANGE.default);
-	/**
-	 * Off: the folder lists only what Markpad opens. On: every file, the rest
-	 * dimmed and opened by the system's default app.
-	 */
-	folderShowAllFiles = $state(false);
 	osType = $state<OSType>('unknown');
-	imageDirectory = $state('img');
-	macosImageScaling = $state(true);
 	language = $state<LanguageCode>('en');
-	showEditorToolbar = $state(true);
-	editorToolbarOrder = $state<string[]>([...DEFAULT_EDITOR_TOOLBAR_ORDER]);
-	editorToolbarHidden = $state<string[]>([]);
-	titlebarToolbarOrder = $state<string[]>([...DEFAULT_TITLEBAR_TOOLBAR_ORDER]);
-	titlebarToolbarHidden = $state<string[]>([]);
-	titlebarToolbarPlacement = $state<Record<string, TitlebarToolbarPlacement>>({ ...DEFAULT_TITLEBAR_TOOLBAR_PLACEMENT });
-
-	editorFont = $state('Consolas');
-	editorFontSize = $state(EDITOR_FONT_SIZE_RANGE.default);
-	previewFont = $state('Segoe UI');
-	previewFontSize = $state(PREVIEW_FONT_SIZE_RANGE.default);
-	codeFont = $state('Consolas');
-	codeFontSize = $state(CODE_FONT_SIZE_RANGE.default);
-
-	// File-save behavior: on, edits are persisted without Cmd+S; off, they are
-	// kept until saved (closing backs them up or asks, see `persistOpenEditors`).
-	// One switch, because that is the number
-	// of behaviours the app has — see `autoSaveSetting.ts` for the pair it
-	// replaced and why the two of them were never independent.
-	autoSave = $state(DEFAULT_AUTO_SAVE);
+	autoSave = $state(true);
 	persistOpenEditors = $state(true);
 
-	/** The `$effect.root` disposer from the constructor. See {@link dispose}. */
 	#disposeEffects: (() => void) | null = null;
+	#exactZoom: number | null = null;
 
 	constructor() {
 		if (!hasStorage()) return;
-
 		const entries = createSettingsPersistence();
-
-		// Whether a font *family* was ever chosen has to be sampled before the
-		// write effects run, because those effects seed every key with the
-		// current value; asking localStorage later would always find something.
-		const hasStoredFontFamily = {
-			editorFont: localStorage.getItem('editor.font') !== null,
-			previewFont: localStorage.getItem('preview.font') !== null,
-			codeFont: localStorage.getItem('preview.codeFont') !== null,
-		};
-
 		loadPersistedSettings(this, entries);
-
-		// Font families default per OS, and the OS is only known once the
-		// backend answers. Re-apply just the ones the user never picked.
-		this.initOSType().then(() => {
-			const defaults = DEFAULT_FONTS[this.osType];
-			if (!hasStoredFontFamily.editorFont) this.editorFont = defaults.editorFont;
-			if (!hasStoredFontFamily.previewFont) this.previewFont = defaults.previewFont;
-			if (!hasStoredFontFamily.codeFont) this.codeFont = defaults.codeFont;
-		});
-
+		void this.initOSType();
 		this.#disposeEffects = $effect.root(() => {
 			installPersistedSettings(this, entries);
 		});
 	}
 
-	/**
-	 * Stops this store persisting, the way `observeFoldLayout`'s stop function
-	 * stops it observing. Held on the instance rather than returned, because the
-	 * one thing a constructor cannot hand back is a second value.
-	 *
-	 * The app never calls it: `settings` below is a singleton that lives as long
-	 * as its window, and that is the behaviour the whole file is written for. A
-	 * *test* constructs stores by the dozen into one shared jsdom, and each
-	 * construction installs ~30 write effects plus a `storage` listener that
-	 * outlive the test that made them — so a later `flushSync()` runs an
-	 * abandoned store's effects too, and they rewrite its keys from its own
-	 * construction-time values.
-	 *
-	 * Disposing the root destroys those effects *and* runs their teardowns, so
-	 * the `window` listener comes off with them; nothing here is registered
-	 * outside the root.
-	 */
 	dispose(): void {
 		this.#disposeEffects?.();
 		this.#disposeEffects = null;
 	}
 
-	toggleWordWrap() {
-		if (this.wordWrap === 'off') {
-			this.wordWrap = 'on';
-		} else if (this.wordWrap === 'on') {
-			this.wordWrap = 'wordWrapColumn';
-		} else {
-			this.wordWrap = 'off';
-		}
-	}
-
-	toggleLineNumbers() {
-		this.lineNumbers = this.lineNumbers === 'on' ? 'off' : 'on';
-	}
-
-	toggleLineHighlight() {
-		this.renderLineHighlight = this.renderLineHighlight === 'line' ? 'none' : 'line';
-	}
-
 	toggleZenMode() {
 		this.zenMode = !this.zenMode;
-		if (this.zenMode) {
-			this.preZenState = {
-				renderLineHighlight: this.renderLineHighlight,
-				showTabs: this.showTabs,
-				statusBar: this.statusBar,
-				minimap: this.minimap,
-				lineNumbers: this.lineNumbers,
-				showToc: this.showToc,
-			};
-			this.renderLineHighlight = 'none';
-			this.showTabs = false;
-			this.statusBar = false;
-			this.minimap = false;
-			this.lineNumbers = 'off';
-			this.showToc = false;
-		} else {
-			// Leaving zen mode always un-hides the six things entering it hid,
-			// snapshot or no snapshot. The old `if (this.preZenState)` made "no
-			// snapshot" mean "stay flattened", which is the state a rejected or
-			// missing record leaves behind — tab bar, status bar and line numbers
-			// gone with nothing in the UI saying zen mode was ever involved.
-			const restored = this.preZenState ?? DEFAULT_PRE_ZEN_STATE;
-			this.renderLineHighlight = restored.renderLineHighlight;
-			this.showTabs = restored.showTabs;
-			this.statusBar = restored.statusBar;
-			this.minimap = restored.minimap;
-			this.lineNumbers = restored.lineNumbers;
-			this.showToc = restored.showToc;
-			this.preZenState = null;
-		}
 	}
 
-	toggleTocSide() {
-		this.tocSide = this.tocSide === 'left' ? 'right' : 'left';
-	}
-
-	toggleSplitEditorSide() {
-		this.splitEditorSide = this.splitEditorSide === 'left' ? 'right' : 'left';
-	}
-
-	setTocWidth(width: number) {
-		this.tocWidth = clampToRange(width, TOC_WIDTH_RANGE);
-	}
-
-	setTabColumnWidth(width: number) {
-		this.tabColumnWidth = clampToRange(width, TAB_COLUMN_WIDTH_RANGE);
-	}
-
-	setSidebarSplit(percent: number) {
-		this.sidebarSplit = clampToRange(Math.round(percent), SIDEBAR_SPLIT_RANGE);
-	}
-
-	setLanguage(lang: LanguageCode) {
-		this.language = lang;
-	}
-
-	setEditorToolbarToolVisible(id: string, visible: boolean) {
-		const hidden = normalizeEditorToolbarHidden(this.editorToolbarHidden);
-		if (visible) {
-			this.editorToolbarHidden = hidden.filter((hiddenId) => hiddenId !== id);
-		} else if (!hidden.includes(id)) {
-			this.editorToolbarHidden = normalizeEditorToolbarHidden([...hidden, id]);
-		}
-	}
-
-	moveEditorToolbarTool(id: string, direction: 'up' | 'down') {
-		const move = getEditorToolbarAdjacentMove(this.editorToolbarOrder, id, direction);
-		if (!move) return;
-		this.editorToolbarOrder = applyEditorToolbarMove(this.editorToolbarOrder, move);
-	}
-
-	reorderEditorToolbarTool(draggedId: string, targetId: string) {
-		const move = getEditorToolbarReorderMove(this.editorToolbarOrder, draggedId, targetId);
-		if (!move) return;
-		this.editorToolbarOrder = applyEditorToolbarMove(this.editorToolbarOrder, move);
-	}
-
-	resetEditorToolbar() {
-		this.editorToolbarOrder = [...DEFAULT_EDITOR_TOOLBAR_ORDER];
-		this.editorToolbarHidden = [];
-	}
-
-	setTitlebarToolbarActionVisible(id: string, visible: boolean) {
-		const hidden = normalizeTitlebarToolbarHidden(this.titlebarToolbarHidden);
-		if (visible) {
-			this.titlebarToolbarHidden = hidden.filter((hiddenId) => hiddenId !== id);
-		} else if (!hidden.includes(id)) {
-			this.titlebarToolbarHidden = normalizeTitlebarToolbarHidden([...hidden, id]);
-		}
-	}
-
-	setTitlebarToolbarActionPlacement(id: string, placement: TitlebarToolbarPlacement) {
-		this.titlebarToolbarPlacement = normalizeTitlebarToolbarPlacement({
-			...this.titlebarToolbarPlacement,
-			[id]: placement,
-		});
-	}
-
-	moveTitlebarToolbarAction(id: string, direction: 'up' | 'down') {
-		const move = getTitlebarToolbarAdjacentMove(this.titlebarToolbarOrder, id, direction);
-		if (!move) return;
-		this.titlebarToolbarOrder = applyTitlebarToolbarMove(this.titlebarToolbarOrder, move);
-	}
-
-	reorderTitlebarToolbarAction(draggedId: string, targetId: string) {
-		const move = getTitlebarToolbarReorderMove(this.titlebarToolbarOrder, draggedId, targetId);
-		if (!move) return;
-		this.titlebarToolbarOrder = applyTitlebarToolbarMove(this.titlebarToolbarOrder, move);
-	}
-
-	resetTitlebarToolbar() {
-		this.titlebarToolbarOrder = [...DEFAULT_TITLEBAR_TOOLBAR_ORDER];
-		this.titlebarToolbarHidden = [];
-		this.titlebarToolbarPlacement = { ...DEFAULT_TITLEBAR_TOOLBAR_PLACEMENT };
-	}
-
-	resetEditorMaxWidth() {
-		this.editorMaxWidth = EDITOR_MAX_WIDTH_RANGE.default;
-	}
-
-	resetPreviewMaxWidth() {
-		this.previewMaxWidth = DEFAULT_PREVIEW_MAX_WIDTH;
-	}
-
-	// The three zoom operations live here rather than at the four keyboard and
-	// wheel handlers that used to spell them out, so ZOOM_LEVEL_RANGE is the only
-	// place the bounds and the neutral factor exist. `stepWithinRange` also
-	// re-clamps the *current* value, which is what makes a corrupt zoomLevel
-	// recoverable by any of them instead of only by the reset button.
 	zoomIn() {
 		this.zoomLevel = stepWithinRange(this.zoomLevel, ZOOM_LEVEL_RANGE.step, ZOOM_LEVEL_RANGE);
 	}
@@ -855,11 +285,10 @@ export class SettingsStore {
 		this.zoomLevel = stepWithinRange(this.zoomLevel, -ZOOM_LEVEL_RANGE.step, ZOOM_LEVEL_RANGE);
 	}
 
-	// zoomLevel is whole percent and one pinch event is often a fraction of
-	// one: rounding every step would stall a slow pinch where it started. The
-	// unrounded level carries between events until something else moves zoomLevel.
-	#exactZoom: number | null = null;
-
+	/**
+	 * Scales the zoom by `factor` without losing the fraction between events, so
+	 * a slow pinch that asks for 1% at a time still adds up.
+	 */
 	zoomBy(factor: number) {
 		const current =
 			this.#exactZoom !== null && Math.round(this.#exactZoom) === this.zoomLevel
@@ -883,20 +312,6 @@ export class SettingsStore {
 			this.osType = 'unknown';
 		}
 	}
-
-	resetEditorFont() {
-		const defaults = DEFAULT_FONTS[this.osType];
-		this.editorFont = defaults.editorFont;
-		this.editorFontSize = EDITOR_FONT_SIZE_RANGE.default;
-	}
-
-	resetPreviewFont() {
-		const defaults = DEFAULT_FONTS[this.osType];
-		this.previewFont = defaults.previewFont;
-		this.previewFontSize = PREVIEW_FONT_SIZE_RANGE.default;
-		this.codeFont = defaults.codeFont;
-		this.codeFontSize = CODE_FONT_SIZE_RANGE.default;
-	}
 }
 
 function booleanSetting(
@@ -913,161 +328,18 @@ function booleanSetting(
 	};
 }
 
-function stringSetting(
-	key: string,
-	read: (target: SettingsStore) => string,
-	load: (target: SettingsStore, value: string) => void,
-): PersistedSetting<SettingsStore> {
-	return {
-		key,
-		read,
-		load: (target, raw) => {
-			if (raw !== null) load(target, raw);
-		},
-	};
-}
-
-function numberSetting(
-	key: string,
-	range: NumericSettingRange,
-	read: (target: SettingsStore) => number,
-	load: (target: SettingsStore, value: number) => void,
-): PersistedSetting<SettingsStore> {
-	return {
-		key,
-		read: (target) => String(read(target)),
-		load: (target, raw) => load(target, parseStoredNumber(raw, range)),
-	};
-}
-
-/**
- * The complete localStorage contract of {@link SettingsStore}: one entry per
- * key, and — by construction — one store field per entry.
- *
- * Adding a setting means adding one entry here; load and save then cannot drift
- * apart, and cross-window sync comes for free because
- * {@link installPersistedSettings} reuses `load` for incoming `storage` events.
- */
+/** The complete localStorage contract of {@link SettingsStore}: one entry per key, one store field per entry. */
 export function createSettingsPersistence(): PersistedSetting<SettingsStore>[] {
 	return [
-		booleanSetting('editor.minimap', (s) => s.minimap, (s, v) => { s.minimap = v; }),
-		stringSetting('editor.wordWrap', (s) => s.wordWrap, (s, v) => { s.wordWrap = v; }),
-		stringSetting('editor.lineNumbers', (s) => s.lineNumbers, (s, v) => { s.lineNumbers = v; }),
-		booleanSetting('editor.vimMode', (s) => s.vimMode, (s, v) => { s.vimMode = v; }),
-		booleanSetting('editor.statusBar', (s) => s.statusBar, (s, v) => { s.statusBar = v; }),
-		booleanSetting('editor.wordCount', (s) => s.wordCount, (s, v) => { s.wordCount = v; }),
-		stringSetting('editor.renderLineHighlight', (s) => s.renderLineHighlight, (s, v) => { s.renderLineHighlight = v; }),
-		booleanSetting('editor.showTabs', (s) => s.showTabs, (s, v) => { s.showTabs = v; }),
+		booleanSetting('editor.autoSaveEdits', (s) => s.autoSave, (s, v) => { s.autoSave = v; }),
 		booleanSetting('editor.persistOpenEditors', (s) => s.persistOpenEditors, (s, v) => { s.persistOpenEditors = v; }),
 		booleanSetting('editor.restoreStateOnReopen', (s) => s.restoreStateOnReopen, (s, v) => { s.restoreStateOnReopen = v; }),
-		booleanSetting('editor.closeWindowWithLastTab', (s) => s.closeWindowWithLastTab, (s, v) => { s.closeWindowWithLastTab = v; }),
 		booleanSetting('editor.zenMode', (s) => s.zenMode, (s, v) => { s.zenMode = v; }),
-		booleanSetting('editor.typewriterMode', (s) => s.typewriterMode, (s, v) => { s.typewriterMode = v; }),
-		booleanSetting('editor.focusMode', (s) => s.focusMode, (s, v) => { s.focusMode = v; }),
-		booleanSetting('editor.occurrencesHighlight', (s) => s.occurrencesHighlight, (s, v) => { s.occurrencesHighlight = v; }),
-		booleanSetting('preview.occurrencesHighlight', (s) => s.previewOccurrences, (s, v) => { s.previewOccurrences = v; }),
-		booleanSetting('preview.annotations', (s) => s.previewAnnotations, (s, v) => { s.previewAnnotations = v; }),
-		booleanSetting('preview.tableBreakout', (s) => s.previewTableBreakout, (s, v) => { s.previewTableBreakout = v; }),
-		booleanSetting('preview.tableScroll', (s) => s.previewTableScroll, (s, v) => { s.previewTableScroll = v; }),
-		booleanSetting('preview.newlineBreaks', (s) => s.previewNewlineBreaks, (s, v) => { s.previewNewlineBreaks = v; }),
-		booleanSetting('editor.showWhitespace', (s) => s.showWhitespace, (s, v) => { s.showWhitespace = v; }),
-		booleanSetting('editor.stickyScroll', (s) => s.stickyScroll, (s, v) => { s.stickyScroll = v; }),
-		booleanSetting('editor.splitScrollSync', (s) => s.splitScrollSync, (s, v) => { s.splitScrollSync = v; }),
-		booleanSetting('editor.showToc', (s) => s.showToc, (s, v) => { s.showToc = v; }),
-		stringSetting('editor.highlightColor', (s) => s.highlightColor, (s, v) => { s.highlightColor = v; }),
 		{
-			key: 'editor.openFileMode',
-			read: (s) => s.openFileMode,
-			// The second key is read, never written: it is the boolean this
-			// setting replaced, and it is what an existing install still has on
-			// the first launch after the upgrade. See `resolveOpenFileMode`.
-			load: (s, raw) => {
-				s.openFileMode = resolveOpenFileMode(raw, readStoredKey(LEGACY_START_IN_EDITOR_KEY));
-			},
+			key: 'zoomLevel',
+			read: (s) => String(s.zoomLevel),
+			load: (s, raw) => { s.zoomLevel = parseStoredNumber(raw, ZOOM_LEVEL_RANGE); },
 		},
-		{
-			key: 'files.openFileTarget',
-			read: (s) => s.openFileTarget,
-			load: (s, raw) => {
-				if (isOpenFileTarget(raw)) s.openFileTarget = raw;
-			},
-		},
-		booleanSetting('editor.newFileDefaultMode', (s) => s.newFileDefaultMode, (s, v) => { s.newFileDefaultMode = v; }),
-		booleanSetting('editor.showRecentFiles', (s) => s.showRecentFiles, (s, v) => { s.showRecentFiles = v; }),
-		booleanSetting('editor.showFolderForDuplicateNames', (s) => s.showFolderForDuplicateNames, (s, v) => { s.showFolderForDuplicateNames = v; }),
-		booleanSetting('motion.animateJumpScroll', (s) => s.animateJumpScroll, (s, v) => { s.animateJumpScroll = v; }),
-		booleanSetting('motion.animateCursor', (s) => s.animateCursor, (s, v) => { s.animateCursor = v; }),
-		booleanSetting('preview.cursor', (s) => s.previewCursor, (s, v) => { s.previewCursor = v; }),
-		booleanSetting('links.openInNewTab', (s) => s.linksOpenInNewTab, (s, v) => { s.linksOpenInNewTab = v; }),
-		numberSetting('editor.maxWidth', EDITOR_MAX_WIDTH_RANGE, (s) => s.editorMaxWidth, (s, v) => { s.editorMaxWidth = v; }),
-		{
-			key: 'preview.maxWidth',
-			read: (s) => String(s.previewMaxWidth),
-			load: (s, savedPreviewMaxWidth) => { s.previewMaxWidth = normalizePreviewMaxWidth(savedPreviewMaxWidth); },
-		},
-		{
-			key: 'preview.fullWidth',
-			read: (s) => String(s.previewFullWidth),
-			// The second key is read, never written: it is the name this setting
-			// had before, and it is what an existing install still has on the
-			// first launch after the upgrade. The write effect seeds the new key
-			// immediately, and `??` prefers it, so the legacy one stops being
-			// consulted after that — the same treatment `editor.openFileMode` and
-			// `editor.autoSaveEdits` give theirs.
-			load: (s, raw) => {
-				s.previewFullWidth = getStoredPreviewFullWidth(raw, readStoredKey(LEGACY_PREVIEW_FULL_WIDTH_KEY));
-			},
-		},
-		numberSetting('zoomLevel', ZOOM_LEVEL_RANGE, (s) => s.zoomLevel, (s, v) => { s.zoomLevel = v; }),
-		booleanSetting('editor.pinnedToc', (s) => s.pinnedToc, (s, v) => { s.pinnedToc = v; }),
-		{
-			key: 'editor.tocSide',
-			read: (s) => s.tocSide,
-			load: (s, raw) => {
-				if (raw === 'left' || raw === 'right') s.tocSide = raw;
-			},
-		},
-		{
-			key: 'editor.tocFollows',
-			read: (s) => s.tocFollows,
-			load: (s, raw) => {
-				if (raw === 'scroll' || raw === 'cursor') s.tocFollows = raw;
-			},
-		},
-		{
-			key: 'editor.splitEditorSide',
-			read: (s) => s.splitEditorSide,
-			load: (s, raw) => {
-				if (raw === 'left' || raw === 'right') s.splitEditorSide = raw;
-			},
-		},
-		numberSetting('editor.tocWidth', TOC_WIDTH_RANGE, (s) => s.tocWidth, (s, v) => { s.tocWidth = v; }),
-		{
-			key: 'editor.tabPosition',
-			read: (s) => s.tabPosition,
-			load: (s, raw) => {
-				if (isTabPosition(raw)) s.tabPosition = raw;
-			},
-		},
-		numberSetting('editor.tabColumnWidth', TAB_COLUMN_WIDTH_RANGE, (s) => s.tabColumnWidth, (s, v) => { s.tabColumnWidth = v; }),
-		{
-			key: 'folder.side',
-			read: (s) => s.folderSide,
-			load: (s, raw) => {
-				if (raw === 'left' || raw === 'right') s.folderSide = raw;
-			},
-		},
-		{
-			key: 'folder.stackOrder',
-			read: (s) => s.sidebarStackOrder,
-			load: (s, raw) => {
-				if (raw === 'openFilesTop' || raw === 'folderTop') s.sidebarStackOrder = raw;
-			},
-		},
-		numberSetting('folder.split', SIDEBAR_SPLIT_RANGE, (s) => s.sidebarSplit, (s, v) => { s.sidebarSplit = v; }),
-		booleanSetting('folder.showAllFiles', (s) => s.folderShowAllFiles, (s, v) => { s.folderShowAllFiles = v; }),
-		stringSetting('editor.imageDirectory', (s) => s.imageDirectory, (s, v) => { s.imageDirectory = v; }),
-		booleanSetting('editor.macosImageScaling', (s) => s.macosImageScaling, (s, v) => { s.macosImageScaling = v; }),
 		{
 			key: 'editor.language',
 			read: (s) => s.language,
@@ -1080,157 +352,13 @@ export function createSettingsPersistence(): PersistedSetting<SettingsStore>[] {
 			},
 		},
 		{
-			// Unprefixed, because that is the key `src/app.html` reads in its
-			// first-paint script to pick a background colour before the bundle
-			// loads. Renaming it would reintroduce the white flash that script
-			// exists to prevent.
+			// Unprefixed, because `src/app.html` reads this key in its first-paint
+			// script to pick a background colour before the bundle loads.
 			key: 'theme',
 			read: (s) => s.theme,
 			load: (s, raw) => { s.theme = resolveTheme(raw); },
 		},
-		booleanSetting('editor.showEditorToolbar', (s) => s.showEditorToolbar, (s, v) => { s.showEditorToolbar = v; }),
-		{
-			key: 'editor.toolbarOrder',
-			read: (s) => JSON.stringify(normalizeEditorToolbarOrder(s.editorToolbarOrder)),
-			load: (s, raw) => { s.editorToolbarOrder = normalizeEditorToolbarOrder(parseStoredStringList(raw)); },
-		},
-		{
-			key: 'editor.toolbarHidden',
-			read: (s) => JSON.stringify(normalizeEditorToolbarHidden(s.editorToolbarHidden)),
-			load: (s, raw) => { s.editorToolbarHidden = normalizeEditorToolbarHidden(parseStoredStringList(raw)); },
-		},
-		{
-			key: 'titlebar.toolbarOrder',
-			read: (s) => JSON.stringify(normalizeTitlebarToolbarOrder(s.titlebarToolbarOrder)),
-			load: (s, raw) => { s.titlebarToolbarOrder = normalizeTitlebarToolbarOrder(parseStoredStringList(raw)); },
-		},
-		{
-			key: 'titlebar.toolbarHidden',
-			read: (s) => JSON.stringify(normalizeTitlebarToolbarHidden(s.titlebarToolbarHidden)),
-			load: (s, raw) => { s.titlebarToolbarHidden = normalizeTitlebarToolbarHidden(parseStoredStringList(raw)); },
-		},
-		{
-			key: 'titlebar.toolbarPlacement',
-			read: (s) => JSON.stringify(normalizeTitlebarToolbarPlacement(s.titlebarToolbarPlacement)),
-			load: (s, raw) => { s.titlebarToolbarPlacement = normalizeTitlebarToolbarPlacement(parseStoredRecord(raw)); },
-		},
-		stringSetting('editor.font', (s) => s.editorFont, (s, v) => { s.editorFont = v; }),
-		numberSetting('editor.fontSize', EDITOR_FONT_SIZE_RANGE, (s) => s.editorFontSize, (s, v) => { s.editorFontSize = v; }),
-		stringSetting('preview.font', (s) => s.previewFont, (s, v) => { s.previewFont = v; }),
-		numberSetting('preview.fontSize', PREVIEW_FONT_SIZE_RANGE, (s) => s.previewFontSize, (s, v) => { s.previewFontSize = v; }),
-		stringSetting('preview.codeFont', (s) => s.codeFont, (s, v) => { s.codeFont = v; }),
-		numberSetting('preview.codeFontSize', CODE_FONT_SIZE_RANGE, (s) => s.codeFontSize, (s, v) => { s.codeFontSize = v; }),
-		{
-			key: 'editor.autoSaveEdits',
-			read: (s) => String(s.autoSave),
-			// The two older keys are read, never written: they are what an
-			// existing install still has on the first launch after the upgrade.
-			// See `resolveAutoSave`.
-			load: (s, raw) => {
-				s.autoSave = resolveAutoSave(
-					raw,
-					readStoredKey(LEGACY_AUTO_SAVE_KEY),
-					readStoredKey(LEGACY_CONFIRM_BEFORE_SAVE_KEY),
-				);
-			},
-		},
-		{
-			key: 'editor.preZenState',
-			read: (s) => (s.preZenState ? JSON.stringify(s.preZenState) : null),
-			// Same two steps as `titlebar.toolbarPlacement`: parse to a record
-			// (unparseable, non-object and array all become `null` there), then
-			// validate the shape. Nothing here can throw, and nothing reaches the
-			// field that the field's type does not describe.
-			load: (s, raw) => { s.preZenState = normalizePreZenState(parseStoredRecord(raw)); },
-		},
 	];
-}
-
-/** Marks a file as Markpad settings; its value is the format version. */
-const SETTINGS_FILE_MARKER = 'markpadSettings';
-
-// A family the user never picked is the exporting OS's default, which the
-// importing machine may not have. Leaving it out keeps the importer's own.
-const FONT_DEFAULT_FIELDS: Record<string, keyof DefaultFonts> = {
-	'editor.font': 'editorFont',
-	'preview.font': 'previewFont',
-	'preview.codeFont': 'codeFont',
-};
-
-/** A parsed settings file: localStorage values by key, and theme JSON by name. */
-export interface SettingsFile {
-	settings: Record<string, unknown>;
-	themes: Record<string, string>;
-}
-
-/**
- * Serializes every persisted setting to a settings file (#134), keyed by its
- * localStorage key. A stored value that is itself JSON (booleans, numbers,
- * lists) is written as that JSON so the file can be edited by hand; the
- * `stringify` check keeps the round trip exact.
- *
- * `themes` are the installed VS Code themes, carried whole because Markpad
- * keeps no link back to where one was downloaded from.
- */
-export function exportSettings(store: SettingsStore, themes: Record<string, string> = {}): string {
-	const values: Record<string, unknown> = {};
-	for (const entry of createSettingsPersistence()) {
-		const raw = entry.read(store);
-		if (raw === null) continue;
-		const fontField = FONT_DEFAULT_FIELDS[entry.key];
-		if (fontField && raw === DEFAULT_FONTS[store.osType][fontField]) continue;
-		let value: unknown = raw;
-		try {
-			const parsed: unknown = JSON.parse(raw);
-			if (typeof parsed !== 'string' && JSON.stringify(parsed) === raw) value = parsed;
-		} catch {
-			// Not JSON: an ordinary string setting.
-		}
-		values[entry.key] = value;
-	}
-	return JSON.stringify({ [SETTINGS_FILE_MARKER]: 1, settings: values, themes }, null, '\t') + '\n';
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-/** Throws when `text` is not a settings file. Theme entries that are not strings are dropped. */
-export function parseSettingsFile(text: string): SettingsFile {
-	let parsed: unknown = null;
-	try {
-		parsed = JSON.parse(text);
-	} catch {
-		// Reported below with every other non-settings file.
-	}
-	if (!isRecord(parsed) || typeof parsed[SETTINGS_FILE_MARKER] !== 'number' || !isRecord(parsed.settings)) {
-		throw new Error('Not a Markpad settings file');
-	}
-	const themes: Record<string, string> = {};
-	if (isRecord(parsed.themes)) {
-		for (const [name, json] of Object.entries(parsed.themes)) {
-			if (typeof json === 'string') themes[name] = json;
-		}
-	}
-	return { settings: parsed.settings, themes };
-}
-
-/**
- * Applies a settings file's values onto `store`. Keys the file does not name
- * keep their current value, and unknown keys are ignored. Each value goes
- * through the same `load` that reads localStorage, so a hand-edited or foreign
- * value is validated exactly like a corrupt stored one. The write effects then
- * persist it and sync the other windows.
- *
- * Install the file's themes first: a `vscode:` theme that is not on disk yet
- * falls back to `system` the moment it is applied.
- */
-export function applySettings(store: SettingsStore, values: Record<string, unknown>): void {
-	for (const entry of createSettingsPersistence()) {
-		if (!Object.prototype.hasOwnProperty.call(values, entry.key)) continue;
-		const value = values[entry.key];
-		entry.load(store, typeof value === 'string' ? value : JSON.stringify(value));
-	}
 }
 
 export const settings = new SettingsStore();

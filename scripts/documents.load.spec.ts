@@ -45,16 +45,7 @@ describe('document load failure', () => {
 
 	function makeSession(overrides: Record<string, unknown> = {}) {
 		return createDocumentSession({
-			setShowHome: () => {},
-			currentFile: () => tabManager.activeTab?.path ?? '',
-			resetScrollHistory: () => {},
-			renderMarkdown: async () => '',
 			afterLoad: async () => {},
-			saveRecentFile: () => {},
-			deleteRecentFile: (path: string) => void deletedRecents.push(path),
-			setLoadingTabs: () => {},
-			measureInitialViewport: () => {},
-			isScrolling: () => false,
 			onError: (message: string, error: unknown) => void errors.push({ message, error }),
 			onDiskChangedUnderSave: () => {},
 			cancelPendingAutoSave: () => {},
@@ -74,7 +65,8 @@ describe('document load failure', () => {
 	}
 
 	test('a read that fails keeps the open tab, its buffer and its recent entry', async () => {
-		tabManager.closeAll();
+		tabManager.tabs = [];
+		tabManager.activeTabId = null;
 		errors.length = 0;
 		deletedRecents.length = 0;
 
@@ -96,7 +88,8 @@ describe('document load failure', () => {
 	});
 
 	test('the failure is reported rather than swallowed', async () => {
-		tabManager.closeAll();
+		tabManager.tabs = [];
+		tabManager.activeTabId = null;
 		errors.length = 0;
 
 		const session = makeSession();
@@ -164,16 +157,7 @@ describe('external change reload', () => {
 
 	function makeSession(overrides: Record<string, unknown> = {}) {
 		return createDocumentSession({
-			setShowHome: () => {},
-			currentFile: () => tabManager.activeTab?.path ?? '',
-			resetScrollHistory: () => {},
-			renderMarkdown: async () => '',
 			afterLoad: async () => {},
-			saveRecentFile: () => {},
-			deleteRecentFile: () => {},
-			setLoadingTabs: () => {},
-			measureInitialViewport: () => {},
-			isScrolling: () => false,
 			onError: () => {},
 			onDiskChangedUnderSave: (tabId: string) => refusedSaves.push(tabId),
 			cancelPendingAutoSave: () => {},
@@ -198,7 +182,8 @@ describe('external change reload', () => {
 	}
 
 	function reset() {
-		tabManager.closeAll();
+		tabManager.tabs = [];
+		tabManager.activeTabId = null;
 		disk.clear();
 		handleInvoke = diskInvoke;
 		refusedSaves = [];
@@ -418,191 +403,8 @@ describe('external change reload', () => {
 
 	// --- #692: the editor is where the reload has to land ---
 
-	test('reloading a clean tab does not throw the user out of the editor', async () => {
-		// The gate on the Auto-Reload button used to hide it in edit mode, so this
-		// path was reachable only by enabling Live Mode in the preview and then
-		// pressing Edit. Now that editing is the case the button is FOR, a reload
-		// that dropped the tab back to preview would be the visible bug.
-		//
-		// `loadMarkdown(path)` with no options is exactly the call the
-		// `file-changed` listener makes for a `reload` outcome.
-		reset();
-		const session = makeSession();
-		const tab = open('/notes/live.md', 'before');
-		tab.isEditing = true;
-
-		handleInvoke = (cmd) => {
-			if (cmd === 'canonicalize_path') return '/notes/live.md';
-			// An editing pane always gets the whole file, never the 5MB preview
-			// slice — an editor bound to a partial buffer auto-saves it back over
-			// the document's tail.
-			if (cmd === 'read_file_content_checked') return ['after', false, 'UTF-8'];
-			throw new Error(`unexpected invoke: ${cmd}`);
-		};
-
-		await session.loadMarkdown('/notes/live.md');
-
-		assert.equal(tabManager.activeTab?.rawContent, 'after', 'the disk version did not arrive');
-		assert.equal(tabManager.activeTab?.isEditing, true, 'the reload left the editor');
-		assert.equal(tabManager.activeTab?.isDirty, false, 'the reloaded buffer is not an edit');
-	});
 });
 
-// #547. The revision above guarded the SECOND stage only. The first stage wrote
-// the buffer, the encoding and the truncation flag unconditionally, across two
-// awaits — so when two loads overlapped on one tab and the older one's preview
-// read landed last, it overwrote the winner's complete buffer with its 50KB
-// slice and re-raised `isTruncated`. Its own second stage was then correctly
-// rejected by the revision it had just lost. Nothing retried, nothing recorded
-// it, and from then on every save was refused.
-//
-// Two loads overlap because the startup path is delivered on two channels that
-// nothing dedupes: `RunEvent::Opened` stashes it for `send_markdown_path` AND
-// emits `file-path`, and argv is read by both.
-//
-// These drive the real TabManager and the real document session, so they lock
-// the outcome rather than the shape of the guard.
-describe('large file load revision', () => {
-	// The runes are the compiler's, not ours: vitest builds `.svelte.ts` through the
-	// Svelte plugin, so the store and the session run under real reactivity, and jsdom
-	// supplies `window` and `localStorage`. Only the Tauri backend is stubbed.
-
-	// The preview always returns isFull=false to exercise the two-stage path
-	// regardless of the actual threshold — no need for a multi-MB test string.
-	const FULL = '# big\n\n' + 'x'.repeat(200) + '\n\ntail that must never be lost\n';
-	const PARTIAL = FULL.slice(0, 40) + '…';
-
-	/** Per-call delays, so the two concurrent loads can be ordered deliberately. */
-	let previewDelays: number[] = [];
-	let previewCall = 0;
-	let savedContent: string | null = null;
-
-	let handleInvoke: (cmd: string, args: any) => unknown = () => {
-		throw new Error('unexpected invoke');
-	};
-
-	beforeAll(() => {
-		(window as any).__TAURI_INTERNALS__ = {
-			metadata: { currentWindow: { label: 'main' }, currentWebview: { windowLabel: 'main', label: 'main' } },
-			invoke: (cmd: string, args: any) => Promise.resolve(handleInvoke(cmd, args)),
-		};
-	});
-
-	// `settings` is one store for the whole file: put back what this block changes.
-	let settingsBefore: { openFileMode: typeof settings.openFileMode };
-	beforeAll(() => {
-		settingsBefore = { openFileMode: settings.openFileMode };
-	});
-	afterAll(() => {
-		Object.assign(settings, settingsBefore);
-	});
-
-	const errors: string[] = [];
-	const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-	function makeSession() {
-		return createDocumentSession({
-			setShowHome: () => {},
-			currentFile: () => tabManager.activeTab?.path ?? '',
-			resetScrollHistory: () => {},
-			renderMarkdown: async (raw: string) => `<p>${raw.length}</p>`,
-			afterLoad: async () => {},
-			saveRecentFile: () => {},
-			deleteRecentFile: () => {},
-			setLoadingTabs: () => {},
-			measureInitialViewport: () => {},
-			isScrolling: () => false,
-			onError: (message) => errors.push(message),
-			onDiskChangedUnderSave: () => {},
-			cancelPendingAutoSave: () => {},
-			askClose: async () => 'discard' as const,
-			onCloseSaveNewerEdits: () => {},
-			onCloseAutoSaveFailed: () => {},
-			onPartialCopySaved: () => {},
-		});
-	}
-
-	function reset() {
-		tabManager.closeAll();
-		errors.length = 0;
-		previewCall = 0;
-		savedContent = null;
-		settings.openFileMode = 'preview';
-		handleInvoke = (cmd, args) => {
-			if (cmd === 'canonicalize_path') return '/docs/big.md';
-			if (cmd === 'open_markdown_preview') {
-				const delay = previewDelays[previewCall++] ?? 0;
-				// Always return isFull=false to exercise the two-stage load path
-				return wait(delay).then(() => [PARTIAL, false, false, 'UTF-8']);
-			}
-			if (cmd === 'read_file_content_checked') return [FULL, false, 'UTF-8'];
-			if (cmd === 'save_file_content') {
-				savedContent = args.content;
-				return null;
-			}
-			throw new Error(`unexpected invoke: ${cmd}`);
-		};
-	}
-
-	/** Both startup channels deliver the same path; only the timing differs. */
-	async function loadTwice() {
-		const session = makeSession();
-		// The `file-path` listener does not await its load; `send_markdown_path` does.
-		const first = session.loadMarkdown('/docs/big.md');
-		const second = session.loadMarkdown('/docs/big.md');
-		await Promise.all([first, second]);
-		await wait(500);
-		return { session, tab: tabManager.activeTab! };
-	}
-
-	test('an overtaken load cannot leave the tab holding its preview slice', async () => {
-		reset();
-		// The first load's preview read is slow, so it lands after the second load
-		// has already completed the tab. This is the ordering that stranded it.
-		previewDelays = [120, 10];
-		const { tab } = await loadTwice();
-
-		assert.equal(tab.rawContent, FULL, 'the complete file must survive the stale preview');
-		assert.notEqual(tab.isTruncated, true);
-	});
-
-	test('a tab left by overlapping loads can still be saved, in full', async () => {
-		reset();
-		previewDelays = [120, 10];
-		const { session, tab } = await loadTwice();
-
-		assert.equal(await session.saveContent(tab.id), true, `save was refused: ${errors.join('; ')}`);
-		// The refusal is the only thing between this state and a truncated write,
-		// so a save that succeeds must be a save of the whole document.
-		assert.equal(savedContent, FULL);
-	});
-
-	test('overlapping loads settle on the whole file whichever preview read wins', async () => {
-		for (const delays of [
-			[10, 120], // the first load lands first — the ordering that always worked
-			[0, 0], // both resolve on the same tick
-			[120, 10], // the first load lands last
-		]) {
-			reset();
-			previewDelays = delays;
-			const { tab } = await loadTwice();
-			assert.equal(tab.rawContent, FULL, `stranded a slice with delays ${delays.join(',')}`);
-			assert.notEqual(tab.isTruncated, true, `left truncated with delays ${delays.join(',')}`);
-		}
-	});
-
-	test('a single load of a large file is unaffected', async () => {
-		reset();
-		previewDelays = [0];
-		const session = makeSession();
-		await session.loadMarkdown('/docs/big.md');
-		await wait(400);
-
-		const tab = tabManager.activeTab!;
-		assert.equal(tab.rawContent, FULL);
-		assert.notEqual(tab.isTruncated, true);
-	});
-});
 
 // Opening a file that is ALREADY open in a tab with unsaved edits must not
 // re-read it from disk. `setTabRawContent` replaces rawContent AND
@@ -644,16 +446,7 @@ describe('reopening a dirty document', () => {
 
 	function makeSession() {
 		return createDocumentSession({
-			setShowHome: () => {},
-			currentFile: () => tabManager.activeTab?.path ?? '',
-			resetScrollHistory: () => {},
-			renderMarkdown: async (raw: string) => raw,
 			afterLoad: async () => {},
-			saveRecentFile: () => {},
-			deleteRecentFile: () => {},
-			setLoadingTabs: () => {},
-			measureInitialViewport: () => {},
-			isScrolling: () => false,
 			onError: () => {},
 			onDiskChangedUnderSave: () => {},
 			cancelPendingAutoSave: () => {},
@@ -665,8 +458,8 @@ describe('reopening a dirty document', () => {
 	}
 
 	function reset() {
-		tabManager.closeAll();
-		tabManager.recentlyClosed.length = 0;
+		tabManager.tabs = [];
+		tabManager.activeTabId = null;
 		localStorage.clear();
 		disk.clear();
 		reads.length = 0;
@@ -683,28 +476,6 @@ describe('reopening a dirty document', () => {
 
 	// --- opening a file must never cost a buffer ---
 
-	// `addTab` followed by a load with `skipTabManagement` is the shape back/forward
-	// and a few other routes use: whatever tab `addTab` leaves active is the one
-	// the disk content lands in. Today that is always a fresh tab, so this passes
-	// without the guard — it is pinned here because it is the invariant, and any
-	// future change to how an already-open path is resolved has to keep it.
-	//
-	// It asserts ONLY that the edits survive: no tab counts, no active-tab
-	// identity, nothing about how the request was routed. A failure here means
-	// work was destroyed, and nothing else.
-	test('following a link into a new tab never costs the target tab its unsaved edits', async () => {
-		reset();
-		const session = makeSession();
-		const edited = openEdited('/notes/target.md', 'on disk', 'my unsaved paragraph');
-		tabManager.addTab('/notes/from.md', 'from text');
-
-		tabManager.addTab('/notes/target.md');
-		await session.loadMarkdown('/notes/target.md', { skipTabManagement: true, resetScrollHistory: true });
-
-		assert.equal(edited.rawContent, 'my unsaved paragraph');
-		assert.equal(edited.originalContent, 'on disk', 'the saved baseline is intact, so the tab can still tell you what changed');
-		assert.equal(edited.isDirty, true, 'the tab still knows it has something to save');
-	});
 
 	// --- the pre-existing loss, independent of one-tab-per-path ---
 
@@ -741,46 +512,7 @@ describe('reopening a dirty document', () => {
 		assert.deepEqual(reads, ['/notes/a.md']);
 	});
 
-	test('an edited tab following a link to a DIFFERENT file still loads it', async () => {
-		reset();
-		const session = makeSession();
-		disk.set('/notes/b.md', 'b on disk');
-		const edited = openEdited('/notes/a.md', 'a on disk', 'edits');
 
-		// `navigate` rewrites this tab's path; the caller has already dealt with the
-		// buffer (canCloseTab) before getting here.
-		await session.loadMarkdown('/notes/b.md', { navigate: true });
-
-		assert.equal(edited.path, '/notes/b.md');
-		assert.equal(edited.rawContent, 'b on disk');
-		assert.deepEqual(reads, ['/notes/b.md']);
-	});
-
-	test('a Reload of a file changed under unsaved edits replaces the buffer', async () => {
-		reset();
-		const session = makeSession();
-		const edited = openEdited('/notes/a.md', 'on disk', 'my unsaved paragraph');
-
-		disk.set('/notes/a.md', 'someone else wrote this');
-		const outcome = await session.resolveExternalChange('/notes/a.md');
-		assert.equal(outcome.action, 'conflict', 'the watcher never reloads it on its own');
-		// Deciding that took a read of its own — comparing the file against the
-		// tab's baseline is how "who wrote this" is answered now. `reads` is here
-		// to measure what the OPEN does, so the resolution's read is cleared first.
-		reads.length = 0;
-
-		// The options resolveExternalChangeByReloading passes, verbatim.
-		await session.loadMarkdown('/notes/a.md', {
-			preserveEditState: true,
-			skipTabManagement: true,
-			resetScrollHistory: true,
-			discardUnsavedBuffer: true,
-		});
-
-		assert.equal(edited.rawContent, 'someone else wrote this');
-		assert.equal(edited.isDirty, false);
-		assert.deepEqual(reads, ['/notes/a.md']);
-	});
 
 	test('a conflict alone does not authorize the next open to discard the buffer', async () => {
 		reset();
@@ -843,16 +575,7 @@ describe('truncated buffer guard', () => {
 
 	function makeSession() {
 		return createDocumentSession({
-			setShowHome: () => {},
-			currentFile: () => tabManager.activeTab?.path ?? '',
-			resetScrollHistory: () => {},
-			renderMarkdown: async (raw: string) => `<p>${raw.length}</p>`,
 			afterLoad: async () => {},
-			saveRecentFile: () => {},
-			deleteRecentFile: () => {},
-			setLoadingTabs: () => {},
-			measureInitialViewport: () => {},
-			isScrolling: () => false,
 			onError: (message) => errors.push(message),
 			onDiskChangedUnderSave: () => {},
 			cancelPendingAutoSave: () => {},
@@ -864,7 +587,8 @@ describe('truncated buffer guard', () => {
 	}
 
 	function reset() {
-		tabManager.closeAll();
+		tabManager.tabs = [];
+		tabManager.activeTabId = null;
 		invokeCalls = [];
 		errors.length = 0;
 		notices.length = 0;
@@ -899,30 +623,6 @@ describe('truncated buffer guard', () => {
 		assert.equal(invokeCalls.length, before);
 	});
 
-	test('a load into an editable pane reads the whole file instead of the preview slice', async () => {
-		// F5 / "reload from disk" preserves edit state. Taking the preview
-		// shortcut there hands the editor a partial buffer, and the next keystroke
-		// arms auto-save on it.
-		reset();
-		handleInvoke = (cmd) => {
-			if (cmd === 'open_markdown_preview') return [PARTIAL, false, false];
-			if (cmd === 'read_file_content_checked') return [FULL, false];
-			throw new Error(`unexpected invoke: ${cmd}`);
-		};
-		tabManager.addTab('/docs/big.md', '');
-		const tab = tabManager.activeTab!;
-		tab.isEditing = true;
-		const session = makeSession();
-
-		await session.loadMarkdown('/docs/big.md', { preserveEditState: true, skipTabManagement: true });
-
-		assert.equal(tab.rawContent, FULL);
-		assert.notEqual(tab.isTruncated, true);
-		assert.equal(
-			invokeCalls.some((call) => call.cmd === 'open_markdown_preview'),
-			false,
-		);
-	});
 
 	// --- the refusal itself: what each writer does when the buffer stays partial ---
 	//

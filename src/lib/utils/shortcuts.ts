@@ -35,13 +35,6 @@ import type { TranslationKey } from './i18n.js';
 
 type ShortcutGroup = 'file' | 'view' | 'window';
 
-/** Display order of the groups, and the i18n key that titles each one. */
-export const SHORTCUT_GROUPS: ReadonlyArray<{ group: ShortcutGroup; labelKey: TranslationKey }> = [
-	{ group: 'file', labelKey: 'menu.file' },
-	{ group: 'view', labelKey: 'menu.view' },
-	{ group: 'window', labelKey: 'menu.window' },
-];
-
 /** The platforms the app distinguishes, spelled the way `settings.osType` does. */
 type ShortcutPlatform = 'macos' | 'windows' | 'linux';
 
@@ -226,35 +219,6 @@ export function modifierFor(platform: string): 'Cmd' | 'Ctrl' {
 }
 
 /**
- * Should this click on a document link open a tab rather than navigate this one?
- *
- * THE CHORD IS THE PLATFORM'S. This is a gesture people bring with them from a
- * browser rather than learn here: ⌘-click on macOS, Ctrl-click everywhere else.
- * Reading both modifiers on both platforms — fine for a wheel-zoom, where
- * either answer is the same answer — is wrong in each direction here. On macOS
- * Ctrl-click IS the secondary click, so one gesture would open a context menu
- * and a tab; on Windows and Linux Meta is the Super key, which belongs to the
- * window manager. Asked through `modifierFor` so that "which modifier is this
- * platform's" keeps one answer, including for the `'unknown'` os type the store
- * carries until Tauri replies.
- *
- * THE CHORD MEANS "THE OTHER ONE", not "new tab". With `preferNewTab` off it
- * opens a tab; with it on it navigates in place. That is what the modifier does
- * in a browser and in Obsidian, and it is the difference between a preference
- * that changes the default and one that takes the other behaviour away — the
- * in-place path is the only thing that writes a tab's file history, which is
- * what Back and Forward read.
- */
-export function opensInNewTab(
-	platform: string,
-	event: { readonly metaKey: boolean; readonly ctrlKey: boolean },
-	preferNewTab: boolean,
-): boolean {
-	const chord = modifierFor(platform) === 'Cmd' ? event.metaKey : event.ctrlKey;
-	return chord !== preferNewTab;
-}
-
-/**
  * The words each platform prints on the keys the two platforms name
  * differently, keyed by that platform's `Mod` word.
  *
@@ -308,17 +272,3 @@ type ShortcutSection = {
 	entries: ReadonlyArray<{ id: string; labelKey: TranslationKey; hintKey?: TranslationKey; chords: string[] }>;
 };
 
-/** The whole registry, grouped and rendered for `platform` — what the panel draws. */
-export function shortcutSections(platform: ShortcutPlatform): ShortcutSection[] {
-	const modifier = modifierFor(platform);
-	return SHORTCUT_GROUPS.map(({ group, labelKey }) => ({
-		group,
-		labelKey,
-		entries: SHORTCUTS.filter((entry) => entry.group === group).map((entry) => ({
-			id: entry.id,
-			labelKey: (platform === 'macos' && entry.macosLabelKey) || entry.labelKey,
-			hintKey: entry.hintKey,
-			chords: entry.chords.map((chord) => formatChord(chord, modifier)),
-		})),
-	}));
-}

@@ -1,45 +1,5 @@
 import type { OSType } from '../stores/settings.svelte.js';
 
-/*
- * WHICH COMMAND a document-level keystroke means — the whole of it, and nothing
- * else.
- *
- * This was the body of `handleKeyDown` in MarkdownViewer.svelte, where it could
- * not be imported and therefore could not be run by a test. What tests did
- * instead was read it: fourteen assertions across four files matched the
- * component's source text for `if (mod && key === 'e')` and its neighbours, and
- * #647 turned five of them red by renaming a local. A source-shape assertion
- * cannot tell a rename from a regression, because it never asks what the code
- * DOES.
- *
- * The same argument as #644's fold drivers, and the same shape of answer: the
- * logic moves out, the wiring stays in. What moves is the part that is a
- * function of the keystroke — the branch structure, every modifier guard, the
- * per-platform scoping. What stays is the part that is genuinely the
- * component's: which of its own functions each command runs.
- *
- * WHY A COMMAND NAME RATHER THAN A HOST OBJECT. The obvious extraction hands
- * the dispatcher the eleven callbacks it used to close over (`closeFile`,
- * `saveContent`, `handleNewFile`, …) as a host argument, the way `FoldHost`
- * carries the fold drivers' three. Eleven is not three: a host that large is
- * the component with its name changed, every caller has to build one, and the
- * test that builds one is back to describing the component rather than running
- * it. So the seam is cut one step earlier, at the question that is actually
- * hard — WHICH command — and the answer is a string the caller switches on.
- * The component's switch is the residue, and it is checked where it lives.
- *
- * WHY IT TAKES NO STORES. Nothing here imports `settings` or `tabManager`;
- * every fact about the app arrives in `KeyContext` as a plain value. That is
- * partly #644's constraint (a store import drags its runes behind every
- * importer) and mostly this one: with no free identifiers there is nothing for
- * a test harness to stub, which is the failure #649 hit — a helper the harness
- * did not know about resolved to a recording stub whose result compared false
- * to everything, so a Windows-only branch reported as firing on all three
- * platforms and the measured chord count went from 51 to 610. A function whose
- * every input is an argument cannot be run against a more agreeable copy of the
- * app, because there is no copy to make.
- */
-
 /**
  * One command the document-level keyboard reaches, named rather than called.
  *
@@ -89,7 +49,7 @@ export type KeyStroke = {
  * Ctrl+Alt+Z. The AltGraph modifier is what tells them apart. `ctrlKey` is
  * required so this cannot touch macOS, where the chords are Cmd+Option.
  */
-export function isAltGraphChord(e: Pick<KeyStroke, 'ctrlKey' | 'getModifierState'>): boolean {
+function isAltGraphChord(e: Pick<KeyStroke, 'ctrlKey' | 'getModifierState'>): boolean {
 	return e.ctrlKey && e.getModifierState?.('AltGraph') === true;
 }
 

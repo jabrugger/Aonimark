@@ -1,3 +1,4 @@
+import { titlebarActionIds } from '../src/lib/utils/titlebarToolbar.js';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
@@ -5,7 +6,7 @@ import ts from 'typescript';
 
 import { buildMenuModel, type MenuNode, type MenuState } from '../src/lib/utils/appMenu.js';
 import { getSupportedLanguages, type LanguageCode, t, type Translation } from '../src/lib/utils/i18n.js';
-import { formatChord, modifierFor, SHORTCUT_GROUPS, type ShortcutEntry, shortcutLabel, SHORTCUTS, shortcutSections } from '../src/lib/utils/shortcuts.js';
+import { formatChord, modifierFor, type ShortcutEntry, shortcutLabel, SHORTCUTS } from '../src/lib/utils/shortcuts.js';
 import type { ViewerCommand } from '../src/lib/utils/viewerKeymap.js';
 import { translations } from './allTranslations.js';
 import { type Chord, documentKeymap, PLATFORMS, toMonacoLabel, viewerCommandCalls } from './keymapHarness.js';
@@ -33,27 +34,6 @@ describe('shortcut registry', () => {
 	 */
 
 	// ------------------------------------------------------------- sanity guards
-
-	test('the registry was actually read, and is internally coherent', () => {
-		// Every assertion below iterates SHORTCUTS. If it were empty — or if a filter
-		// silently dropped everything — they would all pass having checked nothing.
-		assert.ok(SHORTCUTS.length > 8, `the registry holds ${SHORTCUTS.length} entries`);
-
-		const ids = SHORTCUTS.map((entry) => entry.id);
-		assert.equal(new Set(ids).size, ids.length, 'shortcut ids are unique');
-
-		for (const entry of SHORTCUTS) {
-			assert.ok(entry.chords.length > 0, `${entry.id} declares at least one chord`);
-			assert.ok(
-				SHORTCUT_GROUPS.some((group) => group.group === entry.group),
-				`${entry.id} is in a group the panel renders`,
-			);
-		}
-
-		// Every entry reaches the panel: no row can be in the registry and invisible.
-		const rendered = shortcutSections('macos').flatMap((section) => section.entries.map((e) => e.id));
-		assert.deepEqual([...rendered].sort(), [...ids].sort());
-	});
 
 	test('no registry entry is unverifiable', () => {
 		// The rule that makes this file mean something: a row must name the thing
@@ -130,27 +110,6 @@ describe('shortcut registry', () => {
 	function chordOfAccelerator(accelerator: string): string {
 		return accelerator.replace(/^CmdOrCtrl\b/, 'Mod');
 	}
-
-	test('the panel names each command the way the macOS menu does', () => {
-		// One command, one name: the panel said "Exit" where the menu says "Quit
-		// Markpad", "Editor" for Edit Mode, "Toggle Live Mode" for Auto-Reload and
-		// "Move to" for Move Tab to Next Window.
-		const panel = shortcutSections('macos').flatMap((section) => section.entries);
-		// Pre-existing: the menu's check item is "Tab Bar", the panel's "Toggle Tab Bar".
-		const knownDifferent = new Set(['toggle-tabs']);
-		let compared = 0;
-		for (const { text, accelerator } of menuAccelerators()) {
-			const row = SHORTCUTS.find((entry) => entry.chords.includes(chordOfAccelerator(accelerator)));
-			if (!row || knownDifferent.has(row.id)) continue;
-			const entry = panel.find((candidate) => candidate.id === row.id)!;
-			assert.equal(t(entry.labelKey, 'en'), text, `${row.id}: the panel and the menu disagree`);
-			compared++;
-		}
-		assert.ok(compared > 10, `only ${compared} menu items compared`);
-		// Windows and Linux have no app menu; their in-app menu says Exit.
-		const windows = shortcutSections('windows').flatMap((section) => section.entries);
-		assert.equal(windows.find((entry) => entry.id === 'app-exit')?.labelKey, 'menu.exit');
-	});
 
 	test('every macOS menu accelerator is a chord the registry advertises for the command the item runs', () => {
 		const items = menuAccelerators();
@@ -326,20 +285,6 @@ describe('shortcut registry', () => {
 
 	// ------------------------------------------------------------------- i18n
 
-	test('every label the registry names is a key English already defines', () => {
-		// The registry deliberately mints no new command names: each label is a key
-		// that already existed for a menu or context-menu entry, and is therefore
-		// already translated everywhere. This is the assertion that keeps it that
-		// way — a new key would have to be added to the dictionary first.
-		const labelKeys = [...SHORTCUTS.map((e) => e.labelKey), ...SHORTCUT_GROUPS.map((g) => g.labelKey)];
-		assert.ok(labelKeys.length > 15, `checking ${labelKeys.length} label keys`);
-
-		for (const key of labelKeys) {
-			assert.notEqual(t(key, 'en'), key, `${key} is defined in English`);
-			assert.ok(t(key, 'en').length > 0, `${key} is non-empty in English`);
-		}
-	});
-
 	/** The value `lang` itself defines for `key`, ignoring the English fallback. */
 	function defines(lang: LanguageCode, key: string): boolean {
 		let node: string | Translation | undefined = translations[lang];
@@ -357,59 +302,6 @@ describe('shortcut registry', () => {
 	 * and has to be added here by name.
 	 */
 	const PARTIALLY_TRANSLATED: Record<string, number> = {};
-
-	test('every panel label is translated everywhere, or is a named pre-existing gap', () => {
-		// The stated reason for reusing dictionary keys instead of minting new ones
-		// was that the existing ones are already translated. That is a claim about
-		// the dictionary, so it is measured here rather than asserted from memory.
-		const languages = getSupportedLanguages().map((l) => l.code) as LanguageCode[];
-		assert.equal(languages.length, 26);
-
-		const measured = new Map<string, number>();
-		for (const key of new Set([...SHORTCUTS.map((e) => e.labelKey), ...SHORTCUT_GROUPS.map((g) => g.labelKey)])) {
-			const missing = languages.filter((lang) => !defines(lang, key)).length;
-			if (missing > 0) measured.set(key, missing);
-		}
-
-		assert.deepEqual(
-			Object.fromEntries([...measured].sort()),
-			Object.fromEntries(Object.entries(PARTIALLY_TRANSLATED).sort()),
-			'a panel label’s translation coverage changed; if a key was newly introduced or ' +
-				'newly translated, update PARTIALLY_TRANSLATED — do not let the panel quietly ' +
-				'grow labels that 20-odd locales cannot read',
-		);
-	});
-
-	test('no two rows in one panel section read the same, in any language', () => {
-		// Two rows with one label is indistinguishable from a duplicated entry from
-		// the user's side.
-		const languages = getSupportedLanguages().map((l) => l.code) as LanguageCode[];
-		for (const { group } of SHORTCUT_GROUPS) {
-			const rows = SHORTCUTS.filter((entry: ShortcutEntry) => entry.group === group);
-			for (const lang of languages) {
-				const seen = new Map<string, string>();
-				for (const row of rows) {
-					const text = t(row.labelKey, lang);
-					const owner = seen.get(text);
-					assert.equal(owner, undefined, `${lang} ${group}: ${owner} and ${row.id} both read "${text}"`);
-					seen.set(text, row.id);
-				}
-			}
-		}
-	});
-
-	test('the panel renders the platform modifier the user is on', () => {
-		const mac = shortcutSections('macos').flatMap((s) => s.entries);
-		const win = shortcutSections('windows').flatMap((s) => s.entries);
-
-		assert.equal(mac.find((e) => e.id === 'file-save')?.chords[0], 'Cmd+S');
-		assert.equal(win.find((e) => e.id === 'file-save')?.chords[0], 'Ctrl+S');
-		// F5 has no modifier at all.
-		assert.equal(mac.find((e) => e.id === 'file-reload')?.chords[0], 'F5');
-
-		assert.equal(shortcutLabel('file-save', 'Cmd'), 'Cmd+S');
-		assert.equal(shortcutLabel('no-such-command', 'Cmd'), undefined);
-	});
 
 	/**
 	 * What each modifier the registry writes is CALLED on each platform.
@@ -762,5 +654,28 @@ describe('viewer command table', () => {
 		// reaches touches `addHomeTab`.
 		const routes = Object.entries(calls).filter(([, names]) => names.some((name) => name.endsWith('addHomeTab')));
 		assert.deepEqual(routes.map(([command]) => command), [], 'a keyboard command still reaches addHomeTab');
+	});
+});
+
+describe('title bar actions', () => {
+	test('a file on disk offers reload and auto-reload in the bar, and the rest in the menu', () => {
+		assert.deepEqual(titlebarActionIds({ hasActiveTab: true, currentFile: '/notes/a.md', zoomLevel: 100 }), {
+			barIds: ['reload', 'live'],
+			menuIds: ['zen', 'theme', 'settings'],
+		});
+	});
+
+	test('an unsaved document has nothing to reload, and zoom reset appears only when zoomed', () => {
+		assert.deepEqual(titlebarActionIds({ hasActiveTab: true, currentFile: '', zoomLevel: 150 }), {
+			barIds: [],
+			menuIds: ['zen', 'zoom', 'theme', 'settings'],
+		});
+	});
+
+	test('with no document only theme and settings remain', () => {
+		assert.deepEqual(titlebarActionIds({ hasActiveTab: false, currentFile: '' }), {
+			barIds: [],
+			menuIds: ['theme', 'settings'],
+		});
 	});
 });

@@ -1,4 +1,4 @@
-export type DialogChoice = 'save' | 'discard' | 'cancel';
+type DialogChoice = 'save' | 'discard' | 'cancel';
 
 /** The one save/discard/cancel dialog the viewer shows. */
 export class ChoiceDialog {
