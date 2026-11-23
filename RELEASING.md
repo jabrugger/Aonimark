@@ -44,7 +44,7 @@ If you ever lose the private key:
 
 ### 5. `alecdotdev/Markpad` is load-bearing
 
-The updater endpoint in `src-tauri/tauri.conf.json` points at **`jabrugger/Markpad-Neo`**. (`scripts/release.workflows.test.ts` holds that name and the endpoint together — if the repository ever moves again, this line moves with it.)
+The updater endpoint in `src-tauri/tauri.conf.json` points at **`jabrugger/Aonimark`**. (`scripts/release.workflows.test.ts` holds that name and the endpoint together — if the repository ever moves again, this line moves with it.)
 
 That only helps builds made from here on. The endpoint is compiled into the binary, so every copy up to and including v2.7.0 asks GitHub for `https://github.com/alecdotdev/Markpad/releases/latest/download/latest.json` and reaches the current feed only because GitHub answers with a 301. Those installs use that redirect for as long as they run.
 

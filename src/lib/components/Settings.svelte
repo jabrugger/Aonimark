@@ -13,7 +13,7 @@
 		onclose,
 	} = $props<{ show?: boolean; theme?: ThemeSetting; onSetTheme?: (t: ThemeSetting) => void; onclose: () => void }>();
 
-	const REPOSITORY_URL = 'https://github.com/jabrugger/Markpad-Neo';
+	const REPOSITORY_URL = 'https://github.com/jabrugger/Aonimark';
 
 	let modal = $state<HTMLDivElement>();
 	let appVersion = $state('');

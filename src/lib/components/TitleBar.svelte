@@ -323,8 +323,8 @@ import { TitleBarPopovers, containClick } from '../stores/titleBarPopovers.svelt
 						class="home-menu-footer"
 						onclick={() => {
 							popovers.homeMenuOpen = false;
-							openUrl('https://github.com/jabrugger/Markpad-Neo')
-								.catch(() => window.open('https://github.com/jabrugger/Markpad-Neo', '_blank'));
+							openUrl('https://github.com/jabrugger/Aonimark')
+								.catch(() => window.open('https://github.com/jabrugger/Aonimark', '_blank'));
 						}}>
 						v{appVersion}
 					</button>
