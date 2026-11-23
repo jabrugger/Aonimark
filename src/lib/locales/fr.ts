@@ -74,10 +74,7 @@ export default {
         autoSaveFailed: 'Échec de l\'enregistrement automatique — les modifications non enregistrées restent en mémoire',
         savedNewerEdits: 'Enregistré — maintien du mode édition car des modifications plus récentes existent',
         lossySaveBlocked: 'Non enregistré : des parties de ce fichier n’ont pu être lues dans aucun encodage et sont devenues « � » à l’ouverture. Enregistrer détruirait l’original — utilisez « Enregistrer sous » pour écrire une copie',
-        partialSaveBlocked: 'Non enregistré : ce fichier n’est que partiellement chargé et l’enregistrer le tronquerait — utilisez « Enregistrer sous » pour écrire une copie',
-        partialCopySaved: 'Copie enregistrée, mais elle ne contient que la partie du document déjà chargée',
         encodingUnmappable: 'Non enregistré : {{encoding}} ne peut pas représenter tous les caractères de ce document (probablement un emoji). Utilisez « Enregistrer sous » pour écrire une copie en UTF-8',
-        restoreInterrupted: 'Aonimark n’a pas fini de restaurer votre session la dernière fois',
         restoreInterruptedDeferred: 'Aonimark n’a pas fini d’ouvrir {path} la dernière fois, il a donc été ignoré. Ouvrez-le vous-même pour réessayer'
     },
     externalChange: {

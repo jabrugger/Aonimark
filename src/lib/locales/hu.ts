@@ -74,10 +74,7 @@ export default {
         autoSaveFailed: 'Automatikus mentés sikertelen — a nem mentett módosítások még a memóriában vannak',
         savedNewerEdits: 'Elmentve — a szerkesztési mód marad, mert újabb módosítások vannak',
         lossySaveBlocked: 'Nincs mentve: a fájl egyes részei semmilyen kódolással nem voltak olvashatók, és megnyitáskor „�” lett belőlük. A mentés tönkretenné az eredetit — másolat írásához használja a „Mentés másként” parancsot',
-        partialSaveBlocked: 'Nincs mentve: a fájlnak csak egy része töltődött be, és a mentés csonkolná — másolat írásához használja a „Mentés másként” parancsot',
-        partialCopySaved: 'Másolat mentve, de csak a dokumentum betöltött részét tartalmazza',
         encodingUnmappable: 'Nincs mentve: a(z) {{encoding}} nem tudja ábrázolni a dokumentum összes karakterét (valószínűleg egy emojit). UTF-8 másolat írásához használja a „Mentés másként” parancsot',
-        restoreInterrupted: 'A Aonimark legutóbb nem fejezte be a munkamenet visszaállítását',
         restoreInterruptedDeferred: 'A Aonimark legutóbb nem fejezte be a(z) {path} megnyitását, ezért kihagyta. Nyissa meg saját maga az újrapróbáláshoz'
     },
     externalChange: {

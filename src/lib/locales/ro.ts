@@ -74,10 +74,7 @@ export default {
         autoSaveFailed: 'Salvarea automată a eșuat — modificările nesalvate sunt încă în memorie',
         savedNewerEdits: 'Salvat — rămân în modul de editare deoarece există modificări mai noi',
         lossySaveBlocked: 'Nesalvat: părți din acest fișier nu au putut fi citite în nicio codificare și au devenit "�" la deschidere. Salvarea ar distruge originalul — folosiți "Salvare ca" pentru a scrie o copie',
-        partialSaveBlocked: 'Nesalvat: doar o parte din acest fișier s-a încărcat, iar salvarea l-ar trunchia — folosiți "Salvare ca" pentru a scrie o copie',
-        partialCopySaved: 'Copie salvată, dar conține doar partea din document care se încărcase',
         encodingUnmappable: 'Nesalvat: {{encoding}} nu poate reprezenta toate caracterele pe care le conține acum documentul (cel mai probabil un emoji). Folosiți "Salvare ca" pentru a scrie o copie în UTF-8',
-        restoreInterrupted: 'Data trecută, Aonimark nu a terminat restaurarea sesiunii',
         restoreInterruptedDeferred: 'Data trecută, Aonimark nu a terminat deschiderea {path}, așa că a fost omis. Deschideți-l manual pentru a reîncerca'
     },
     externalChange: {

@@ -74,10 +74,7 @@ export default {
         autoSaveFailed: 'Automatisch opslaan mislukt — niet-opgeslagen wijzigingen staan nog in het geheugen',
         savedNewerEdits: 'Opgeslagen — bewerkmodus blijft actief omdat er nieuwere wijzigingen zijn',
         lossySaveBlocked: 'Niet opgeslagen: delen van dit bestand konden in geen enkele codering worden gelezen en werden "�" bij het openen. Opslaan zou het origineel vernietigen — gebruik "Opslaan als" om een kopie te schrijven',
-        partialSaveBlocked: 'Niet opgeslagen: slechts een deel van dit bestand is geladen, en opslaan zou het afkappen — gebruik "Opslaan als" om een kopie te schrijven',
-        partialCopySaved: 'Kopie opgeslagen, maar die bevat alleen het deel van het document dat geladen was',
         encodingUnmappable: 'Niet opgeslagen: {{encoding}} kan niet elk teken weergeven dat dit document nu bevat (waarschijnlijk een emoji). Gebruik "Opslaan als" om een kopie als UTF-8 te schrijven',
-        restoreInterrupted: 'Aonimark heeft je sessie de vorige keer niet volledig hersteld',
         restoreInterruptedDeferred: 'Aonimark kon {path} de vorige keer niet volledig openen, dus het is overgeslagen. Open het zelf om het opnieuw te proberen'
     },
     externalChange: {

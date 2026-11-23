@@ -74,10 +74,7 @@ export default {
         autoSaveFailed: 'Automatické uložení selhalo — neuložené změny zůstávají v paměti',
         savedNewerEdits: 'Uloženo — zůstávám v režimu úprav, protože máte novější změny',
         lossySaveBlocked: 'Neuloženo: části tohoto souboru nešlo přečíst v žádném kódování a při otevření se z nich stalo „�“. Uložení by zničilo originál — kopii zapíšete pomocí „Uložit jako“',
-        partialSaveBlocked: 'Neuloženo: načetla se jen část souboru a uložení by ho zkrátilo — kopii zapíšete pomocí „Uložit jako“',
-        partialCopySaved: 'Kopie uložena, ale obsahuje jen načtenou část dokumentu',
         encodingUnmappable: 'Neuloženo: {{encoding}} nedokáže vyjádřit všechny znaky, které dokument nyní obsahuje (nejspíš emoji). Pomocí „Uložit jako“ zapíšete kopii v UTF-8',
-        restoreInterrupted: 'Aonimark minule nedokončil obnovení relace',
         restoreInterruptedDeferred: 'Aonimark minule nedokončil otevírání {path}, proto byl přeskočen. Otevřete ho ručně a zkuste to znovu'
     },
     externalChange: {

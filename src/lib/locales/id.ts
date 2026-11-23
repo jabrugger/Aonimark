@@ -74,10 +74,7 @@ export default {
         autoSaveFailed: 'Penyimpanan otomatis gagal — perubahan yang belum disimpan masih ada di memori',
         savedNewerEdits: 'Tersimpan — tetap di mode edit karena ada perubahan yang lebih baru',
         lossySaveBlocked: 'Tidak disimpan: sebagian berkas ini tidak dapat dibaca dengan pengodean apa pun dan menjadi "�" saat dibuka. Menyimpan akan merusak aslinya — gunakan "Simpan Sebagai" untuk menulis salinan',
-        partialSaveBlocked: 'Tidak disimpan: baru sebagian berkas ini yang dimuat, dan menyimpan akan memotongnya — gunakan "Simpan Sebagai" untuk menulis salinan',
-        partialCopySaved: 'Salinan disimpan, tetapi hanya berisi bagian dokumen yang sudah dimuat',
         encodingUnmappable: 'Tidak disimpan: {{encoding}} tidak dapat merepresentasikan semua karakter yang kini ada di dokumen ini (kemungkinan besar emoji). Gunakan "Simpan Sebagai" untuk menulis salinan sebagai UTF-8',
-        restoreInterrupted: 'Aonimark tidak selesai memulihkan sesi Anda terakhir kali',
         restoreInterruptedDeferred: 'Aonimark tidak selesai membuka {path} terakhir kali, jadi berkas itu dilewati. Buka sendiri untuk mencoba lagi'
     },
     externalChange: {

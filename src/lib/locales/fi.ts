@@ -74,10 +74,7 @@ export default {
         autoSaveFailed: 'Automaattinen tallennus epäonnistui — tallentamattomat muutokset ovat yhä muistissa',
         savedNewerEdits: 'Tallennettu — pysytään muokkaustilassa, koska sinulla on uudempia muutoksia',
         lossySaveBlocked: 'Ei tallennettu: osaa tiedostosta ei voitu lukea millään merkistökoodauksella, ja niistä tuli "�" avattaessa. Tallentaminen tuhoaisi alkuperäisen — kirjoita kopio "Tallenna nimellä" -toiminnolla',
-        partialSaveBlocked: 'Ei tallennettu: tiedostosta on ladattu vain osa, ja tallentaminen katkaisisi sen — kirjoita kopio "Tallenna nimellä" -toiminnolla',
-        partialCopySaved: 'Kopio tallennettiin, mutta se sisältää vain ladatun osan asiakirjasta',
         encodingUnmappable: 'Ei tallennettu: {{encoding}} ei pysty esittämään kaikkia asiakirjan nykyisiä merkkejä (todennäköisesti emoji). Kirjoita kopio UTF-8-muodossa "Tallenna nimellä" -toiminnolla',
-        restoreInterrupted: 'Aonimark ei saanut istuntoasi palautettua viime kerralla',
         restoreInterruptedDeferred: 'Aonimark ei saanut tiedostoa {path} auki viime kerralla, joten se ohitettiin. Avaa se itse yrittääksesi uudelleen'
     },
     externalChange: {

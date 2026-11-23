@@ -74,10 +74,7 @@ export default {
         autoSaveFailed: 'Automatické ukladanie zlyhalo — neuložené zmeny zostávajú v pamäti',
         savedNewerEdits: 'Uložené — zostávam v režime úprav, pretože máte novšie zmeny',
         lossySaveBlocked: 'Neuložené: časti tohto súboru sa nedali prečítať v žiadnom kódovaní a pri otvorení sa z nich stalo „�“. Uloženie by zničilo originál — kópiu zapíšete cez „Uložiť ako“',
-        partialSaveBlocked: 'Neuložené: načítala sa len časť súboru a uloženie by ho skrátilo — kópiu zapíšete cez „Uložiť ako“',
-        partialCopySaved: 'Kópia uložená, ale obsahuje len načítanú časť dokumentu',
         encodingUnmappable: 'Neuložené: {{encoding}} nedokáže vyjadriť všetky znaky, ktoré dokument teraz obsahuje (najskôr emoji). Cez „Uložiť ako“ zapíšete kópiu v UTF-8',
-        restoreInterrupted: 'Aonimark minule nedokončil obnovenie relácie',
         restoreInterruptedDeferred: 'Aonimark minule nedokončil otváranie {path}, preto bol preskočený. Otvorte ho ručne a skúste to znova'
     },
     externalChange: {

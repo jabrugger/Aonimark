@@ -74,10 +74,7 @@ export default {
         autoSaveFailed: '자동 저장 실패 — 저장되지 않은 변경 사항은 메모리에 남아 있습니다',
         savedNewerEdits: '저장됨 — 새로운 편집이 있어 편집 모드를 유지합니다',
         lossySaveBlocked: '저장하지 않음: 이 파일의 일부는 어떤 인코딩으로도 읽을 수 없어 열 때 "�"로 바뀌었습니다. 덮어쓰면 원본이 손상됩니다 — "다른 이름으로 저장"으로 새 파일에 저장하세요',
-        partialSaveBlocked: '저장하지 않음: 이 파일은 일부만 불러왔으며, 저장하면 잘려나갑니다 — "다른 이름으로 저장"으로 사본을 만드세요',
-        partialCopySaved: '사본을 저장했지만, 불러온 부분만 담겨 있습니다',
         encodingUnmappable: '저장하지 않음: {{encoding}}(으)로는 이 문서에 포함된 일부 문자(대개 이모지)를 표현할 수 없습니다. "다른 이름으로 저장"으로 UTF-8 사본을 만드세요',
-        restoreInterrupted: '지난번에 Aonimark가 세션 복원을 완료하지 못했습니다',
         restoreInterruptedDeferred: '지난번에 Aonimark가 {path} 열기를 완료하지 못해 건너뛰었습니다. 다시 시도하려면 직접 여세요'
     },
     externalChange: {

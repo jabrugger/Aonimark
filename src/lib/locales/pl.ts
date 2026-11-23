@@ -74,10 +74,7 @@ export default {
         autoSaveFailed: 'Autozapis nie powiódł się — niezapisane zmiany pozostają w pamięci',
         savedNewerEdits: 'Zapisano — pozostaję w trybie edycji, ponieważ są nowsze zmiany',
         lossySaveBlocked: 'Nie zapisano: części tego pliku nie dało się odczytać w żadnym kodowaniu i po otwarciu zmieniły się w „�”. Zapis zniszczyłby oryginał — użyj „Zapisz jako”, aby zapisać kopię',
-        partialSaveBlocked: 'Nie zapisano: wczytano tylko część pliku, a zapis by go obciął — użyj „Zapisz jako”, aby zapisać kopię',
-        partialCopySaved: 'Kopię zapisano, ale zawiera tylko wczytaną część dokumentu',
         encodingUnmappable: 'Nie zapisano: {{encoding}} nie obsługuje wszystkich znaków, które zawiera teraz dokument (najpewniej emoji). Użyj „Zapisz jako”, aby zapisać kopię w UTF-8',
-        restoreInterrupted: 'Aonimark ostatnio nie dokończył przywracania sesji',
         restoreInterruptedDeferred: 'Aonimark ostatnio nie dokończył otwierania {path}, więc go pominięto. Otwórz go samodzielnie, aby spróbować ponownie'
     },
     externalChange: {

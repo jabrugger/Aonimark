@@ -1,15 +1,12 @@
 import type { Tab } from '../stores/tabs.svelte.js';
 
 /** What a backup keeps of a document: enough to put its unsaved buffer back. */
-export type RecoveredDocument = Pick<Tab, 'path' | 'title' | 'rawContent' | 'originalContent' | 'hasReplacementChars' | 'encoding'> & {
-	isTruncated?: boolean;
-};
+export type RecoveredDocument = Pick<Tab, 'path' | 'title' | 'rawContent' | 'originalContent' | 'hasReplacementChars' | 'encoding'>;
 
 const STRING_FIELDS = ['path', 'title', 'rawContent', 'originalContent', 'encoding'] as const;
 
 /** Only what a close would otherwise ask about: a dirty buffer, or untitled text.
- * A clean file reopens from disk through the session restore. A partial read
- * carries its guard so it never restores as a complete document. */
+ * A clean file reopens from disk through the session restore. */
 export function recoverySnapshot(tabs: readonly Tab[]): string {
 	return JSON.stringify(tabs
 		.filter((tab) => tab.isDirty || (tab.path === '' && tab.rawContent !== ''))
@@ -20,7 +17,6 @@ export function recoverySnapshot(tabs: readonly Tab[]): string {
 			originalContent: tab.originalContent,
 			hasReplacementChars: tab.hasReplacementChars,
 			encoding: tab.encoding,
-			...(tab.isTruncated ? { isTruncated: true } : {}),
 		})));
 }
 
@@ -32,8 +28,7 @@ export function parseRecovery(json: string): RecoveredDocument[] {
 			typeof entry === 'object' &&
 			entry !== null &&
 			STRING_FIELDS.every((field) => typeof entry[field] === 'string') &&
-			typeof entry.hasReplacementChars === 'boolean' &&
-			(entry.isTruncated === undefined || typeof entry.isTruncated === 'boolean');
+			typeof entry.hasReplacementChars === 'boolean';
 		if (!valid) throw new Error('Invalid recovery document');
 		return {
 			path: entry.path,
@@ -42,7 +37,6 @@ export function parseRecovery(json: string): RecoveredDocument[] {
 			originalContent: entry.originalContent,
 			hasReplacementChars: entry.hasReplacementChars,
 			encoding: entry.encoding,
-			...(entry.isTruncated ? { isTruncated: true } : {}),
 		};
 	});
 }

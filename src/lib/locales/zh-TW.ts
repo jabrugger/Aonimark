@@ -74,10 +74,7 @@ export default {
         autoSaveFailed: '自動儲存失敗——未儲存的變更仍保留於記憶體中',
         savedNewerEdits: '已儲存——因有更新的編輯內容，繼續保持編輯模式',
         lossySaveBlocked: '未儲存：此檔案的部分內容無法用任何編碼讀取，開啟時已變成「�」。直接儲存會破壞原檔案 — 請用「另存新檔」寫入新檔案',
-        partialSaveBlocked: '未儲存：此檔案只讀取了一部分，儲存會將其截斷 —— 請用「另存新檔」寫一份副本',
-        partialCopySaved: '副本已儲存，但其中只包含已讀取的那部分文件',
         encodingUnmappable: '未儲存：{{encoding}} 無法表示此文件新增的部分字元（多半是表情符號）。請用「另存新檔」寫入一份 UTF-8 複本',
-        restoreInterrupted: 'Aonimark 上次沒有完成工作階段的還原',
         restoreInterruptedDeferred: 'Aonimark 上次沒能開啟 {path}，已將其略過。請自行開啟再試一次'
     },
     externalChange: {

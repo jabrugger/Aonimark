@@ -145,7 +145,6 @@ export function createExternalChange(options: ExternalChangeOptions) {
 		if (!tab?.path || tab.id !== tabId) return;
 		clearExternalChangeConflict(tab.id);
 		await loadMarkdown(tab.path, {
-			preserveEditState: true,
 			skipTabManagement: true,
 			// The user answered "the file changed under your edits" with the
 			// disk version. Every other caller of loadMarkdown is an OPEN and
@@ -162,7 +161,6 @@ export function createExternalChange(options: ExternalChangeOptions) {
 		if (!(await options.canCloseTab(activeId))) return;
 
 		await loadMarkdown(tab.path, {
-			preserveEditState: true,
 			skipTabManagement: true,
 			// canCloseTab has already resolved the buffer, so normally there is
 			// nothing left to discard — but the user can type during that await,

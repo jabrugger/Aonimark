@@ -74,10 +74,7 @@ export default {
         autoSaveFailed: 'Automatisk gemning mislykkedes — ikke-gemte ændringer er stadig i hukommelsen',
         savedNewerEdits: 'Gemt — bliver i redigeringstilstand, fordi du har nyere ændringer',
         lossySaveBlocked: 'Ikke gemt: dele af filen kunne ikke læses i nogen kodning og blev til "�", da den blev åbnet. Gemning ville ødelægge originalen — brug "Gem som" for at skrive en kopi',
-        partialSaveBlocked: 'Ikke gemt: kun en del af filen er indlæst, og gemning ville afkorte den — brug "Gem som" for at skrive en kopi',
-        partialCopySaved: 'Kopi gemt, men den indeholder kun den del af dokumentet, der var indlæst',
         encodingUnmappable: 'Ikke gemt: {{encoding}} kan ikke gengive alle tegn, som dokumentet nu indeholder (sandsynligvis en emoji). Brug "Gem som" for at skrive en kopi som UTF-8',
-        restoreInterrupted: 'Aonimark blev ikke færdig med at gendanne din session sidste gang',
         restoreInterruptedDeferred: 'Aonimark blev ikke færdig med at åbne {path} sidste gang, så den blev sprunget over. Åbn den selv for at prøve igen'
     },
     externalChange: {

@@ -41,14 +41,12 @@
 
 	let {
 		value,
-		readOnly = false,
 		language = 'en',
 		onchange,
 		onrequesturl,
 		toolbarHeight = $bindable(0),
 	} = $props<{
 		value: string;
-		readOnly?: boolean;
 		language?: LanguageCode;
 		onchange: (markdown: string) => void;
 		onrequesturl: (defaultText: string) => Promise<string | null>;
@@ -117,7 +115,6 @@
 				}));
 				ctx.update(editorViewOptionsCtx, (prev) => ({
 					...prev,
-					editable: () => !readOnly,
 					// Commit every transaction ourselves so a document change reaches
 					// the tab synchronously. Milkdown's `listener` plugin debounces
 					// 200ms, which is a window where a tab switch or close could drop

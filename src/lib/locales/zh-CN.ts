@@ -74,10 +74,7 @@ export default {
         autoSaveFailed: '自动保存失败 — 未保存的更改仍在内存中',
         savedNewerEdits: '已保存 — 因为存在更新的编辑,继续保持编辑模式',
         lossySaveBlocked: '未保存：此文件的部分内容无法用任何编码读取，打开时已变成“�”。直接保存会破坏原文件 — 请用“另存为”写入新文件',
-        partialSaveBlocked: '未保存：此文件只加载了一部分，保存会将其截断 —— 请用“另存为”写一份副本',
-        partialCopySaved: '副本已保存，但其中只包含已加载的那部分文档',
         encodingUnmappable: '未保存：{{encoding}} 无法表示文档中新增的部分字符（多半是表情符号）。请用“另存为”写入一份 UTF-8 副本',
-        restoreInterrupted: 'Aonimark 上次没有完成会话恢复',
         restoreInterruptedDeferred: 'Aonimark 上次没能打开 {path}，已将其跳过。请手动打开再试一次'
     },
     externalChange: {

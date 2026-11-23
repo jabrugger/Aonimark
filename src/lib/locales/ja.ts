@@ -74,10 +74,7 @@ export default {
         autoSaveFailed: '自動保存に失敗しました — 未保存の変更はメモリ内に残っています',
         savedNewerEdits: '保存しました — 新しい編集があるため編集モードを継続します',
         lossySaveBlocked: '保存しませんでした：このファイルの一部はどの文字コードでも読めず、開いた時点で「�」に置き換わっています。上書き保存すると元のファイルが壊れます —「名前を付けて保存」で新しいファイルに書き出してください',
-        partialSaveBlocked: '保存しませんでした：このファイルは一部しか読み込まれておらず、上書き保存すると切り詰められます —「名前を付けて保存」で複製を書き出してください',
-        partialCopySaved: '複製を保存しましたが、読み込めていた範囲のみが含まれています',
         encodingUnmappable: '保存しませんでした：{{encoding}} ではこの文書に含まれる一部の文字（多くは絵文字）を表現できません。「名前を付けて保存」で UTF-8 の複製を作成してください',
-        restoreInterrupted: '前回、Aonimark はセッションの復元を完了できませんでした',
         restoreInterruptedDeferred: '前回、Aonimark は {path} を開き終えられなかったため、スキップしました。もう一度試すには手動で開いてください'
     },
     externalChange: {

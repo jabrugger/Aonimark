@@ -74,10 +74,7 @@ export default {
         autoSaveFailed: 'Tự động lưu thất bại — các thay đổi chưa lưu vẫn còn trong bộ nhớ',
         savedNewerEdits: 'Đã lưu — vẫn ở chế độ chỉnh sửa vì bạn có chỉnh sửa mới hơn',
         lossySaveBlocked: 'Chưa lưu: một số phần của tệp này không đọc được bằng bất kỳ bảng mã nào và đã thành "�" khi mở. Lưu đè sẽ làm hỏng bản gốc — hãy dùng "Lưu dưới dạng" để ghi một bản sao',
-        partialSaveBlocked: 'Chưa lưu: tệp này mới chỉ được tải một phần, lưu sẽ cắt cụt nó — hãy dùng "Lưu dưới dạng" để ghi một bản sao',
-        partialCopySaved: 'Đã lưu bản sao, nhưng nó chỉ chứa phần tài liệu đã được tải',
         encodingUnmappable: 'Chưa lưu: {{encoding}} không thể biểu diễn mọi ký tự tài liệu này đang chứa (nhiều khả năng là emoji). Hãy dùng "Lưu dưới dạng" để ghi một bản sao UTF-8',
-        restoreInterrupted: 'Lần trước Aonimark chưa khôi phục xong phiên làm việc',
         restoreInterruptedDeferred: 'Lần trước Aonimark chưa mở xong {path} nên đã bỏ qua. Hãy tự mở tệp để thử lại'
     },
     externalChange: {

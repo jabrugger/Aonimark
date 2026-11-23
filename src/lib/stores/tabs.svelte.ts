@@ -21,8 +21,6 @@ export interface Tab {
 	/** Set when a command line named a path that does not exist yet: the file is created on first save. */
 	createsFile?: string;
 	readonly isDirty: boolean;
-	isTruncated?: boolean;
-	unread?: boolean;
 	/** The bytes did not decode cleanly, so a save would rewrite them as U+FFFD. */
 	hasReplacementChars: boolean;
 	encoding: string;
@@ -41,8 +39,6 @@ function makeTab(fields: TabFields): Tab {
 		get isDirty() {
 			return this.rawContent !== this.originalContent;
 		},
-		isTruncated: false,
-		unread: false,
 		...fields,
 	};
 }
@@ -207,62 +203,13 @@ class TabManager {
 	/**
 	 * Replace a tab's buffer with what was just read from disk: the new text
 	 * becomes both the buffer and the saved baseline, so the tab is clean.
-	 *
-	 * `isTruncated` says whether that read covered the whole file. It defaults
-	 * to false because every caller but the large-file preview read supplies a
-	 * complete document, and a stale `true` is the dangerous direction: it
-	 * would block saving a file that is actually intact. The opposite mistake
-	 * — a partial buffer that claims to be whole — is what truncates files, so
-	 * the preview read must pass it explicitly.
 	 */
-	setTabRawContent(id: string, raw: string, isTruncated = false) {
+	setTabRawContent(id: string, raw: string) {
 		const tab = this.tab(id);
 		if (tab) {
 			tab.rawContent = raw;
 			tab.originalContent = raw;
-			tab.isTruncated = isTruncated;
-			tab.unread = false;
 		}
-	}
-
-	/** Restore left this tab unread: see `Tab.unread`. A dirty buffer is never touched. */
-	markTabUnread(id: string) {
-		const tab = this.tab(id);
-		if (!tab || tab.isDirty) return;
-		this.markTabContentUnavailable(id);
-		tab.unread = true;
-	}
-
-	/** True once per unread tab: the caller is the one read it is owed. */
-	takeUnread(id: string): boolean {
-		const tab = this.tab(id);
-		if (!tab?.unread) return false;
-		tab.unread = false;
-		return true;
-	}
-
-	/**
-	 * The tab's file could not be read. The tab stays open with its path — the
-	 * file may be on a share that is temporarily down, a drive that is not
-	 * plugged in, or a file another program has locked, and none of those are
-	 * the user's decision to close a document — but its empty buffer is flagged
-	 * incomplete so nothing can mistake it for the document and write it back.
-	 *
-	 * This is the same flag the large-file preview read uses, deliberately: it
-	 * already means "this buffer is not the whole file", every writer already
-	 * refuses it, and `documentSession.ensureFullContent` already re-reads the
-	 * file and clears the flag the next time the user opens the tab for
-	 * editing — which is how a tab recovers once the drive is plugged back in.
-	 *
-	 * A dirty buffer is never touched: unsaved text the user typed outranks a
-	 * failed read of the file it came from.
-	 */
-	markTabContentUnavailable(id: string) {
-		const tab = this.tab(id);
-		if (!tab || tab.isDirty) return;
-		tab.rawContent = '';
-		tab.originalContent = '';
-		tab.isTruncated = true;
 	}
 
 	/**

@@ -74,10 +74,7 @@ export default {
         autoSaveFailed: 'Automatisk lagring mislyktes — ulagrede endringer er fortsatt i minnet',
         savedNewerEdits: 'Lagret — forblir i redigeringsmodus fordi du har nyere endringer',
         lossySaveBlocked: 'Ikke lagret: deler av filen kunne ikke leses i noen koding og ble til "�" da den ble åpnet. Lagring ville ødelegge originalen — bruk "Lagre som" for å skrive en kopi',
-        partialSaveBlocked: 'Ikke lagret: bare en del av filen er lastet inn, og lagring ville avkorte den — bruk "Lagre som" for å skrive en kopi',
-        partialCopySaved: 'Kopi lagret, men den inneholder bare den delen av dokumentet som var lastet inn',
         encodingUnmappable: 'Ikke lagret: {{encoding}} kan ikke gjengi alle tegnene dokumentet nå inneholder (trolig en emoji). Bruk "Lagre som" for å skrive en kopi som UTF-8',
-        restoreInterrupted: 'Aonimark ble ikke ferdig med å gjenopprette økten din forrige gang',
         restoreInterruptedDeferred: 'Aonimark ble ikke ferdig med å åpne {path} forrige gang, så den ble hoppet over. Åpne den selv for å prøve igjen'
     },
     externalChange: {

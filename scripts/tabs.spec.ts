@@ -212,7 +212,6 @@ describe('path identity on a case-folding volume', () => {
 			askClose: async () => 'discard' as const,
 			onCloseSaveNewerEdits: () => {},
 			onCloseAutoSaveFailed: () => {},
-			onPartialCopySaved: () => {},
 		});
 	}
 
@@ -414,7 +413,6 @@ describe('a read lands in its own tab', () => {
 			askClose: async () => 'discard' as const,
 			onCloseSaveNewerEdits: () => {},
 			onCloseAutoSaveFailed: () => {},
-			onPartialCopySaved: () => {},
 		});
 	}
 

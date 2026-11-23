@@ -82,7 +82,6 @@ describe('explicit save cancels auto-save', () => {
 			askClose: async () => 'discard' as const,
 			onCloseSaveNewerEdits: () => {},
 			onCloseAutoSaveFailed: () => {},
-			onPartialCopySaved: () => {},
 		});
 	}
 
@@ -259,7 +258,6 @@ describe('one write per tab in flight', () => {
 			askClose: async () => 'discard' as const,
 			onCloseSaveNewerEdits: () => {},
 			onCloseAutoSaveFailed: () => {},
-			onPartialCopySaved: () => {},
 		});
 	}
 
@@ -553,7 +551,6 @@ describe('rename file session', () => {
 			askClose: async () => 'discard' as const,
 			onCloseSaveNewerEdits: () => {},
 			onCloseAutoSaveFailed: () => {},
-			onPartialCopySaved: () => {},
 		});
 	}
 
@@ -683,7 +680,6 @@ describe('untitled first save writes', () => {
 			askClose: async () => 'discard' as const,
 			onCloseSaveNewerEdits: () => {},
 			onCloseAutoSaveFailed: () => {},
-			onPartialCopySaved: () => {},
 		});
 	}
 
@@ -829,7 +825,6 @@ describe('lossy save refusal scope', () => {
 			askClose: async () => 'discard' as const,
 			onCloseSaveNewerEdits: () => {},
 			onCloseAutoSaveFailed: () => {},
-			onPartialCopySaved: () => {},
 		});
 	}
 
@@ -1002,7 +997,6 @@ describe('document encoding round trip', () => {
 			askClose: async () => 'discard' as const,
 			onCloseSaveNewerEdits: () => {},
 			onCloseAutoSaveFailed: () => {},
-			onPartialCopySaved: () => {},
 		});
 	}
 
@@ -1138,7 +1132,6 @@ describe('view mode without saving', () => {
 			askClose,
 			onCloseSaveNewerEdits: () => {},
 			onCloseAutoSaveFailed: () => {},
-			onPartialCopySaved: () => {},
 		});
 	}
 

@@ -74,10 +74,7 @@ export default {
         autoSaveFailed: 'Salvataggio automatico non riuscito — le modifiche non salvate sono ancora in memoria',
         savedNewerEdits: 'Salvato — mantengo la modalità modifica perché ci sono modifiche più recenti',
         lossySaveBlocked: 'Non salvato: parti di questo file non erano leggibili in nessuna codifica e all’apertura sono diventate "�". Salvare distruggerebbe l’originale — usa "Salva come" per scrivere una copia',
-        partialSaveBlocked: 'Non salvato: il file è caricato solo in parte e salvarlo lo troncherebbe — usa "Salva come" per scrivere una copia',
-        partialCopySaved: 'Copia salvata, ma contiene solo la parte del documento già caricata',
         encodingUnmappable: 'Non salvato: {{encoding}} non può rappresentare tutti i caratteri ora presenti nel documento (probabilmente un’emoji). Usa "Salva come" per scrivere una copia in UTF-8',
-        restoreInterrupted: 'L’ultima volta Aonimark non ha finito di ripristinare la sessione',
         restoreInterruptedDeferred: 'L’ultima volta Aonimark non ha finito di aprire {path}, quindi è stato saltato. Aprilo tu per riprovare'
     },
     externalChange: {

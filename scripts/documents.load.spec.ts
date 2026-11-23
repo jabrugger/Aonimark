@@ -52,7 +52,6 @@ describe('document load failure', () => {
 			askClose: async () => 'discard' as const,
 			onCloseSaveNewerEdits: () => {},
 			onCloseAutoSaveFailed: () => {},
-			onPartialCopySaved: () => {},
 			...overrides,
 		});
 	}
@@ -167,7 +166,6 @@ describe('external change reload', () => {
 			},
 			onCloseSaveNewerEdits: () => {},
 			onCloseAutoSaveFailed: () => {},
-			onPartialCopySaved: () => {},
 			...overrides,
 		});
 	}
@@ -453,7 +451,6 @@ describe('reopening a dirty document', () => {
 			askClose: async () => 'discard' as const,
 			onCloseSaveNewerEdits: () => {},
 			onCloseAutoSaveFailed: () => {},
-			onPartialCopySaved: () => {},
 		});
 	}
 
@@ -542,161 +539,3 @@ describe('reopening a dirty document', () => {
 //
 // These tests drive the real TabManager and the real document session with a
 // stubbed Tauri bridge, so they lock the behaviour, not the wording.
-describe('truncated buffer guard', () => {
-	// The runes are the compiler's, not ours: vitest builds `.svelte.ts` through the
-	// Svelte plugin, so the store and the session run under real reactivity, and jsdom
-	// supplies `window` and `localStorage`. Only the Tauri backend is stubbed.
-
-	const PREVIEW_BYTES = 50000;
-	const FULL = `# big\n\n${'x'.repeat(PREVIEW_BYTES)}\n\ntail that must never be lost\n`;
-	const PARTIAL = FULL.slice(0, PREVIEW_BYTES);
-
-	let invokeCalls: Array<{ cmd: string; args: any }> = [];
-	/** Set per test. Return a never-settling promise to freeze the partial state. */
-	let handleInvoke: (cmd: string, args: any) => unknown = () => {
-		throw new Error('unexpected invoke');
-	};
-
-	beforeAll(() => {
-		(window as any).__TAURI_INTERNALS__ = {
-			metadata: { currentWindow: { label: 'main' }, currentWebview: { windowLabel: 'main', label: 'main' } },
-			invoke: (cmd: string, args: any) => {
-				invokeCalls.push({ cmd, args });
-				return Promise.resolve(handleInvoke(cmd, args)).then((value) => value);
-			},
-		};
-	});
-
-	const errors: string[] = [];
-	/** Non-failure notices the session raised, in order. */
-	const notices: string[] = [];
-	/** What the close dialog answers next. Set per test. */
-	let closeAnswer: 'save' | 'discard' | 'cancel' = 'discard';
-
-	function makeSession() {
-		return createDocumentSession({
-			afterLoad: async () => {},
-			onError: (message) => errors.push(message),
-			onDiskChangedUnderSave: () => {},
-			cancelPendingAutoSave: () => {},
-			askClose: async () => closeAnswer,
-			onCloseSaveNewerEdits: () => {},
-			onCloseAutoSaveFailed: () => {},
-			onPartialCopySaved: () => notices.push('partialCopySaved'),
-		});
-	}
-
-	function reset() {
-		tabManager.tabs = [];
-		tabManager.activeTabId = null;
-		invokeCalls = [];
-		errors.length = 0;
-		notices.length = 0;
-		closeAnswer = 'discard';
-	}
-
-	/** Open a >50KB file and leave the background full read pending forever. */
-	async function openPartial(path = '/docs/big.md') {
-		handleInvoke = (cmd) => {
-			if (cmd === 'open_markdown_preview') return [PARTIAL, false, false];
-			if (cmd === 'read_file_content_checked') return new Promise(() => {});
-			throw new Error(`unexpected invoke: ${cmd}`);
-		};
-		const session = makeSession();
-		await session.loadMarkdown(path);
-		const tab = tabManager.activeTab!;
-		assert.equal(tab.rawContent, PARTIAL, 'precondition: the buffer is the partial read');
-		return { session, tab };
-	}
-
-	test('completing a buffer that is already whole does not re-read the file', async () => {
-		reset();
-		handleInvoke = (cmd) => {
-			if (cmd === 'open_markdown_preview') return [FULL, true, false];
-			throw new Error(`unexpected invoke: ${cmd}`);
-		};
-		const session = makeSession();
-		await session.loadMarkdown('/docs/small.md');
-		const before = invokeCalls.length;
-
-		assert.equal(await session.ensureFullContent(tabManager.activeTabId!), true);
-		assert.equal(invokeCalls.length, before);
-	});
-
-
-	// --- the refusal itself: what each writer does when the buffer stays partial ---
-	//
-	// Everything above proves the guard lets a COMPLETED buffer through. The
-	// branch it exists for — `ensureFullContent` answering false — had no test
-	// driving a writer into it, and an audit that deleted the verdict check from
-	// `toggleTaskCheckbox` outright left the whole suite green.
-	//
-	// `ensureFullContent` answers false in exactly three states, and each is
-	// exercised below:
-	//
-	//   1. the tab is gone — a transfer or detach whose tab closed mid-flight,
-	//   2. the partial buffer already carries edits: replacing it would trade the
-	//      user's typing for the file's tail, so it is left alone,
-	//   3. the re-read itself failed — the only one of the three that reports.
-	//
-	// The two writers that do not consult it, `saveContent` and `saveContentAs`,
-	// carry the same refusal as their own `isTruncated` backstop, so they are
-	// driven into it here too.
-	//
-	// A buffer that is still partial afterwards is unusable in both directions: it
-	// cannot be written (that truncates the file) and it can no longer be completed
-	// (state 2 is permanent once the buffer is dirty). So every test asserts the
-	// same pair — nothing reached `save_file_content`, and the buffer was left
-	// exactly as it was found.
-
-	/** Did anything at all get written to disk in this test? */
-	const wroteToDisk = () => invokeCalls.some((call) => call.cmd === 'save_file_content');
-
-	const TASKS = `- [ ] first\n\n${'y'.repeat(PREVIEW_BYTES)}\n\n- [ ] last\n`;
-	const TASKS_PARTIAL = TASKS.slice(0, PREVIEW_BYTES);
-
-	/** Open the >50KB task list and leave it holding only its preview slice. */
-	async function openPartialTasks() {
-		handleInvoke = (cmd) => {
-			if (cmd === 'open_markdown_preview') return [TASKS_PARTIAL, false, false];
-			if (cmd === 'read_file_content_checked') return new Promise(() => {});
-			throw new Error(`unexpected invoke: ${cmd}`);
-		};
-		const session = makeSession();
-		await session.loadMarkdown('/docs/tasks.md');
-		const tab = tabManager.activeTab!;
-		assert.equal(tab.rawContent, TASKS_PARTIAL, 'precondition: the buffer is the partial read');
-		return { session, tab };
-	}
-
-	/**
-	 * From here on the file's tail cannot be read — an unplugged drive, a network
-	 * volume that went away, a file another process replaced. Writes are allowed
-	 * through so that a guard which stops refusing is caught by the write it lets
-	 * happen, not by an "unexpected invoke" from the stub.
-	 */
-	/**
-	 * The original file's tail cannot be read any more — the case Save As exists to
-	 * rescue. `/docs/copy.md`, the file the rescue writes, is readable: it is a new
-	 * file the process just created, and every save checks the disk against its own
-	 * baseline before overwriting.
-	 */
-	function makeTailUnreadable() {
-		const written = new Map<string, string>();
-		handleInvoke = (cmd, args) => {
-			if (cmd === 'read_file_content_checked') {
-				const saved = written.get(args.path);
-				if (saved !== undefined) return [saved, false, 'UTF-8'];
-				return Promise.reject(new Error('Os { code: 5, kind: Uncategorized }'));
-			}
-			if (cmd === 'save_file_content') {
-				written.set(args.path, args.content);
-				return null;
-			}
-			if (cmd === 'canonicalize_path') return '/docs/copy.md';
-			if (cmd === 'plugin:dialog|save') return '/docs/copy.md';
-			throw new Error(`unexpected invoke: ${cmd}`);
-		};
-	}
-
-});

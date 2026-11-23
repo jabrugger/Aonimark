@@ -74,10 +74,7 @@ export default {
         autoSaveFailed: 'Automatisk sparning misslyckades — osparade ändringar finns kvar i minnet',
         savedNewerEdits: 'Sparat — stannar i redigeringsläge eftersom det finns nyare ändringar',
         lossySaveBlocked: 'Inte sparad: delar av filen kunde inte läsas i någon teckenkodning och blev "�" när den öppnades. Att spara skulle förstöra originalet — använd "Spara som" för att skriva en kopia',
-        partialSaveBlocked: 'Inte sparad: bara en del av filen har lästs in, och att spara skulle korta av den — använd "Spara som" för att skriva en kopia',
-        partialCopySaved: 'Kopian sparades, men den innehåller bara den del av dokumentet som hade lästs in',
         encodingUnmappable: 'Inte sparad: {{encoding}} kan inte återge alla tecken som dokumentet nu innehåller (troligen en emoji). Använd "Spara som" för att skriva en kopia som UTF-8',
-        restoreInterrupted: 'Aonimark hann inte återställa din session förra gången',
         restoreInterruptedDeferred: 'Aonimark hann inte öppna {path} förra gången, så den hoppades över. Öppna den själv för att försöka igen'
     },
     externalChange: {

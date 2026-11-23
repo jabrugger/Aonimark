@@ -142,10 +142,7 @@ const en = {
         autoSaveFailed: 'Auto-save failed — unsaved changes still in memory',
         savedNewerEdits: 'Saved — staying in edit mode because you have newer edits',
         lossySaveBlocked: 'Not saved: parts of this file could not be read in any encoding and became "�" when it was opened. Saving would destroy the original — use "Save As" to write a copy',
-        partialSaveBlocked: 'Not saved: only part of this file has loaded, and saving would truncate it — use "Save As" to write a copy',
-        partialCopySaved: 'Copy saved, but it holds only the part of the document that had loaded',
         encodingUnmappable: 'Not saved: {{encoding}} cannot represent every character this document now contains (an emoji, most likely). Use "Save As" to write a copy as UTF-8',
-        restoreInterrupted: 'Aonimark did not finish restoring your session last time',
         restoreInterruptedDeferred: 'Aonimark did not finish opening {path} last time, so it was skipped. Open it yourself to try again'
     },
     externalChange: {

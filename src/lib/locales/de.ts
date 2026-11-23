@@ -74,10 +74,7 @@ export default {
         autoSaveFailed: 'Automatisches Speichern fehlgeschlagen — nicht gespeicherte Änderungen bleiben im Speicher',
         savedNewerEdits: 'Gespeichert — Bearbeitungsmodus bleibt aktiv, da neuere Änderungen vorliegen',
         lossySaveBlocked: 'Nicht gespeichert: Teile dieser Datei konnten in keiner Kodierung gelesen werden und wurden beim Öffnen zu "�". Speichern würde das Original zerstören — verwenden Sie "Speichern unter", um eine Kopie zu schreiben',
-        partialSaveBlocked: 'Nicht gespeichert: Diese Datei ist nur teilweise geladen, Speichern würde sie abschneiden — verwenden Sie "Speichern unter", um eine Kopie zu schreiben',
-        partialCopySaved: 'Kopie gespeichert, sie enthält aber nur den bereits geladenen Teil des Dokuments',
         encodingUnmappable: 'Nicht gespeichert: {{encoding}} kann nicht jedes Zeichen dieses Dokuments darstellen (vermutlich ein Emoji). Verwenden Sie "Speichern unter", um eine Kopie als UTF-8 zu schreiben',
-        restoreInterrupted: 'Aonimark konnte die Sitzung beim letzten Mal nicht vollständig wiederherstellen',
         restoreInterruptedDeferred: 'Aonimark konnte {path} beim letzten Mal nicht öffnen, daher wurde die Datei übersprungen. Öffnen Sie sie selbst, um es erneut zu versuchen'
     },
     externalChange: {

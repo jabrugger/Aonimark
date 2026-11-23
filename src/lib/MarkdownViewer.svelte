@@ -138,7 +138,6 @@ import { followTheme } from './utils/themeEffect.svelte.js';
 	
 	
 
-	const RESTORE_IN_PROGRESS_KEY = 'markpad-window-restore-in-progress';
 
 	// Each window persists and restores its own snapshot, keyed by its label.
 	// Windows are equal: whichever starts first reopens the others of the last
@@ -188,7 +187,6 @@ import { followTheme } from './utils/themeEffect.svelte.js';
 	const windowStateJson = () => tabManager.serializeState();
 
 	const windowSession = createWindowSession({
-		restoreInProgressKey: RESTORE_IN_PROGRESS_KEY,
 		serializeState: windowStateJson,
 		shouldRestoreState: () => settings.restoreStateOnReopen,
 		isDisposed: () => isDisposed,
@@ -202,17 +200,9 @@ import { followTheme } from './utils/themeEffect.svelte.js';
 			addToast(`${message}: ${String(error)}`, 'error');
 		},
 		onWarning: (message, error) => console.warn(message, error),
-		// The console line above says the same thing in more detail, but in a
-		// packaged build nobody can open that console: the recovery mechanism
-		// was diagnosing itself and writing the answer where no one could read
-		// it. A document missing its content needs an explanation on screen.
-		onInterrupted: ({ deferredPath }) =>
-			addToast(
-				deferredPath
-					? t('toast.restoreInterruptedDeferred', settings.language).replace('{path}', deferredPath)
-					: t('toast.restoreInterrupted', settings.language),
-				'warning',
-			),
+		// A packaged build has no console to read, so the user is told on screen.
+		onInterrupted: (path) =>
+			addToast(t('toast.restoreInterruptedDeferred', settings.language).replace('{path}', path), 'warning'),
 	});
 
 	// The session is recorded as it changes, so a crash or kill brings this
@@ -265,7 +255,6 @@ import { followTheme } from './utils/themeEffect.svelte.js';
 		onCloseAutoSaveFailed: () => addToast(t('toast.autoSaveFailed', settings.language), 'error'),
 		// Not an error: the copy is the way out of a partial buffer, and it was
 		// written. What the reader needs is to know where it stops.
-		onPartialCopySaved: () => addToast(t('toast.partialCopySaved', settings.language), 'info'),
 	});
 
 	const externalChange = createExternalChange({
@@ -854,7 +843,6 @@ import { followTheme } from './utils/themeEffect.svelte.js';
 							{@const tabId = tabManager.activeTabId}
 							<WysiwygEditor
 								value={tabManager.activeTab.rawContent}
-								readOnly={tabManager.activeTab.isTruncated === true}
 								language={settings.language}
 								onchange={(markdown) => tabManager.updateTabRawContent(tabId ?? '', markdown)}
 								onrequesturl={requestLinkUrl}

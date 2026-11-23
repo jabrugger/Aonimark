@@ -74,10 +74,7 @@ export default {
         autoSaveFailed: 'Otomatik kaydetme başarısız — kaydedilmemiş değişiklikler hâlâ bellekte',
         savedNewerEdits: 'Kaydedildi — daha yeni düzenlemeleriniz olduğu için düzenleme modunda kalınıyor',
         lossySaveBlocked: 'Kaydedilmedi: bu dosyanın bazı bölümleri hiçbir kodlamada okunamadı ve açılırken "�" oldu. Kaydetmek orijinali bozar — kopya yazmak için "Farklı Kaydet" kullanın',
-        partialSaveBlocked: 'Kaydedilmedi: bu dosyanın yalnızca bir kısmı yüklendi ve kaydetmek dosyayı kırpar — kopya yazmak için "Farklı Kaydet" kullanın',
-        partialCopySaved: 'Kopya kaydedildi, ancak yalnızca belgenin yüklenmiş kısmını içeriyor',
         encodingUnmappable: 'Kaydedilmedi: {{encoding}}, bu belgenin artık içerdiği her karakteri gösteremiyor (büyük olasılıkla bir emoji). UTF-8 olarak kopya yazmak için "Farklı Kaydet" kullanın',
-        restoreInterrupted: 'Aonimark geçen sefer oturumunuzu geri yüklemeyi bitiremedi',
         restoreInterruptedDeferred: 'Aonimark geçen sefer {path} dosyasını açmayı bitiremedi, bu yüzden atlandı. Yeniden denemek için kendiniz açın'
     },
     externalChange: {

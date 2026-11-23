@@ -9,7 +9,6 @@ import { canonicalizePath, isSameFilePath } from '../utils/pathIdentity.js';
 
 export type LoadMarkdownOptions = {
 	skipTabManagement?: boolean;
-	preserveEditState?: boolean;
 	/**
 	 * The file opens beside the one on screen (a link opened in a new tab), so
 	 * the tab being left keeps its in-page jump stacks.
@@ -60,12 +59,6 @@ type DocumentSessionOptions = {
 	askClose: (title: string, diskMoved: boolean) => Promise<'save' | 'discard' | 'cancel'>;
 	onCloseSaveNewerEdits: () => void;
 	onCloseAutoSaveFailed: () => void;
-	/**
-	 * A Save As wrote a copy that stops where the load did. Not a failure — the
-	 * copy is the way out of a partial buffer — but the reader has to be told
-	 * what is in the file they just made.
-	 */
-	onPartialCopySaved: () => void;
 };
 
 /**
@@ -199,12 +192,9 @@ export function createDocumentSession(options: DocumentSessionOptions) {
 	 *   question that is sometimes false teaches people to dismiss it,
 	 *   including the times it is true.
 	 *
-	 * A truncated tab (the >5MB preview slice) always answers "changed" and
-	 * needs no better answer: `ensureFullContent` gates every path that can
-	 * write, so a tab we have never written has no write of ours to recognise.
 	 */
 	async function fileDiffersFromBaseline(tab: Tab, path: string): Promise<boolean> {
-		if (!path || tab.isTruncated) return true;
+		if (!path) return true;
 		// An untitled buffer is a version OF nothing, so there is no baseline to
 		// have moved and nothing here to protect. Asking anyway refused the first
 		// save of every new document: the path the Save dialog just returned
@@ -287,49 +277,6 @@ export function createDocumentSession(options: DocumentSessionOptions) {
 		if (owner.id !== tabManager.activeTabId) return { action: 'ignore' };
 
 		return { action: 'reload', tabId: owner.id, path: changedPath };
-	}
-
-	/**
-	 * Replace a partial buffer (the >5MB preview read) with the whole file.
-	 * Must be awaited by every path that can lead to a write — entering the
-	 * editor, editing front matter, toggling a task checkbox — because writing the partial buffer
-	 * back permanently truncates the document.
-	 *
-	 * Returns false when the buffer is still partial afterwards. A partial
-	 * buffer that already carries edits is left alone: replacing it would
-	 * trade the file's tail for the user's typing, so the caller has to stop
-	 * instead. Every editing entry point calls this first, which is what makes
-	 * that state unreachable in practice.
-	 */
-	async function ensureFullContent(tabId: string): Promise<boolean> {
-		const tab = tabManager.tabs.find((item) => item.id === tabId);
-		if (!tab) return false;
-		if (!tab.isTruncated) return true;
-		if (!tab.path) return true;
-		if (tab.isDirty) return false;
-		const mayApply = claimTabForRead(tabId);
-		try {
-			// Checked, like every other read that ends in a writable buffer.
-			// The bare command was safe here only because this re-reads a file
-			// whose tab `loadMarkdown` had already flagged — an invariant held
-			// by two call sites agreeing, not by anything in the code. Reading
-			// the fidelity again costs nothing and makes the flag a property of
-			// the buffer instead of a memory of how it was obtained; it also
-			// CLEARS the flag for a file converted to UTF-8 since the load.
-			const [full, lossy, encoding] = await commands.readFileContentChecked(tab.path);
-			// Overtaken, edited or closed while the read was out. Whether the
-			// buffer is whole is still the question asked, so the tab answers it.
-			if (!mayApply()) return tabManager.tabs.find((item) => item.id === tabId)?.isTruncated === false;
-			tabManager.setTabDecodedLossy(tabId, lossy);
-			// The preview's answer came from the first 5MB; this one is the
-			// whole file's, and it is the one every save from here on uses.
-			tabManager.setTabEncoding(tabId, encoding);
-			tabManager.setTabRawContent(tabId, full);
-			return true;
-		} catch (error) {
-			options.onError('Error loading the rest of the file', error);
-			return false;
-		}
 	}
 
 	// Tabs already told about a refused save. Auto-save re-arms on every
@@ -559,13 +506,6 @@ export function createDocumentSession(options: DocumentSessionOptions) {
 	async function saveContent(tabId?: string): Promise<boolean> {
 		const tab = tabId ? tabManager.tabs.find((item) => item.id === tabId) : tabManager.activeTab;
 		if (!tab) return false;
-		// Backstop, not the main defence: every path that lets the user change
-		// a large file completes its buffer first. If one is ever missed, the
-		// write must fail loudly rather than silently truncate the document.
-		if (tab.isTruncated) {
-			options.onError(t('toast.partialSaveBlocked', settings.language), tab.path);
-			return false;
-		}
 		let targetPath = tab.path;
 		// The tab's own path is already resolved, so the ordinary save — Ctrl+S,
 		// and the auto-save timer every 1.5s — adds no I/O here. Only the dialog
@@ -665,21 +605,6 @@ export function createDocumentSession(options: DocumentSessionOptions) {
 	async function saveContentAs(): Promise<boolean> {
 		const tab = tabManager.activeTab;
 		if (!tab) return false;
-		// A copy is a NEW file at a path the user chose, so unlike the ordinary
-		// save it cannot destroy anything they already have. That is what makes
-		// it the one write a partial buffer may make — and refusing it too, as
-		// this did, left a buffer that could go nowhere: not over the original,
-		// correctly, and not beside it either, so edits made in that state had
-		// no exit but the clipboard. The lossy-decode guard reasons the same way
-		// and has always pointed at Save As for the same reason.
-		//
-		// Completed first where that is possible, so the copy is whole whenever
-		// it can be. `ensureFullContent` declines on a dirty buffer — reading the
-		// file over unsaved edits would discard the very thing this rescue is
-		// for — and that is exactly the case where the copy really is short, so
-		// the user is told once it is written.
-		if (tab.isTruncated) await ensureFullContent(tab.id);
-		const copyIsPartial = tab.isTruncated === true;
 		const selected = await save({
 			filters: [
 				{ name: 'Markdown', extensions: MARKDOWN_LINK_EXTENSIONS },
@@ -719,22 +644,9 @@ export function createDocumentSession(options: DocumentSessionOptions) {
 				tabManager.setTabDecodedLossy(tab.id, false);
 				tabManager.setTabEncoding(tab.id, 'UTF-8');
 				lossySaveWarnedTabs.delete(tab.id);
-				// And the same for the truncation flag, for the same reason: it
-				// described the file this tab used to point at. Whatever the buffer
-				// was a slice OF, it is the whole of what was just written, and the
-				// tab now points at that. Leaving it on would refuse every save from
-				// a tab holding a complete document — the rescue would free the text
-				// and then trap it again. Assigned rather than going through
-				// `setTabRawContent`, which would also reset the baseline the two
-				// lines below set on purpose.
-				tab.isTruncated = false;
 				// Same as the ordinary save: the baseline is what was written,
 				// and edits made during the write stay dirty against it.
 				tab.originalContent = snapshot;
-				// Said after the write rather than before the dialog: nothing is lost
-				// by proceeding, and a reader who came here to rescue unsaved text
-				// still has to know that what landed on disk stops where the load did.
-				if (copyIsPartial) options.onPartialCopySaved();
 				return true;
 			} catch (error) {
 				const { message, detail } = describeSaveFailure(error, tab);
@@ -810,27 +722,12 @@ export function createDocumentSession(options: DocumentSessionOptions) {
 		return true;
 	}
 
-	/**
-	 * Read a restored tab whose read was taken for it (`takeUnread`) — the
-	 * startup pass for the tab on screen, or `readActiveIfUnread` on a later
-	 * activation. Same call as Reload from disk minus the discard: the tab
-	 * keeps its mode, a preview reads the 5MB slice first, and #547's claim
-	 * still refuses a result that would land on typing.
-	 *
-	 * `loadMarkdown` fills the ACTIVE tab. If another tab became active while
-	 * the caller awaited, this one is owed its read again, on activation.
-	 */
+	/** Reads the document a restored session names, the way Reload from disk reads it. */
 	function readRestoredTab(tabId: string): Promise<void> {
 		const tab = tabManager.activeTab;
-		if (!tab || tab.id !== tabId) {
-			tabManager.markTabUnread(tabId);
-			return Promise.resolve();
-		}
-		return loadMarkdown(tab.path, { skipTabManagement: true, preserveEditState: true });
+		if (!tab || tab.id !== tabId) return Promise.resolve();
+		return loadMarkdown(tab.path, { skipTabManagement: true });
 	}
-
-
-
 
 	/**
 	 * A command line named a file that does not exist yet (#1051): an empty tab
@@ -858,5 +755,5 @@ export function createDocumentSession(options: DocumentSessionOptions) {
 		else await loadMarkdown(filePath);
 	}
 
-	return { loadMarkdown, openFile, readRestoredTab, saveContent, saveContentAs, renameFile, allowOverwriteOnce, resolveExternalChange, dirtyTabsChangedOnDisk, ensureFullContent, canCloseTab, isLossySaveRefused };
+	return { loadMarkdown, openFile, readRestoredTab, saveContent, saveContentAs, renameFile, allowOverwriteOnce, resolveExternalChange, dirtyTabsChangedOnDisk, canCloseTab, isLossySaveRefused };
 }
