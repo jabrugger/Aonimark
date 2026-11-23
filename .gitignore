@@ -18,7 +18,7 @@ dist/
 .worktrees/
 
 # Downloaded by the snap jobs; snapcraft.yaml packages it. Never committed.
-markpad.deb
+aonimark.deb
 pack.log
 
 # npm is the package manager; package-lock.json is the only lockfile.

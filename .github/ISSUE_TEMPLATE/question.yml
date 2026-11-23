@@ -1,5 +1,5 @@
 name: Question
-description: Ask how to do something in Markpad
+description: Ask how to do something in Aonimark
 labels: ["question"]
 body:
   - type: markdown
@@ -16,7 +16,7 @@ body:
   - type: input
     id: platform-version
     attributes:
-      label: Platform and Markpad version
-      placeholder: "Windows 11 · Markpad 2.7.4"
+      label: Platform and Aonimark version
+      placeholder: "Windows 11 · Aonimark 0.1.0"
     validations:
       required: true

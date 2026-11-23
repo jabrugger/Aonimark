@@ -47,13 +47,13 @@
         ],
         "mimeType": "text/markdown",
         "name": "Markdown File",
-        "description": "Opens Markdown files with Markpad",
+        "description": "Opens Markdown files with Aonimark",
         "role": "Editor"
       },
       {
         "ext": ["mdown", "mkd"],
         "name": "Markdown File",
-        "description": "Opens Markdown files with Markpad",
+        "description": "Opens Markdown files with Aonimark",
         "role": "Editor"
       }
     ],

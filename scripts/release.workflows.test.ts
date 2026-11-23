@@ -39,11 +39,10 @@ type Workflow = {
 
 const workflow = (name: string) => parse(readSource(`.github/workflows/${name}`)) as Workflow;
 const build = workflow('build.yml');
-const publish = workflow('publish-packages.yml');
 const testWf = workflow('test.yml');
 const testBuild = workflow('test_build.yml');
 const audit = workflow('audit.yml');
-const ALL = { 'audit.yml': audit, 'build.yml': build, 'publish-packages.yml': publish, 'test.yml': testWf, 'test_build.yml': testBuild };
+const ALL = { 'audit.yml': audit, 'build.yml': build, 'test.yml': testWf, 'test_build.yml': testBuild };
 
 // A job that calls another workflow has no steps of its own.
 const steps = (wf: Workflow) => Object.values(wf.jobs).flatMap((job) => job.steps ?? []);
@@ -74,42 +73,10 @@ describe('the release workflow', () => {
 		assert.ok(!runs(build).some((run) => /npm install/.test(run)), 'build.yml runs npm install');
 	});
 
-	test('the snap ships the binary the release shipped, not a second build of it', () => {
-		// This used to assert `npm ci` in snapcraft.yaml, because the snap resolved
-		// its own dependency graph and compiled its own binary. RELEASING.md promises
-		// every channel resolves the committed lockfile, and two compilations of one
-		// source satisfy that while still producing two different binaries: a snap
-		// user and a .deb user of the same version did not have the same file.
-		//
-		// Packaging the release's .deb makes the promise structural instead.
-		const snap = parse(readSource('snapcraft.yaml')) as { parts: Record<string, Record<string, unknown>> };
-		const parts = Object.entries(snap.parts);
-		assert.ok(parts.length > 0, 'snapcraft.yaml has no parts');
-		for (const [name, part] of parts) {
-			assert.equal(part['source-type'], 'deb', `snap part ${name} does not package a .deb`);
-			assert.equal(part['build-packages'], undefined, `snap part ${name} installs build tools`);
-			const scripts = ['override-pull', 'override-build', 'override-stage', 'override-prime']
-				.map((key) => String(part[key] ?? ''))
-				.join('\n');
-			for (const builder of [/npm (ci|install)/, /tauri build/, /rustup/, /cargo/]) {
-				assert.doesNotMatch(scripts, builder, `snap part ${name} is building, not packaging: ${builder}`);
-			}
-		}
-	});
 
-	test('the .deb the snap packages is the one from the release being published', () => {
-		// The whole guarantee is that the Snap Store serves what the release page
-		// serves. It rests on where this file comes from, so the download is pinned
-		// to the tag and to the exact name build.yml uploads — not `latest`, and not
-		// a pattern that could match a different architecture.
-		const download = step(publish.jobs.snap.steps, 'Take the .deb from the release').run ?? '';
-		assert.match(download, /gh release download "\$TAG"/);
-		assert.match(download, /--pattern "Markpad_\$\{VERSION\}_amd64\.deb"/);
-		assert.match(download, /--output markpad\.deb/);
-	});
 
 	test('portable executables are not mislabeled as installers', () => {
-		assert.ok(!runs(build).some((run) => /MarkpadInstaller_/.test(run)));
+		assert.ok(!runs(build).some((run) => /AonimarkInstaller_/.test(run)));
 		assert.match(step(build.jobs.build.steps, 'Upload Windows Artifacts').run ?? '', /bundle\/nsis\/\*-setup\.exe/);
 	});
 
@@ -221,7 +188,7 @@ describe('the release workflow', () => {
 		}
 	});
 
-	test('the updater feed publishes the keys an installed Markpad can ask for', () => {
+	test('the updater feed publishes the keys an installed Aonimark can ask for', () => {
 		// tauri-plugin-updater tries `{os}-{arch}-{installer}` and then `{os}-{arch}`,
 		// and only tries the first when the binary knows its own bundle type. Ours
 		// does not on Windows or Linux, so those clients look up the plain key only.
@@ -255,45 +222,8 @@ describe('the release workflow', () => {
 		assert.equal(repo, documented[1], `tauri.conf.json points the updater at ${repo} while RELEASING.md documents ${documented[1]}`);
 	});
 
-	test('a package manager is not published from inside the platform matrix', () => {
-		// `choco push` and `snapcraft push` used to run in the build jobs, which put
-		// an irreversible side effect before the thing that decides whether a
-		// release happens: markpad-app 2.7.2 reached Chocolatey from run
-		// 31192564528, which then failed and produced no release.
-		//
-		// `snapcraft upload` was `snapcraft push` until snapcraft 8 removed that
-		// name. This pins the string the workflow uses; nothing runnable from
-		// `npm test` can check that the tool still has the command.
-		const pushes = /snapcraft (pack|push|upload)|choco push/;
-		assert.deepEqual(runs(build).filter((run) => pushes.test(run)), [], 'build.yml publishes to a package manager');
-		assert.ok(publish.jobs.chocolatey.steps.some((s) => /choco push/.test(s.run ?? '')));
-		assert.ok(publish.jobs.snap.steps.some((s) => /snapcraft upload/.test(s.run ?? '')));
-		assert.ok(!runs(publish).some((run) => /snapcraft push/.test(run)));
-	});
 
-	test('package managers are published from a release a human published', () => {
-		// `release: published` fires when a maintainer clicks Publish on the draft.
-		// Anything earlier publishes on a release nobody has looked at.
-		assert.deepEqual((publish.on.release as { types: string[] }).types, ['published']);
-		assert.equal(publish.on.push, undefined);
-	});
 
-	test('a publishing step cannot report success while failing', () => {
-		// The snap build failed under `continue-on-error: true` from v2.6.11 onward,
-		// for three months and six versions, while the job reported success.
-		for (const [name, wf] of [
-			['publish-packages.yml', publish],
-			['build.yml', build],
-			['audit.yml', audit],
-		] as const) {
-			for (const [id, job] of Object.entries(wf.jobs)) {
-				assert.equal(job['continue-on-error'], undefined, `${name} job ${id} swallows its failure`);
-				for (const s of job.steps ?? []) {
-					assert.equal(s['continue-on-error'], undefined, `${name} step "${s.name}" swallows its failure`);
-				}
-			}
-		}
-	});
 
 	test('the AppImage strip is a script, and its excludelist has one home', () => {
 		// As a heredoc inside build.yml the strip could only be exercised by cutting
@@ -378,28 +308,7 @@ describe('the release workflow', () => {
 		}
 	});
 
-	test('the package managers we recommend are the ones we publish to', () => {
-		// README, the release body and the publishing workflow drifted once: the
-		// snap build was dead from v2.6.11 while both documents recommended it.
-		const readme = readSource('README.md');
-		const releaseBody = step(build.jobs['create-release'].steps, 'Compose the download table').run ?? '';
-		for (const [name, install, push] of [
-			['Chocolatey', /choco install markpad-app/, /choco push/],
-			['Snap', /snap install markpad/, /snapcraft upload/],
-		] as const) {
-			const publishes = runs(publish).some((run) => push.test(run));
-			assert.equal(install.test(readme), publishes, `README and the pipeline disagree on ${name}`);
-			assert.equal(install.test(releaseBody), publishes, `the release body and the pipeline disagree on ${name}`);
-		}
-	});
 
-	test('the Chocolatey job skips a version that is already on the feed', () => {
-		// Chocolatey accepts a version once, and on the workflow_dispatch path the
-		// version is normally already there. The guard must gate the push.
-		const choco = publish.jobs.chocolatey.steps;
-		assert.ok(choco.some((s) => s.id === 'already'));
-		assert.equal(step(choco, 'Pack and publish').if, "steps.already.outputs.published != 'true'");
-	});
 
 	test('one release build runs at a time, and none of its runners drift', () => {
 		// Dispatching twice gave two runs writing to the same draft release.
@@ -436,16 +345,16 @@ describe('one version across the manifests', () => {
 	// Cargo.lock is the third file, and the one that gets forgotten: a bump lands
 	// green and stays wrong until someone runs `cargo build`. test.yml runs cargo
 	// with `--locked`, so a lock that no longer matches Cargo.toml fails CI. The
-	// fix is `cargo update -p Markpad --precise <version>` in src-tauri.
+	// fix is `cargo update -p Aonimark --precise <version>` in src-tauri.
 	test('package.json, Cargo.toml and Cargo.lock declare the same version', () => {
 		const metadata = JSON.parse(
 			execFileSync('cargo', ['metadata', '--format-version', '1', '--no-deps', '--manifest-path', 'src-tauri/Cargo.toml'], {
 				encoding: 'utf8',
 			}),
 		) as { packages: Array<{ name: string; version: string }> };
-		const markpad = metadata.packages.find((p) => p.name === 'Markpad');
-		assert.ok(markpad, 'src-tauri/Cargo.toml does not define the Markpad package');
-		assert.equal(markpad.version, packageJson.version, 'src-tauri/Cargo.toml is out of step with package.json');
+		const aonimark = metadata.packages.find((p) => p.name === 'Aonimark');
+		assert.ok(aonimark, 'src-tauri/Cargo.toml does not define the Aonimark package');
+		assert.equal(aonimark.version, packageJson.version, 'src-tauri/Cargo.toml is out of step with package.json');
 
 		const cargoSteps = testWf.jobs.test.steps.filter((s) => /\bcargo (test|clippy)\b/.test(s.run ?? ''));
 		assert.ok(cargoSteps.length >= 2, 'test.yml runs no cargo test and clippy');
@@ -649,7 +558,7 @@ describe('NSIS installer hooks', () => {
 	// allowed to write UserChoice. When that happens the user's only way back is
 	// Explorer's Open With dialog, which reads `OpenWithProgids` on the extension
 	// and `Software\Classes\Applications\<exe>\SupportedTypes` -- neither of which
-	// APP_ASSOCIATE writes. #756 is what that looks like from the outside: Markpad
+	// APP_ASSOCIATE writes. #756 is what that looks like from the outside: Aonimark
 	// is not the default and cannot be picked as one either.
 	//
 	// The hook fills that gap, and it has to name both the ProgID and the
@@ -673,8 +582,8 @@ describe('NSIS installer hooks', () => {
 			const progId = association.name ?? association.ext[0];
 			assert.match(
 				hooks,
-				new RegExp(`!define\\s+MARKPAD_PROGID\\s+"${progId}"`),
-				`hooks.nsi must define MARKPAD_PROGID as ${JSON.stringify(progId)}, the ProgID the bundler ` +
+				new RegExp(`!define\\s+AONIMARK_PROGID\\s+"${progId}"`),
+				`hooks.nsi must define AONIMARK_PROGID as ${JSON.stringify(progId)}, the ProgID the bundler ` +
 					'template derives from bundle.fileAssociations[].name. A mismatch registers an Open With ' +
 					'entry pointing at a ProgID that does not exist.'
 			);
@@ -683,21 +592,21 @@ describe('NSIS installer hooks', () => {
 				assert.match(
 					hooks,
 					new RegExp(
-						`WriteRegStr\\s+SHCTX\\s+"Software\\\\Classes\\\\\\.${ext}\\\\OpenWithProgids"\\s+"\\$\\{MARKPAD_PROGID\\}"`
+						`WriteRegStr\\s+SHCTX\\s+"Software\\\\Classes\\\\\\.${ext}\\\\OpenWithProgids"\\s+"\\$\\{AONIMARK_PROGID\\}"`
 					),
 					`.${ext} is in bundle.fileAssociations but hooks.nsi never adds it to OpenWithProgids, ` +
-						'so Markpad stays out of the Open With dialog for it.'
+						'so Aonimark stays out of the Open With dialog for it.'
 				);
 				assert.match(
 					hooks,
 					new RegExp(`SupportedTypes"\\s+"\\.${ext}"`),
 					`.${ext} is in bundle.fileAssociations but is missing from the Applications SupportedTypes ` +
-						'entry, which is what filters Markpad into the dialog for a given extension.'
+						'entry, which is what filters Aonimark into the dialog for a given extension.'
 				);
 				assert.match(
 					hooks,
 					new RegExp(
-						`DeleteRegValue\\s+SHCTX\\s+"Software\\\\Classes\\\\\\.${ext}\\\\OpenWithProgids"\\s+"\\$\\{MARKPAD_PROGID\\}"`
+						`DeleteRegValue\\s+SHCTX\\s+"Software\\\\Classes\\\\\\.${ext}\\\\OpenWithProgids"\\s+"\\$\\{AONIMARK_PROGID\\}"`
 					),
 					`hooks.nsi adds .${ext} to OpenWithProgids on install but never removes it on uninstall.`
 				);

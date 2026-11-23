@@ -39,19 +39,19 @@ describe('release version bump', () => {
 		// following the instructions correctly. The script runs here against a
 		// copy of the three manifests, with a stand-in `cargo` that records what
 		// it was asked and rewrites the lock entry the way `cargo update` does.
-		const root = realpathSync(mkdtempSync(join(tmpdir(), 'markpad-release-')));
+		const root = realpathSync(mkdtempSync(join(tmpdir(), 'aonimark-release-')));
 		try {
 			mkdirSync(join(root, 'src-tauri'));
 			mkdirSync(join(root, 'bin'));
-			writeFileSync(join(root, 'package.json'), '{\n  "name": "markpad",\n  "version": "1.0.0"\n}\n');
+			writeFileSync(join(root, 'package.json'), '{\n  "name": "aonimark",\n  "version": "1.0.0"\n}\n');
 			writeFileSync(
 				join(root, 'src-tauri/Cargo.toml'),
 				// A dependency's `version` ahead of ours, as a reordered manifest has.
-				'[dependencies]\nserde = { version = "1.0.0" }\n\n[package]\nname = "Markpad"\nversion = "1.0.0"\n',
+				'[dependencies]\nserde = { version = "1.0.0" }\n\n[package]\nname = "Aonimark"\nversion = "1.0.0"\n',
 			);
 			writeFileSync(
 				join(root, 'src-tauri/Cargo.lock'),
-				'[[package]]\nname = "Markpad"\nversion = "1.0.0"\n\n[[package]]\nname = "serde"\nversion = "1.0.0"\n',
+				'[[package]]\nname = "Aonimark"\nversion = "1.0.0"\n\n[[package]]\nname = "serde"\nversion = "1.0.0"\n',
 			);
 			const cargo = join(root, 'bin/cargo');
 			writeFileSync(
@@ -59,8 +59,8 @@ describe('release version bump', () => {
 				[
 					'#!/bin/sh',
 					'echo "$PWD $*" > ../cargo-call',
-					'[ "$1 $2 $3" = "update -p Markpad" ] || exit 9',
-					'sed -i.bak "/^name = \\"Markpad\\"$/{n;s/^version = .*/version = \\"$5\\"/;}" Cargo.lock',
+					'[ "$1 $2 $3" = "update -p Aonimark" ] || exit 9',
+					'sed -i.bak "/^name = \\"Aonimark\\"$/{n;s/^version = .*/version = \\"$5\\"/;}" Cargo.lock',
 				].join('\n'),
 			);
 			chmodSync(cargo, 0o755);
@@ -74,13 +74,13 @@ describe('release version bump', () => {
 
 			assert.equal(JSON.parse(readSource(join(root, 'package.json'))).version, '2.3.4');
 			const toml = readSource(join(root, 'src-tauri/Cargo.toml'));
-			assert.match(toml, /\[package\]\nname = "Markpad"\nversion = "2.3.4"/);
+			assert.match(toml, /\[package\]\nname = "Aonimark"\nversion = "2.3.4"/);
 			assert.match(toml, /serde = \{ version = "1.0.0" \}/, 'a dependency version is not ours');
-			assert.match(readSource(join(root, 'src-tauri/Cargo.lock')), /name = "Markpad"\nversion = "2.3.4"/);
+			assert.match(readSource(join(root, 'src-tauri/Cargo.lock')), /name = "Aonimark"\nversion = "2.3.4"/);
 			// The lock is cargo's format; it is handed to cargo, not rewritten.
 			assert.equal(
 				readSource(join(root, 'cargo-call')).trim(),
-				`${join(root, 'src-tauri')} update -p Markpad --precise 2.3.4`,
+				`${join(root, 'src-tauri')} update -p Aonimark --precise 2.3.4`,
 			);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
@@ -113,7 +113,7 @@ describe('release workflow steps', () => {
 		assert.ok(names.indexOf(guardName) >= 0 && names.indexOf(guardName) < names.indexOf('Create Release'), 'the guard runs after the release it guards has been created');
 		const run = buildStep('create-release', guardName).run.replaceAll('${{ steps.get_version.outputs.version }}', '9.9.9');
 
-		const dir = mkdtempSync(join(tmpdir(), 'markpad-release-guard-'));
+		const dir = mkdtempSync(join(tmpdir(), 'aonimark-release-guard-'));
 		try {
 			// `gh release view` as GitHub answers it: FAKE_GH_OUT on stdout, FAKE_GH_ERR on
 			// stderr, FAKE_GH_EXIT as the status. The call itself is recorded.
@@ -134,12 +134,12 @@ exit "$FAKE_GH_EXIT"
 			];
 			for (const answer of answers) {
 				const result = spawnSync('/bin/bash', ['-c', run], {
-					env: { PATH: `${dir}:/usr/bin:/bin`, GITHUB_REPOSITORY: 'markpad-app/Markpad', GITHUB_TOKEN: 'fixture',
+					env: { PATH: `${dir}:/usr/bin:/bin`, GITHUB_REPOSITORY: 'aonimark-app/Aonimark', GITHUB_TOKEN: 'fixture',
 						FAKE_GH_OUT: answer.out, FAKE_GH_ERR: answer.err, FAKE_GH_EXIT: String(answer.exit) },
 					encoding: 'utf8',
 				});
 				assert.equal(result.status === 0, answer.ok, `${answer.name}: exit ${result.status}\n${result.stdout}${result.stderr}`);
-				assert.equal(readSource(join(dir, 'gh-call')).trim(), 'release view v9.9.9 --repo markpad-app/Markpad --json isDraft');
+				assert.equal(readSource(join(dir, 'gh-call')).trim(), 'release view v9.9.9 --repo aonimark-app/Aonimark --json isDraft');
 			}
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
@@ -153,7 +153,7 @@ exit "$FAKE_GH_EXIT"
 		complete.APPLE_DEVELOPER_ID_P12 = 'Zml4dHVyZQ==';
 		complete.APPLE_DEVELOPER_ID_SHA1 = 'A'.repeat(40);
 		complete.APPLE_TEAM_ID = 'ABCDEFGHIJ';
-		const dir = mkdtempSync(join(tmpdir(), 'markpad-signing-test-'));
+		const dir = mkdtempSync(join(tmpdir(), 'aonimark-signing-test-'));
 		try {
 			// A mock command prevents any real keychain access even if a guard regresses.
 			writeFileSync(join(dir, 'security'), '#!/bin/sh\necho keychain-touched >&2\nexit 97\n', { mode: 0o755 });

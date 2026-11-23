@@ -36,7 +36,7 @@ export const commands = {
 	 *  Writes `content` to `path` as `encoding` — the label the file was decoded
 	 *  from, so a legacy document is saved as the bytes it arrived as instead of
 	 *  being silently converted to UTF-8 behind the user's back. Callers with text
-	 *  Markpad generated itself (the HTML and SVG exports) pass `UTF-8`.
+	 *  Aonimark generated itself (the HTML and SVG exports) pass `UTF-8`.
 	 * 
 	 *  The label is not trusted: it makes a round trip through the frontend, and
 	 *  `encode_text` rejects one it does not recognise rather than falling back to

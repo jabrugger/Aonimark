@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for all Markpad windows",
+  "description": "Capability for all Aonimark windows",
   "windows": [
     "main",
     "window-*"

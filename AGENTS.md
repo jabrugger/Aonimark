@@ -1,10 +1,10 @@
-# AGENTS.md - Coding Guidelines for Markpad
+# AGENTS.md - Coding Guidelines for Aonimark
 
-This file contains guidelines for AI agents working on the Markpad codebase.
+This file contains guidelines for AI agents working on the Aonimark codebase.
 
 ## Project Overview
 
-Markpad is a Tauri v2 application with:
+Aonimark is a Tauri v2 application with:
 - **Frontend**: Svelte 5 + TypeScript + Vite
 - **Backend**: Rust (Tauri commands)
 - **Purpose**: Markdown viewer and text editor
@@ -270,7 +270,7 @@ three and checks they agree. By hand, all three go in the same commit:
 
 - `package.json` `version`
 - `src-tauri/Cargo.toml` `version`
-- `src-tauri/Cargo.lock` — not by hand: run `cargo update -p Markpad --precise
+- `src-tauri/Cargo.lock` — not by hand: run `cargo update -p Aonimark --precise
   <version>` in `src-tauri` (or any `cargo check` there, which rewrites it as a
   side effect) and commit the one-line diff.
 
@@ -290,6 +290,6 @@ See [RELEASING.md](RELEASING.md) for the maintainer-facing release runbook
 
 For agents: never modify `plugins.updater.pubkey` in `src-tauri/tauri.conf.json`.
 That value is set once by the maintainer and shipping a different one breaks
-auto-update for all existing users — they have to manually re-install Markpad.
+auto-update for all existing users — they have to manually re-install Aonimark.
 The placeholder string in PR-2 is replaced exactly once, by the maintainer,
 right before the first auto-update-capable release.

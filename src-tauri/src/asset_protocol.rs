@@ -126,7 +126,7 @@ fn allow_origin(request: &Request<Vec<u8>>) -> String {
         .unwrap_or_else(|| {
             // The shape tauri gives a webview loaded from its own scheme. A
             // dev build served over http has a different origin, which only
-            // matters for a CORS-checked request; nothing in Markpad fetches
+            // matters for a CORS-checked request; nothing in Aonimark fetches
             // this scheme, and `<img>`/`<video>` do not check.
             if cfg!(any(windows, target_os = "android")) {
                 "http://tauri.localhost".to_owned()

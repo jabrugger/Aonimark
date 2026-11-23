@@ -17,7 +17,7 @@ static TEMP_FILE_SEQ: AtomicU64 = AtomicU64::new(0);
 /// modern Windows — `std::fs::rename` calls `MoveFileExW` with
 /// `MOVEFILE_REPLACE_EXISTING` on Windows since Rust 1.35, so an existing
 /// destination is replaced atomically without a dedicated fallback path.
-/// Markpad targets Tauri v2 (Rust 1.70+), so we can rely on this everywhere.
+/// Aonimark targets Tauri v2 (Rust 1.70+), so we can rely on this everywhere.
 ///
 /// **Other correctness preservations vs. plain `fs::write`:**
 /// - **Symlinks:** if `target` is a symlink, follow it to the real file so we
@@ -164,7 +164,7 @@ pub(crate) fn atomic_write(target: &Path, bytes: &[u8]) -> std::io::Result<()> {
 }
 
 /// Strip Windows' verbatim (`\\?\`) prefix, which `canonicalize` adds and
-/// nothing else in Markpad wants: the string reaches window titles, the recent
+/// nothing else in Aonimark wants: the string reaches window titles, the recent
 /// files list and the tab bar, and several Win32 APIs reject it. `\\?\C:\a`
 /// becomes `C:\a` and `\\?\UNC\server\share` becomes `\\server\share`. A no-op
 /// everywhere else, so callers do not need to know the platform.
@@ -186,7 +186,7 @@ fn strip_verbatim_prefix(path: PathBuf) -> PathBuf {
 
 /// The identity of a file, as the filesystem itself defines it.
 ///
-/// Markpad compares paths to answer one question in three places — "is this
+/// Aonimark compares paths to answer one question in three places — "is this
 /// the same file?" — and exact string equality gets it wrong three ways:
 ///
 /// - **case**: `/notes/A.md` and `/notes/a.md` are one file on APFS and NTFS.
@@ -232,7 +232,7 @@ pub(crate) fn canonical_identity(path: &Path) -> std::io::Result<PathBuf> {
 }
 
 /// The encoding label of a plain UTF-8 file — the default for a new buffer
-/// and for everything Markpad generates itself (HTML and SVG exports).
+/// and for everything Aonimark generates itself (HTML and SVG exports).
 const UTF8_LABEL: &str = "UTF-8";
 /// UTF-8 with a leading byte order mark. Not a WHATWG label, because WHATWG
 /// has no name for it: `encoding_rs` reports both as "UTF-8" and the BOM is
@@ -550,7 +550,7 @@ pub(crate) mod tests {
     #[cfg(unix)]
     #[test]
     fn canonical_identity_resolves_a_symlink_to_its_target() {
-        // A link and its target are one file for every purpose Markpad has:
+        // A link and its target are one file for every purpose Aonimark has:
         // `atomic_write` follows the link when it writes, so two tabs on the
         // two names would be two auto-save timers on one document.
         let dir = temp_dir("canon-link");
@@ -759,7 +759,7 @@ pub(crate) mod tests {
     pub(crate) const CHINESE_SAMPLE: &str =
         "# 中文标题\n\n这是一个用国标编码保存的文档，里面全是汉字。\n";
 
-    /// One realistic document per legacy encoding Markpad is likely to meet.
+    /// One realistic document per legacy encoding Aonimark is likely to meet.
     /// Each is text that encoding can represent and UTF-8 disagrees with.
     const LEGACY_SAMPLES: [(&encoding_rs::Encoding, &str); 4] = [
         (encoding_rs::GBK, CHINESE_SAMPLE),

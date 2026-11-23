@@ -56,11 +56,10 @@ jobs:
           tool: cargo-audit
 
       # The three ignored advisories are all in `zip`'s `extract`, which follows
-      # Unix symlinks and permission bits from the archive. Markpad reads VSIX
-      # entries by name and never extracts. tauri-plugin-updater does extract,
-      # but only on Windows and only an update whose signature it has verified;
-      # it requires zip ^4 and the fix is in 9. Drop these once it moves and
-      # Markpad's own zip dependency is on 9 as well.
+      # Unix symlinks and permission bits from the archive. Only
+      # tauri-plugin-updater extracts, and only on Windows, an update whose
+      # signature it has verified. It requires zip ^4 and the fix is in 9, so
+      # drop these once it moves.
       - name: audit Rust dependencies
         run: >-
           cargo audit --file src-tauri/Cargo.lock

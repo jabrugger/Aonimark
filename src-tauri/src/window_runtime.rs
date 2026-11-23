@@ -215,7 +215,7 @@ fn restore_progress_path_in(config: &Path, label: &str) -> Result<PathBuf, Strin
     secondary_window_file(&config.join(RESTORE_PROGRESS_DIR), label)
 }
 
-/// Writes a file Markpad owns in one of its per-window directories. Like
+/// Writes a file Aonimark owns in one of its per-window directories. Like
 /// `atomic_write`, but refuses to follow a symlink into a document.
 fn write_owned_file(path: &Path, json: &str) -> Result<(), String> {
     if let Some(dir) = path.parent() {
@@ -447,7 +447,7 @@ pub async fn clear_unsaved_recovery(app: AppHandle, labels: Vec<String>) -> Resu
 /// measured on macOS/APFS with a 122-byte payload, `atomic_write`'s two fsyncs
 /// cost ~8 ms per call against ~0.2 ms for temp-file-plus-rename.
 fn write_restore_progress(path: &Path, json: &str) -> std::io::Result<()> {
-    // Two Markpad processes (Windows, Linux), or two windows of one, would
+    // Two Aonimark processes (Windows, Linux), or two windows of one, would
     // otherwise share a temp name and the loser would delete the winner's file
     // out from under its rename.
     let name = path
@@ -550,7 +550,7 @@ pub fn deliver_opened_path<R: Runtime>(app: &AppHandle<R>, path: String) {
 /// argv is the one path source nobody vetted. Every other way a path enters is
 /// narrower: the file picker returns a file that exists, and macOS's
 /// `RunEvent::Opened` carries a URL Launch Services already resolved to a real
-/// file it decided Markpad handles. Here the shell hands over whatever was
+/// file it decided Aonimark handles. Here the shell hands over whatever was
 /// typed, and what comes back goes straight to the frontend's `loadMarkdown`,
 /// so it has to be a path a document could plausibly live at.
 ///
@@ -573,7 +573,7 @@ pub fn deliver_opened_path<R: Runtime>(app: &AppHandle<R>, path: String) {
 /// be written is the request `vim` and `code` answer with an empty buffer at
 /// that name, and nothing here can tell it from a typo; dropping it would
 /// answer a deliberate request with an empty window. An existing file that is
-/// not Markdown is kept too — Markpad's own Open dialog offers "All Files", so
+/// not Markdown is kept too — Aonimark's own Open dialog offers "All Files", so
 /// the extension is not what decides whether a path is openable.
 pub fn startup_paths(args: &[String], cwd: &Path) -> Vec<String> {
     args.iter()
@@ -829,11 +829,11 @@ mod tests {
 
 /// Does a watch armed on a FILE survive that file being replaced by a rename?
 ///
-/// Not a test of Markpad's code — a test of the platform behaviour `watch_file`
+/// Not a test of Aonimark's code — a test of the platform behaviour `watch_file`
 /// rests on, which is the only way to know whether the assumption holds on the
 /// three targets. `atomic_write` saves every document by writing a temp file
 /// alongside and renaming it over the target, so this is not an exotic case:
-/// it is what one Markpad save does to its own watch, and what most editors do
+/// it is what one Aonimark save does to its own watch, and what most editors do
 /// to it (VS Code, Vim, JetBrains, Emacs all rename on save).
 ///
 /// If this fails on a platform, the watcher there stops reporting anything

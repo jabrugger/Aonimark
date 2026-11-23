@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest something Markpad should do
+description: Suggest something Aonimark should do
 labels: ["enhancement"]
 body:
   - type: textarea
@@ -39,6 +39,6 @@ body:
   - type: input
     id: setup
     attributes:
-      label: Your Markpad version and how you installed it
+      label: Your Aonimark version and how you installed it
       description: Skip only if the request has nothing to do with your setup.
       placeholder: "2.7.4 · Windows installer"

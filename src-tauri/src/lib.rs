@@ -1,4 +1,4 @@
-//! Markpad's Rust backend. `app::run` builds the Tauri app; `commands`,
+//! Aonimark's Rust backend. `app::run` builds the Tauri app; `commands`,
 //! and `window_runtime` hold what the frontend can `invoke`.
 
 mod app;

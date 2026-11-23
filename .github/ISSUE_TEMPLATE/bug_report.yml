@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in Markpad is broken or behaves unexpectedly
+description: Something in Aonimark is broken or behaves unexpectedly
 labels: ["bug"]
 body:
   - type: markdown
@@ -12,8 +12,8 @@ body:
   - type: input
     id: app-version
     attributes:
-      label: Markpad version
-      description: Shown in Settings, or in the About / Markpad menu.
+      label: Aonimark version
+      description: Shown in Settings, or in the About / Aonimark menu.
       placeholder: "2.7.4"
     validations:
       required: true
@@ -22,17 +22,14 @@ body:
     id: install-method
     attributes:
       label: How did you install it?
-      description: The installer and the portable build, or a snap and an AppImage, fail in different ways.
+      description: The installer and the portable build, or a .deb and an AppImage, fail in different ways.
       options:
-        - "Windows — installer (Markpad_…_setup.exe)"
-        - "Windows — portable (Markpad_….exe)"
-        - "Windows — Chocolatey"
+        - "Windows — installer (Aonimark_…_setup.exe)"
+        - "Windows — portable (Aonimark_….exe)"
         - "macOS — .dmg"
-        - "macOS — Homebrew"
         - "Linux — AppImage"
         - "Linux — .deb"
         - "Linux — .rpm"
-        - "Linux — snap"
         - "Built from source"
         - "Not sure"
     validations:
