@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 
-import { patchPreview } from '../src/lib/utils/previewPatch.js';
 import { asRendererLine } from '../src/lib/utils/lineCoordinates.js';
 import { flushSync } from 'svelte';
 
@@ -23,113 +22,6 @@ const { snapshotTab } = await import('../src/lib/utils/tabTransfer.js');
 const { outgoingTabAnchorLine } = await import('../src/lib/utils/editorPosition.js');
 type Tab = import('../src/lib/stores/tabs.svelte.js').Tab;
 
-describe('a preview host per tab', () => {
-	function patchPreviewBlocks(host: HTMLElement, html: string) {
-		return patchPreview(host, html, '/docs/a.md', new Set());
-	}
-
-	/**
-	 * Switching tabs must not rebuild the document being switched to.
-	 *
-	 * The preview used to have ONE `.markdown-blocks` host for every tab, so a
-	 * switch handed that host the other document's markup. Two documents share no
-	 * block keys, so the diff replaced essentially every node: `renderRichContent`
-	 * ran over the whole document again, the folds re-measured, and the reading
-	 * position was restored against a layout that was still settling. That is one
-	 * cause with three symptoms — a visible reload, motion, and a position that
-	 * moved after it had been restored.
-	 *
-	 * There is a host per tab now, and this is the property that makes the switch
-	 * free. It is a property of `patchPreview` plus the per-host record it keeps
-	 * (`states`, a `WeakMap` keyed on the container), not of any new module:
-	 * re-patching a host that already holds that document matches every key and
-	 * changes nothing.
-	 *
-	 * What this cannot check is the wiring in `MarkdownViewer.svelte` that gives
-	 * each tab its own host — that component cannot be mounted outside Tauri. What
-	 * it does check is the mechanism the wiring depends on, and it is the half that
-	 * would fail silently: a keying change in `previewPatch.ts` would still look
-	 * correct on screen and quietly put the whole cost back.
-	 */
-
-	/** The renderer's output with `splitBlocks`: one block per `\0`. */
-	function doc(title: string, paragraphs: string[]): string {
-		return [
-			`<h1 data-sourcepos="1:1-1:${title.length}" id="${title}">${title}</h1>`,
-			...paragraphs.map((text, i) => `<p data-sourcepos="${i + 3}:1-${i + 3}:${text.length}">${text}</p>`),
-		].join('\0\n');
-	}
-
-	const A = doc('alpha', ['one', 'two', 'three']);
-	const B = doc('beta', ['four', 'five']);
-
-	let hostA: HTMLElement;
-	let hostB: HTMLElement;
-
-	beforeEach(() => {
-		document.body.innerHTML = '';
-		hostA = document.createElement('div');
-		hostB = document.createElement('div');
-		document.body.append(hostA, hostB);
-	});
-
-	test('re-showing a tab replaces no nodes and asks for no enrichment', () => {
-		patchPreviewBlocks(hostA, A);
-		patchPreviewBlocks(hostB, B);
-
-		const backToA = patchPreviewBlocks(hostA, A);
-
-		expect(backToA.replaced).toBe(0);
-		expect(backToA.inserted).toEqual([]);
-	});
-
-	test('the nodes the reader was looking at are the same objects afterwards', () => {
-		patchPreviewBlocks(hostA, A);
-		const before = [...hostA.querySelectorAll('.content-inner > p')];
-
-		patchPreviewBlocks(hostB, B);
-		patchPreviewBlocks(hostA, A);
-
-		const after = [...hostA.querySelectorAll('.content-inner > p')];
-		expect(after).toEqual(before);
-		// Identity, not equality: a rebuilt tree passes `toEqual` on the markup and
-		// is still a different set of boxes with different layout.
-		after.forEach((node, i) => expect(node).toBe(before[i]));
-	});
-
-	test('each host remembers its own document, so neither switch disturbs the other', () => {
-		patchPreviewBlocks(hostA, A);
-		patchPreviewBlocks(hostB, B);
-		patchPreviewBlocks(hostA, A);
-		patchPreviewBlocks(hostB, B);
-
-		expect(hostA.querySelector('h1')!.textContent).toBe('alpha');
-		expect(hostB.querySelector('h1')!.textContent).toBe('beta');
-	});
-
-	test('a document that changed while its tab was hidden is patched, not rebuilt, on the way back', () => {
-		patchPreviewBlocks(hostA, A);
-		const wrapper = hostA.querySelector('.foldable-content-wrapper')!;
-
-		// What a background render does: the tab's `content` is rewritten while the
-		// host is off screen. The host is untouched until the tab is shown again.
-		const edited = doc('alpha', ['one', 'two EDITED', 'three']);
-		const patch = patchPreviewBlocks(hostA, edited);
-
-		expect(patch.inserted.length).toBe(1);
-		expect(hostA.querySelector('.foldable-content-wrapper')).toBe(wrapper);
-		expect(hostA.textContent).toContain('two EDITED');
-	});
-
-	test('the same host given a different document does replace everything — the case being avoided', () => {
-		patchPreviewBlocks(hostA, A);
-		const patch = patchPreviewBlocks(hostA, B);
-
-		expect(patch.replaced).toBeGreaterThan(0);
-		// Without this the three tests above would pass against a patch function
-		// that never replaces anything at all.
-	});
-});
 
 // A file path identifies a tab. Two tabs on one file are two buffers with two
 // dirty flags and two auto-save timers writing the same file in turn, so
@@ -1450,7 +1342,7 @@ describe('tab transfer races', () => {
 
 	function makeTransfer(overrides: Partial<Parameters<typeof createTransferOptions>[0]> = {}) {
 		return createTransferOptions({
-			editorPane: () => null,
+			
 			windowStateJson: () => tabManager.serializeState(),
 			isCloseWalkActive: () => false,
 			isDisposed: () => false,
@@ -1508,54 +1400,6 @@ describe('tab transfer races', () => {
 		});
 		await switching.acceptTransferredTab(snapshot);
 		assert.deepEqual(log, []);
-	});
-
-	test('both gates that drop the view state ask for the anchor first', () => {
-		// The two moments a tab's position leaves memory. Neither carries
-		// `editorViewState`, so a background edit-only tab would leave at the
-		// anchor of its last preview scroll.
-		const lines = Array.from({ length: 80 }, (_, index) => `line ${index + 1}`).join('\n');
-		const backgroundId = openTab(lines);
-		tabManager.addTab('/notes/active.md', 'active');
-		const background = tabManager.tabs.find((tab) => tab.id === backgroundId)!;
-		background.isEditing = true;
-		background.anchorLine = 3 as typeof background.anchorLine;
-		background.editorViewState = { viewState: { firstPosition: { lineNumber: 40, column: 1 } } };
-		const expected = outgoingTabAnchorLine(background, tabManager.activeTabId);
-		assert.notEqual(expected, 3);
-
-		const transfer = makeTransfer();
-		assert.equal(JSON.parse(transfer.transferPayload(backgroundId)).anchorLine, expected);
-		const saved = JSON.parse(transfer.serializeState()).tabs.find((tab: { path: string; anchorLine: number }) => tab.anchorLine === expected);
-		assert.ok(saved, 'the window snapshot records the editor position too');
-	});
-
-	test('the transfer payload flushes before it snapshots the tab', () => {
-		// The editor holds the live position; without the flush the tab travels
-		// at the position of the last teardown.
-		const tabId = openTab('doc');
-		const editorPane = {
-			flushPositionTo: (id: string) => {
-				tabManager.tabs.find((tab) => tab.id === id)!.anchorLine = 12 as Tab['anchorLine'];
-			},
-		};
-		const transfer = makeTransfer({ editorPane: () => editorPane });
-		assert.equal(JSON.parse(transfer.transferPayload(tabId)).anchorLine, 12);
-	});
-
-	test('the window-state snapshot flushes too', () => {
-		// Same staleness at window close: the editor has not come down yet.
-		openTab('doc');
-		const flushed: string[] = [];
-		const editorPane = {
-			flushPositionTo: (id: string) => {
-				flushed.push(id);
-				tabManager.tabs.find((tab) => tab.id === id)!.anchorLine = 12 as Tab['anchorLine'];
-			},
-		};
-		const transfer = makeTransfer({ editorPane: () => editorPane });
-		assert.equal(JSON.parse(transfer.serializeState()).tabs[0].anchorLine, 12);
-		assert.deepEqual(flushed, [tabManager.activeTabId]);
 	});
 
 	test('a partial buffer cannot be handed to another window', async () => {

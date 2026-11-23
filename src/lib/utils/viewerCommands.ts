@@ -1,4 +1,3 @@
-import { adjustPreviewMaxWidth } from './previewWidth.js';
 import type { ViewerCommand } from './viewerKeymap.js';
 
 /**
@@ -28,12 +27,9 @@ export type ViewerCommandHost = {
 	saveContentAs(): unknown;
 	saveActiveTab(): unknown;
 	handleUndoCloseTab(): unknown;
-	navigateFileHistory(direction: 'back' | 'forward'): unknown;
 	openSettings(): void;
 	toggleHome(): void;
-	exportAsPdf(): unknown;
 	openFileLocation(): unknown;
-	triggerFindAction(): void;
 };
 
 /**
@@ -43,13 +39,7 @@ export type ViewerCommandHost = {
  */
 export function viewerCommandTable(host: ViewerCommandHost): Record<ViewerCommand, () => void> {
 	const { settings, tabManager } = host;
-	const previewWidth = (delta: number) => () => {
-		settings.previewFullWidth = false;
-		settings.previewMaxWidth = adjustPreviewMaxWidth(settings.previewMaxWidth, delta);
-	};
 	return {
-		'preview-width-narrower': previewWidth(-40),
-		'preview-width-wider': previewWidth(40),
 		'reload-from-disk': () => void host.reloadFromDisk(),
 		'move-tab-to-next-window': () => void host.carryActiveTabToNextWindow(),
 		'close-file': () => void host.closeFile(),
@@ -68,15 +58,11 @@ export function viewerCommandTable(host: ViewerCommandHost): Record<ViewerComman
 		'undo-close-tab': () => void host.handleUndoCloseTab(),
 		'next-tab': () => tabManager.cycleTab('next'),
 		'previous-tab': () => tabManager.cycleTab('prev'),
-		'history-back': () => void host.navigateFileHistory('back'),
-		'history-forward': () => void host.navigateFileHistory('forward'),
 		'zoom-in': () => settings.zoomIn(),
 		'zoom-out': () => settings.zoomOut(),
 		'zoom-reset': () => settings.resetZoom(),
 		'open-settings': () => host.openSettings(),
 		'toggle-home': () => host.toggleHome(),
-		'export-pdf': () => void host.exportAsPdf(),
 		'reveal-file': () => void host.openFileLocation(),
-		find: () => host.triggerFindAction(),
 	};
 }

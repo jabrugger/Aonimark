@@ -33,6 +33,7 @@
 	import { trailing } from '@milkdown/kit/plugin/trailing';
 	import { callCommand, getMarkdown, insert, replaceAll } from '@milkdown/kit/utils';
 	import { TextSelection } from '@milkdown/prose/state';
+	import type { EditorView } from '@milkdown/prose/view';
 	import { t, type LanguageCode } from '../utils/i18n.js';
 	import { splitFrontMatter, withLineEnding, wysiwygStringifyOptions } from '../utils/wysiwygMarkdown.js';
 
@@ -126,13 +127,16 @@
 					// the tab synchronously. Milkdown's `listener` plugin debounces
 					// 200ms, which is a window where a tab switch or close could drop
 					// the last keystrokes; here there is no such window.
-					dispatchTransaction: (tr) => {
-						const view = ctx.get(editorViewCtx);
-						const next = view.state.apply(tr);
-						view.updateState(next);
+					// ProseMirror calls this with the view as `this`, and it can run
+					// while the view is still being constructed (a plugin dispatches
+					// from its first `view()`), before `editorViewCtx` holds it. The
+					// view it hands over is the one to apply to.
+					dispatchTransaction(this: EditorView, tr) {
+						const next = this.state.apply(tr);
+						this.updateState(next);
 						if (tr.docChanged) {
 							changed = true;
-							const markdown = frontMatter + withLineEnding(ctx.get(serializerCtx)(view.state.doc), lineEnding);
+							const markdown = frontMatter + withLineEnding(ctx.get(serializerCtx)(next.doc), lineEnding);
 							lastEmitted = markdown;
 							handlers.onchange(markdown);
 						}

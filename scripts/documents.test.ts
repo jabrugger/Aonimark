@@ -1,21 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { PieceTreeTextBufferBuilder } from 'monaco-editor/esm/vs/editor/common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.js';
-import { DefaultEndOfLine } from 'monaco-editor/esm/vs/editor/common/standalone/standaloneEnums.js';
 
 import { createBoundedWriter, parseRecovery, recoverySnapshot, restoreRecords } from '../src/lib/sessions/unsavedRecovery.js';
 import type { Tab } from '../src/lib/stores/tabs.svelte.js';
-import {
-	DROPPABLE_IMAGE_EXTENSIONS,
-	dropPaneFor,
-	dropZoneLabel,
-	handleDrop,
-	routeDroppedFile,
-	type DropAction,
-	type DropPane,
-} from '../src/lib/utils/fileDrop.js';
-import { openDiffView } from '../src/lib/utils/diffView.js';
 import { HOME_TAB_PATH } from '../src/lib/utils/homeTab.js';
 import { autoSaveFailureNeedsToast, isAutoSaveEligible, type AutoSaveTabState } from '../src/lib/utils/autoSaveTimer.js';
 import { asRendererLine } from '../src/lib/utils/lineCoordinates.js';
@@ -26,7 +14,6 @@ import {
 } from '../src/lib/utils/openFileMode.js';
 import { t } from '../src/lib/utils/i18n.js';
 import { MARKDOWN_OPEN_FILTERS } from '../src/lib/utils/markdownLinks.js';
-import { lineEndingLabel } from '../src/lib/utils/tabModels.js';
 import { buildTransferredTab, snapshotTab, validateTransferPayload, type TransferableTab } from '../src/lib/utils/tabTransfer.js';
 import { dispatchViewerKey, viewerCommandFor, type KeyContext } from '../src/lib/utils/viewerKeymap.js';
 import { translations } from './allTranslations.js';
@@ -123,11 +110,11 @@ describe('save from reading mode', () => {
 	const READING: KeyContext = {
 		mode: 'app',
 		osType: 'windows',
-		isSplit: false,
+		
 		overlayOpen: false,
 		dialogOpen: false,
-		isEditing: false,
-		editorHasFocus: false,
+		
+		
 	};
 
 	/** Mod+S, with no other modifier. */
@@ -138,32 +125,22 @@ describe('save from reading mode', () => {
 		// question rather than matched as text: all four combinations of the two
 		// flags must answer `'save'`, so no guard over either of them can come back
 		// without failing here.
-		for (const isEditing of [false, true]) {
-			for (const isSplit of [false, true]) {
-				assert.equal(
-					viewerCommandFor(MOD_S, { ...READING, isEditing, isSplit }),
-					'save',
-					`isEditing=${isEditing} isSplit=${isSplit}`,
-				);
-			}
-		}
+		assert.equal(viewerCommandFor(MOD_S, READING), 'save');
 	});
 
 	test('the browser save dialog is always suppressed', () => {
 		// Reading mode would otherwise surface the webview's own Save Page dialog.
 		// The keystroke is prevented before the command runs, in every mode.
-		for (const isEditing of [false, true]) {
-			const events: string[] = [];
-			const stroke = { ...MOD_S, preventDefault: () => void events.push('prevented') };
-			dispatchViewerKey(stroke, { ...READING, isEditing }, (command) => void events.push(`run:${command}`));
-			assert.deepEqual(events, ['prevented', 'run:save'], `isEditing=${isEditing}`);
-		}
+		const events: string[] = [];
+		const stroke = { ...MOD_S, preventDefault: () => void events.push('prevented') };
+		dispatchViewerKey(stroke, READING, (command) => void events.push(`run:${command}`));
+		assert.deepEqual(events, ['prevented', 'run:save']);
 
 		// A chord that means nothing keeps its default.
-		const events: string[] = [];
-		const stroke = { ...MOD_S, key: 'j', code: 'KeyJ', ctrlKey: false, preventDefault: () => void events.push('prevented') };
-		dispatchViewerKey(stroke, READING, (command) => void events.push(`run:${command}`));
-		assert.deepEqual(events, []);
+		const noEvents: string[] = [];
+		const other = { ...MOD_S, key: 'j', code: 'KeyJ', ctrlKey: false, preventDefault: () => void noEvents.push('prevented') };
+		dispatchViewerKey(other, READING, (command) => void noEvents.push(`run:${command}`));
+		assert.deepEqual(noEvents, []);
 	});
 });
 
@@ -439,118 +416,6 @@ describe('unsaved recovery', () => {
 	});
 });
 
-// The status bar used to render `t('editor.status.crlf')` — the literal string
-// "CRLF", for every document, on every platform. `samples/stress-test.md` has
-// not got one CR byte in it and the app said CRLF about it.
-//
-// The label is now the model's own EOL, so this file drives real Monaco with
-// real CRLF and LF fixtures and asks what the label would say. The fixtures are
-// literals rather than files on disk for the reason `sourceTree.ts` explains at
-// length: on a Windows checkout Git decides what `\n` in a repo file means, and
-// a test about line endings cannot let it.
-describe('editor line ending', () => {
-	/**
-	 * A Monaco text buffer built exactly the way `monaco.editor.createModel` builds
-	 * one: `createTextBufferFactory` is `new PieceTreeTextBufferBuilder()`,
-	 * `acceptChunk`, `finish()` with `normalizeEOL` left at its default.
-	 *
-	 * The buffer rather than a `TextModel` because a model pulls in the editor's
-	 * browser-side graph, and the EOL is decided down here anyway — everything
-	 * `model.getEOL()` returns comes from this object.
-	 */
-	function textBuffer(source: string, defaultEOL: 1 | 2 = DefaultEndOfLine.LF) {
-		const builder = new PieceTreeTextBufferBuilder();
-		builder.acceptChunk(source);
-		return builder.finish().create(defaultEOL).textBuffer;
-	}
-
-	/** The buffer's own text, to show what normalization did to a fixture. */
-	function contents(buffer: ReturnType<typeof textBuffer>): string {
-		const snapshot = buffer.createSnapshot(false);
-		let text = '';
-		for (let chunk = snapshot.read(); chunk !== null; chunk = snapshot.read()) text += chunk;
-		return text;
-	}
-
-	const CRLF_DOCUMENT = '# Title\r\n\r\nA paragraph.\r\n\r\n- one\r\n- two\r\n';
-	const LF_DOCUMENT = '# Title\n\nA paragraph.\n\n- one\n- two\n';
-
-	test('the label is the document’s ending, not a constant', () => {
-		assert.equal(lineEndingLabel(textBuffer(CRLF_DOCUMENT)), 'CRLF');
-		assert.equal(lineEndingLabel(textBuffer(LF_DOCUMENT)), 'LF');
-	});
-
-	test('a mixed document is not mixed once it is open, and the label says which one won', () => {
-		// Monaco counts the endings and rewrites the WHOLE buffer to the majority
-		// before the model exists, so there is no third answer to give: after this
-		// the document really is uniform, and a save writes it out that way. The
-		// two assertions per fixture are one claim — the label matches the bytes.
-		const mostlyCrlf = textBuffer('a\r\nb\r\nc\n');
-		assert.equal(contents(mostlyCrlf), 'a\r\nb\r\nc\r\n');
-		assert.equal(lineEndingLabel(mostlyCrlf), 'CRLF');
-
-		const mostlyLf = textBuffer('a\nb\nc\r\n');
-		assert.equal(contents(mostlyLf), 'a\nb\nc\n');
-		assert.equal(lineEndingLabel(mostlyLf), 'LF');
-
-		// Half and half: Monaco requires a CR majority, so a tie goes to LF.
-		const tied = textBuffer('a\r\nb\n');
-		assert.equal(contents(tied), 'a\nb\n');
-		assert.equal(lineEndingLabel(tied), 'LF');
-	});
-
-	test('a document with no line break at all reports the ending Monaco would insert', () => {
-		// An empty untitled tab, or a one-line file. There is nothing to detect, so
-		// the model falls back to its `defaultEOL`, which the standalone services
-		// resolve per platform: CRLF on Windows, LF elsewhere. That is still the
-		// truth — it is what Enter inserts and what the save writes.
-		assert.equal(lineEndingLabel(textBuffer('one line, no break', DefaultEndOfLine.CRLF)), 'CRLF');
-		assert.equal(lineEndingLabel(textBuffer('', DefaultEndOfLine.LF)), 'LF');
-	});
-});
-
-describe('external change comparison', () => {
-	test('the diff view owns its models and never edits the document', () => {
-		// Handing it the tab's live model would put a second editor on a buffer
-		// Editor.svelte owns, and a read-only view of a document is not a place to
-		// change it from.
-		const disposed: string[] = [];
-		const created: { text: string; language: string }[] = [];
-		let options: Record<string, unknown> = {};
-		let shown: { original: unknown; modified: unknown } | null = null;
-		const fakeMonaco = {
-			editor: {
-				createModel: (text: string, language: string) => {
-					created.push({ text, language });
-					return { dispose: () => disposed.push(`model:${text}`) };
-				},
-				createDiffEditor: (_element: unknown, given: Record<string, unknown>) => {
-					options = given;
-					return {
-						setModel: (pair: { original: unknown; modified: unknown }) => { shown = pair; },
-						dispose: () => disposed.push('editor'),
-					};
-				},
-			},
-		} as unknown as Parameters<typeof openDiffView>[0];
-
-		const close = openDiffView(fakeMonaco, {} as HTMLElement, 'on disk', 'mine', 'markdown');
-		assert.deepEqual(created, [
-			{ text: 'on disk', language: 'markdown' },
-			{ text: 'mine', language: 'markdown' },
-		]);
-		assert.ok(shown, 'the diff editor was given its own two models');
-		assert.equal(options.readOnly, true);
-		assert.equal(options.originalEditable, false);
-		assert.deepEqual(disposed, []);
-
-		// Every model it creates is disposed, or opening the view repeatedly leaks
-		// one document's worth of text each time.
-		close();
-		assert.deepEqual(disposed.sort(), ['editor', 'model:mine', 'model:on disk']);
-	});
-});
-
 describe('open file mode', () => {
 	/* ------------------------------------------------- the stored preference */
 
@@ -579,123 +444,6 @@ describe('open file mode', () => {
 		// "editor" back — the old key is still sitting in localStorage saying true.
 		assert.equal(resolveOpenFileMode('preview', 'true'), 'preview');
 		assert.equal(resolveOpenFileMode('split', 'true'), 'split');
-	});
-});
-
-/**
- * Where a dropped file goes, per pane.
- *
- * The app answers a drop in three ways, and the branch for the editor pane
- * knew only one of them: it looked for an image extension and **silently
- * discarded everything else**. So dragging a `.md` onto the editor did
- * nothing at all — no tab, no toast, no clue — while the identical drop two
- * inches to the right opened it. #175 asked for "drag multiple files, for each
- * file open a new tab" and got it, as long as the pointer stayed off the
- * editor.
- *
- * The decision now lives in `routeDroppedFile`, away from the window event
- * this suite cannot emit, which is what makes the table below a test rather
- * than a reading of the source. It was written the other way first: source
- * assertions that still passed with the markdown branch disabled by a
- * `false &&`. A check that cannot fail is worse than none, because it is
- * counted.
- */
-describe('file drop routing', () => {
-	/** file, pane, what must happen. */
-	const ROUTES: ReadonlyArray<[path: string, pane: DropPane, action: DropAction]> = [
-		// The report: a document opens, whichever pane is under the pointer.
-		['/notes/spec.md', 'editor', 'open'],
-		['/notes/spec.md', 'preview', 'open'],
-		['/notes/spec.markdown', 'editor', 'open'],
-		['/notes/spec.txt', 'editor', 'open'],
-		['C:\\notes\\spec.MD', 'editor', 'open'],
-
-		// An image goes into the text, and only where there is text.
-		['/notes/img/figure.png', 'editor', 'insert'],
-		['/notes/img/figure.SVG', 'editor', 'insert'],
-		['/notes/img/figure.png', 'preview', 'unsupported'],
-
-		// Everything else is reported rather than dropped on the floor.
-		['/notes/archive.zip', 'editor', 'unsupported'],
-		['/notes/archive.zip', 'preview', 'unsupported'],
-		['/notes/report.pdf', 'editor', 'unsupported'],
-		['/notes/no-extension', 'editor', 'unsupported'],
-	];
-
-	test('every file has an answer on both panes', () => {
-		for (const [path, pane, action] of ROUTES) {
-			assert.equal(routeDroppedFile(path, pane), action, `${path} on the ${pane}`);
-		}
-	});
-
-	test('nothing routes to silence', () => {
-		// The defect in one sentence: a path that matched no branch produced no
-		// action at all. There is no fourth answer to return now, and this is the
-		// assertion that says so.
-		const answers: DropAction[] = ['insert', 'open', 'unsupported'];
-		for (const pane of ['editor', 'preview'] as DropPane[]) {
-			for (const path of ['/a.md', '/a.png', '/a.zip', '/a', '/a.md.zip', '']) {
-				assert.ok(answers.includes(routeDroppedFile(path, pane)), `${path} on the ${pane}`);
-			}
-		}
-	});
-
-	test('the image list and the document list cannot overlap', () => {
-		// They are asked in order, so an extension in both would take whichever
-		// branch runs first rather than the one that suits it.
-		for (const extension of DROPPABLE_IMAGE_EXTENSIONS) {
-			assert.equal(routeDroppedFile(`/notes/figure.${extension}`, 'editor'), 'insert', extension);
-		}
-	});
-
-	test('a drop zone names what the drop will do there (#928)', () => {
-		// The editor zone said "Drop to Embed" for every file, and a document
-		// dropped on it opened.
-		assert.equal(dropZoneLabel(['/notes/spec.md'], 'editor'), 'open');
-		assert.equal(dropZoneLabel(['/notes/img/figure.png'], 'editor'), 'embed');
-		assert.equal(dropZoneLabel(['/notes/spec.md', '/notes/img/figure.png'], 'editor'), 'embed');
-		assert.equal(dropZoneLabel(['/notes/img/figure.png'], 'preview'), 'open');
-	});
-
-	test('a drop outside both panes opens a document in every mode', () => {
-		// In edit or split mode, a `.md` dropped on the tab strip was tracked over
-		// neither pane and the batch was dropped without a word, while the same
-		// drop in reading mode opened it.
-		assert.equal(dropPaneFor(null, true), 'preview');
-		assert.equal(dropPaneFor(null, false), 'preview');
-		assert.equal(routeDroppedFile('/notes/spec.md', dropPaneFor(null, true)), 'open');
-		assert.equal(dropPaneFor('editor', true), 'editor');
-		// The editor pane is only the editor while an editor is mounted there.
-		assert.equal(dropPaneFor('editor', false), 'preview');
-		assert.equal(dropPaneFor('preview', true), 'preview');
-	});
-
-	test('the viewer routes both panes through it, and acts on all three answers', () => {
-		const drop = (target: DropPane | null, hasEditor: boolean, paths: string[]) => {
-			const calls: string[] = [];
-			handleDrop(paths, target, hasEditor, {
-				insert: (path) => calls.push(`insert ${path}`),
-				open: (path) => calls.push(`open ${path}`),
-				unsupported: (path) => calls.push(`unsupported ${path}`),
-			});
-			return calls;
-		};
-		const batch = ['/n/spec.md', '/n/figure.png', '/n/archive.zip'];
-
-		assert.deepEqual(drop('editor', true, batch), [
-			'open /n/spec.md',
-			'insert /n/figure.png',
-			'unsupported /n/archive.zip',
-		]);
-		assert.deepEqual(drop('preview', true, batch), [
-			'open /n/spec.md',
-			'unsupported /n/figure.png',
-			'unsupported /n/archive.zip',
-		]);
-		// Off both panes, a document still opens.
-		assert.deepEqual(drop(null, true, ['/n/spec.md']), ['open /n/spec.md']);
-		// No editor mounted: the editor pane answers as the preview.
-		assert.deepEqual(drop('editor', false, ['/n/figure.png']), ['unsupported /n/figure.png']);
 	});
 });
 

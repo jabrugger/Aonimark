@@ -85,29 +85,6 @@ describe('stale theme load', () => {
 		);
 	});
 
-	test('Monaco loading for the first time does not repaint the editor after a newer choice', async () => {
-		// Another test may already have loaded Monaco. A fresh module registry, a
-		// re-registered mock and a held import make this load the first one again.
-		monaco.hold();
-		monaco.setTheme.mockClear();
-		vi.resetModules();
-		vi.doMock('monaco-editor', () => monaco.factory());
-		const theme = await import('../src/lib/utils/theme.js');
-
-		const load = theme.loadVscodeTheme('Dark Thing', async () => THEME);
-		// Let the read land and the parse reach `import('monaco-editor')`.
-		await vi.waitFor(() => expect(document.documentElement.dataset.theme).toBe('vscode'));
-
-		chooseLight(theme.clearVscodeTheme);
-		monaco.release();
-
-		expect(await load).toBe(false);
-		expect(monaco.setTheme).not.toHaveBeenCalled();
-
-		// And a load nobody replaced still reaches the editor.
-		expect(await theme.loadVscodeTheme('Dark Thing', async () => THEME)).toBe(true);
-		expect(monaco.setTheme).toHaveBeenCalledWith('vscode-custom');
-	});
 });
 
 describe('theme CSS validation', () => {

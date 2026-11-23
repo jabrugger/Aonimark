@@ -48,8 +48,6 @@ import type { OSType } from '../stores/settings.svelte.js';
  * to name `tabManager.cycleTab` for both and could not tell them apart.
  */
 export type ViewerCommand =
-	| 'preview-width-narrower'
-	| 'preview-width-wider'
 	| 'reload-from-disk'
 	| 'move-tab-to-next-window'
 	| 'close-file'
@@ -65,16 +63,12 @@ export type ViewerCommand =
 	| 'undo-close-tab'
 	| 'next-tab'
 	| 'previous-tab'
-	| 'history-back'
-	| 'history-forward'
 	| 'zoom-in'
 	| 'zoom-out'
 	| 'zoom-reset'
 	| 'open-settings'
 	| 'toggle-home'
-	| 'export-pdf'
-	| 'reveal-file'
-	| 'find';
+	| 'reveal-file';
 
 /**
  * The keystroke, as much of it as any branch reads.
@@ -117,8 +111,6 @@ export type KeyContext = {
 	/** The app is still loading its first document; nothing is dispatched. */
 	readonly mode: 'loading' | 'app';
 	readonly osType: OSType;
-	/** The active tab shows both panes, which keeps the preview reachable. */
-	readonly isSplit: boolean;
 	/** Settings, the modal, the prompt or the home screen is in front. */
 	readonly overlayOpen: boolean;
 	/**
@@ -126,50 +118,7 @@ export type KeyContext = {
 	 * keyboard, and a chord behind it could open a second dialog over the first.
 	 */
 	readonly dialogOpen: boolean;
-	readonly isEditing: boolean;
-	/** The caret is inside the Monaco pane, so Monaco's own Find should answer. */
-	readonly editorHasFocus: boolean;
 };
-
-const TEXT_FIELD = 'input, textarea, select, [contenteditable="true"], [role="textbox"]';
-
-/**
- * Whether the preview-width chords apply, given what the keystroke landed on.
- *
- * Exported because it reads the DOM, so a test cannot state it as a boolean:
- * `Mod+Alt+[` inside a text field is the field's business.
- */
-export function canUsePreviewWidthShortcut(target: EventTarget | null | undefined, context: KeyContext): boolean {
-	if (context.overlayOpen || (context.isEditing && !context.isSplit)) return false;
-	return !closestIn(target, TEXT_FIELD);
-}
-
-function closestIn(target: EventTarget | null | undefined, selector: string): boolean {
-	// `typeof target.closest === 'function'` rather than `target instanceof
-	// Element`, which is what this said while it lived in the component. The
-	// module is imported by `node --test` files that have no DOM at all, where
-	// the bare global is a ReferenceError rather than a false — and `instanceof`
-	// against a DOM constructor is the wrong test anyway for a node from another
-	// realm. The method being called is the thing worth asking about.
-	const element = target as Element | null | undefined;
-	return typeof element?.closest === 'function' && element.closest(selector) !== null;
-}
-
-/**
- * Whether the Alt+arrow chords belong to the field the keystroke landed on.
- *
- * Option+Left/Right is word-jump in a macOS text field, so the find bar, the
- * settings fields and the tag input keep it. Monaco's own input does not: on
- * macOS Monaco binds Option+Left/Right itself and stops the event before it
- * gets here, and the rest — Cmd+Option+arrows, Alt+arrows off macOS — Monaco
- * leaves unbound, so they have always switched tabs and history from the
- * editor. `.inputarea` and `.native-edit-context` are its input under each of
- * its two edit-context implementations.
- */
-function arrowChordsBelongToField(target: EventTarget | null | undefined): boolean {
-	return closestIn(target, TEXT_FIELD)
-		&& !closestIn(target, '.inputarea, .native-edit-context');
-}
 
 /**
  * The command this keystroke means, or null for one the app does not bind.
@@ -218,11 +167,6 @@ export function viewerCommandFor(e: KeyStroke, context: KeyContext): ViewerComma
 	// The macOS application menu owns ⌘Q: left unprevented, it reaches the
 	// menu's Quit.
 	if (context.osType === 'macos' && mod && key === 'q') return null;
-
-	if (modAlt && (code === 'BracketLeft' || code === 'BracketRight')) {
-		if (!canUsePreviewWidthShortcut(e.target, context)) return null;
-		return code === 'BracketLeft' ? 'preview-width-narrower' : 'preview-width-wider';
-	}
 
 	if (!cmdOrCtrl && !e.shiftKey && !e.altKey && code === 'F5') return 'reload-from-disk';
 	if (modShift && key === 'm') return 'move-tab-to-next-window';
@@ -284,11 +228,8 @@ export function viewerCommandFor(e: KeyStroke, context: KeyContext): ViewerComma
 	if (mod && code === 'PageDown') return 'next-tab';
 	// Alt-based chords, so they say what they need by hand: `mod` would demand
 	// Alt be up, which is the opposite of what these two bind.
-	if ((code === 'ArrowLeft' || code === 'ArrowRight') && e.altKey && arrowChordsBelongToField(e.target)) return null;
 	if (e.metaKey && !e.ctrlKey && e.altKey && !e.shiftKey && code === 'ArrowLeft') return 'previous-tab';
 	if (e.metaKey && !e.ctrlKey && e.altKey && !e.shiftKey && code === 'ArrowRight') return 'next-tab';
-	if (e.altKey && !e.shiftKey && !cmdOrCtrl && code === 'ArrowLeft') return 'history-back';
-	if (e.altKey && !e.shiftKey && !cmdOrCtrl && code === 'ArrowRight') return 'history-forward';
 	// The one chord that cannot demand Shift be up. `+` IS the shifted `=` on
 	// the layouts that have both, so `mod` would delete the `+` spelling
 	// outright and leave Cmd+Shift+= — how a lot of people zoom in — dead. The
@@ -301,21 +242,8 @@ export function viewerCommandFor(e: KeyStroke, context: KeyContext): ViewerComma
 	if (mod && key === '0') return 'zoom-reset';
 	if (mod && key === ',') return 'open-settings';
 	if (modShift && key === 'h') return 'toggle-home';
-	// Export as PDF. Not the `Mod+Shift+E` the request asked for: Inline Code has
-	// held that since the formatting chords were added, and the editor toolbar
-	// prints it. `P` is the print mnemonic every app shares, and the unshifted
-	// `Mod+P` is already the command palette — the same place Obsidian puts it,
-	// which is where this app's users are coming from.
-	if (modShift && key === 'p') return 'export-pdf';
 	// Had only the Monaco half, so it did nothing in the preview.
 	if (modShift && key === 'r') return 'reveal-file';
-	// Ctrl/Cmd+F: route to either Monaco's built-in find or the preview
-	// FindBar depending on focus and which panes are visible. The caller only
-	// preventDefaults when it takes the action itself — otherwise Monaco's own
-	// keybinding fires — which is why focus is a condition here rather than a
-	// branch inside the command.
-	if (mod && key === 'f' && !context.editorHasFocus) return 'find';
-
 	return null;
 }
 

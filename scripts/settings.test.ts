@@ -3,7 +3,6 @@ import { describe, test } from 'node:test';
 
 import { DEFAULT_AUTO_SAVE, resolveAutoSave } from '../src/lib/utils/autoSaveSetting.js';
 import { fontFamilyValue } from '../src/lib/utils/fontFamily.js';
-import { editorOptionsFromSettings } from '../src/lib/utils/editorOptions.js';
 import { previewAppearanceFrom } from '../src/lib/utils/previewLayout.js';
 import { getSupportedLanguages, type LanguageCode, t, type Translation, type TranslationKey } from '../src/lib/utils/i18n.js';
 import { isHexColor, isSafeCssColor, sanitizeThemeColors } from '../src/lib/utils/theme.js';
@@ -127,39 +126,6 @@ describe('font family values', () => {
 		assert.equal(fontFamilyValue('  Lato  ', 'sans-serif'), '"Lato", sans-serif');
 	});
 
-	test('a chosen family reaches the preview, its code and the editor quoted', () => {
-		const hostile = 'x"; color: red; font-family: "y';
-		const quoted = '"x\\"; color: red; font-family: \\"y"';
-		const appearance = previewAppearanceFrom({
-			previewFont: hostile,
-			previewFontSize: 16,
-			codeFont: 'Gill Sans (Body)',
-			codeFontSize: 14,
-			highlightColor: 'yellow',
-		});
-		assert.equal(appearance.fontFamily, `${quoted}, sans-serif`);
-		assert.equal(appearance.codeFontFamily, '"Gill Sans (Body)", monospace');
-
-		const editor = editorOptionsFromSettings(
-			{
-				minimap: false,
-				stickyScroll: true,
-				wordWrap: 'on',
-				editorMaxWidth: 80,
-				lineNumbers: 'on',
-				renderLineHighlight: 'line',
-				occurrencesHighlight: false,
-				editorFontSize: 14,
-				editorFont: 'M+ 1c',
-				animateJumpScroll: false,
-				animateCursor: false,
-				showWhitespace: false,
-				typewriterMode: false,
-			},
-			100,
-		);
-		assert.equal(editor.fontFamily, '"M+ 1c", monospace');
-	});
 });
 
 describe('theme CSS validation', () => {

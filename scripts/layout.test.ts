@@ -3,12 +3,9 @@ import { describe, test } from 'node:test';
 import postcss, { type Rule } from 'postcss';
 
 import { asBufferLine, asRendererLine, lineCoordinates, tabAnchorForEditorTopLine } from '../src/lib/utils/lineCoordinates.js';
-import { outwardSign, planPaneSlide } from '../src/lib/utils/paneSlide.js';
 import { getScrollSyncPositionFromPixels, getScrollTopForSyncPosition, type ScrollSyncPosition } from '../src/lib/utils/scrollSync.js';
 import { splitRatioAfterDrag, splitRatioAfterKey, splitRatioAfterMove } from '../src/lib/utils/splitPanes.ts';
-import { activeTocIdForLine, sourceLineOf, type TocLineEntry } from '../src/lib/utils/tocFollow.js';
 import { isTocOverhanging, isTocOverPreview } from '../src/lib/utils/tocOverlay.ts';
-import { bindScrollSync } from '../src/lib/utils/editorJumps.js';
 import { FOLD_TRANSITION_MS } from '../src/lib/utils/foldLayout.js';
 import { readSource } from './sourceTree.js';
 
@@ -234,32 +231,6 @@ describe('split pane ratio', () => {
 			assert.equal(Math.sign(splitRatioAfterKey(0.5, 'ArrowLeft', side)! - 0.5), -Math.sign(keyed - 0.5), side);
 		}
 		assert.equal(splitRatioAfterKey(0.5, 'Enter', 'left'), null);
-	});
-});
-
-describe('pane slide on view mode switch', () => {
-	const preview = { editor: false, viewer: true };
-	const edit = { editor: true, viewer: false };
-	const split = { editor: true, viewer: true };
-
-	test('each view mode switch names the pane that comes and the one that goes', () => {
-		assert.deepEqual(planPaneSlide(preview, split), { entering: 'editor', leaving: null });
-		assert.deepEqual(planPaneSlide(split, preview), { entering: null, leaving: 'editor' });
-		assert.deepEqual(planPaneSlide(edit, split), { entering: 'viewer', leaving: null });
-		assert.deepEqual(planPaneSlide(split, edit), { entering: null, leaving: 'viewer' });
-		assert.deepEqual(planPaneSlide(preview, edit), { entering: 'editor', leaving: 'viewer' });
-		assert.deepEqual(planPaneSlide(edit, preview), { entering: 'viewer', leaving: 'editor' });
-	});
-
-	test('the same panes on screen is no slide', () => {
-		for (const mode of [preview, edit, split]) assert.equal(planPaneSlide(mode, mode), null);
-	});
-
-	test('a pane slides from its own outer edge, whichever side the editor is on', () => {
-		assert.equal(outwardSign('editor', false), -1);
-		assert.equal(outwardSign('viewer', false), 1);
-		assert.equal(outwardSign('editor', true), 1);
-		assert.equal(outwardSign('viewer', true), -1);
 	});
 });
 
@@ -505,109 +476,6 @@ describe('fold measurement batching', () => {
 	});
 });
 
-/**
- * #169: the outline highlights the heading you are reading, but only ever
- * answered to the PREVIEW.
- *
- * `Toc.svelte` decided by rendered box — `querySelector` each visible entry
- * out of the preview and measure it against the container, per entry, per
- * scroll event. That question has no answer while the editor is the pane being
- * scrolled: in editor-only mode the preview never scrolls, and in split view
- * it moves only while scroll sync is on. So the outline sat still exactly
- * where the reporter said it did.
- *
- * A SOURCE LINE is something both panes can produce — the editor sends one on
- * every scroll, and the preview already computes one for the tab's reading
- * position — so the rule is now one comparison over a list, fed by either.
- * That the two panes share it is the property worth having: in split view with
- * sync on both are live at once, and two rules could disagree as the panes
- * settle and flicker the highlight between two entries.
- */
-describe('outline follows the editor', () => {
-	/**
-	 * Every line in the outline is a BODY line, because the outline is built out of
-	 * `data-sourcepos` and that attribute counts from the first line of the body.
-	 * The alias is here so each fixture below says which of the two numberings it
-	 * is written in — the distinction this whole file turns on.
-	 */
-	const bodyLine = asRendererLine;
-
-	/** An outline of a document whose headings are 20 source lines apart. */
-	const OUTLINE: TocLineEntry[] = [
-		{ id: 'intro', line: bodyLine(1) },
-		{ id: 'setup', line: bodyLine(21) },
-		{ id: 'a-block-anchor', line: null },
-		{ id: 'usage', line: bodyLine(41) },
-		{ id: 'api', line: bodyLine(61) },
-	];
-
-	test('the active entry is the last heading at or above the editor position', () => {
-		assert.equal(activeTocIdForLine(OUTLINE, bodyLine(1)), 'intro');
-		assert.equal(activeTocIdForLine(OUTLINE, bodyLine(20)), 'intro');
-		assert.equal(activeTocIdForLine(OUTLINE, bodyLine(21)), 'setup');
-		assert.equal(activeTocIdForLine(OUTLINE, bodyLine(40.7)), 'setup');
-		assert.equal(activeTocIdForLine(OUTLINE, bodyLine(41)), 'usage');
-		assert.equal(activeTocIdForLine(OUTLINE, bodyLine(4000)), 'api');
-	});
-
-	test('a position above every heading takes the first entry, as the preview does', () => {
-		// Answering `null` here would blank the outline on the way past the top of
-		// a document scrolled in the editor.
-		assert.equal(activeTocIdForLine([{ id: 'later', line: bodyLine(12) }], bodyLine(3)), 'later');
-	});
-
-	test('an entry with no source range never becomes active, and never hides one that has', () => {
-		// Block anchors (`^id`) are in the outline and carry no range of their own.
-		// A `null` must not be read as line 0 and swallow every position after it.
-		assert.equal(activeTocIdForLine(OUTLINE, bodyLine(45)), 'usage');
-		assert.equal(activeTocIdForLine([{ id: 'block', line: null }], bodyLine(900)), 'block');
-	});
-
-	test('nothing to follow yields nothing, rather than a stale entry', () => {
-		assert.equal(activeTocIdForLine([], bodyLine(12)), null);
-		assert.equal(activeTocIdForLine(OUTLINE, bodyLine(Number.NaN)), null);
-	});
-
-	test('the start line comes from the sourcepos comrak wrote, or nothing', () => {
-		assert.equal(sourceLineOf('42:1-44:9'), 42);
-		assert.equal(sourceLineOf('7:1-7:12'), 7);
-		assert.equal(sourceLineOf(undefined), null);
-		assert.equal(sourceLineOf(''), null);
-		assert.equal(sourceLineOf('0:1-0:1'), null);
-		assert.equal(sourceLineOf('nonsense'), null);
-	});
-
-	test('the editor position is converted before the outline compares it', () => {
-		// What the assertion above cannot see, and what a regular expression over
-		// the viewer's source never could: whether the conversion is the RIGHT one.
-		// This is the shift itself, over the outline's own rule.
-		const raw = ['---', 'title: "T"', 'tags:', '  - a', '---', '', '# Intro'].join('\n') + '\n';
-		const coords = lineCoordinates(raw);
-		assert.equal(coords.frontMatterLines, 6, 'the fixture must actually have front matter');
-
-		// The top of the editor's viewport is body line 18, which is buffer line
-		// 24 because six lines of YAML sit above it. The reader's anchor sits two
-		// lines below that, on body line 20: the last line of the intro section.
-		const topLine = asBufferLine(18 + coords.frontMatterLines);
-		assert.equal(activeTocIdForLine(OUTLINE, tabAnchorForEditorTopLine(coords, topLine)), 'intro');
-
-		// Handed over unconverted it is past the next heading, and the outline
-		// highlights the section the reader has not reached yet. That is the whole
-		// defect, and it is invisible in a document without front matter — which is
-		// every other fixture in this file.
-		assert.equal(activeTocIdForLine(OUTLINE, asRendererLine(topLine)), 'setup');
-
-		// And with the top line one short of a heading — the heading is the first
-		// line fully on screen, the line above it is the one the viewport cuts —
-		// the anchor is on the heading and the outline has moved on. Fed the raw
-		// top line it would still say `intro`, one entry behind what the reader
-		// sees at the top of the editor.
-		const cutLine = asBufferLine(19 + coords.frontMatterLines);
-		assert.equal(activeTocIdForLine(OUTLINE, tabAnchorForEditorTopLine(coords, cutLine)), 'setup');
-		assert.equal(activeTocIdForLine(OUTLINE, coords.toRendererLine(cutLine)), 'intro');
-	});
-});
-
 describe('outline overlay placement', () => {
 	const DEFAULTS = {
 		// TOC_WIDTH_RANGE.default and DEFAULT_PREVIEW_MAX_WIDTH.
@@ -732,31 +600,6 @@ describe('outline overlay placement', () => {
 			isTocOverhanging({ ...DEFAULTS, ...reading, tocSide: 'left', viewerWidth: 600, tocWidth: 60 }),
 			true,
 		);
-	});
-});
-
-describe('scroll sync input', () => {
-	test('typing does not initiate split scroll synchronization', () => {
-		// The editor-to-preview sync listens to scrolling. A caret move by itself,
-		// which every keystroke is, must not drag the other pane along.
-		const listeners: Record<string, ((e: unknown) => void)[]> = { scroll: [], cursor: [] };
-		const on = (kind: string) => (listener: (e: unknown) => void) => {
-			listeners[kind].push(listener);
-			return { dispose: () => listeners[kind].splice(listeners[kind].indexOf(listener), 1) };
-		};
-		const editor = { onDidScrollChange: on('scroll'), onDidChangeCursorPosition: on('cursor') };
-		let synced = 0;
-		const binding = bindScrollSync(editor as never, () => synced++);
-
-		for (const listener of listeners.cursor) listener({ position: { lineNumber: 2, column: 4 } });
-		for (const listener of listeners.scroll) listener({ scrollTopChanged: false, scrollLeftChanged: true });
-		assert.equal(synced, 0);
-
-		for (const listener of listeners.scroll) listener({ scrollTopChanged: true });
-		assert.equal(synced, 1);
-
-		binding.dispose();
-		assert.deepEqual(listeners, { scroll: [], cursor: [] });
 	});
 });
 

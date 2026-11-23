@@ -26,15 +26,11 @@ export type AppMenuCommand =
 	| 'check-updates'
 	| 'open-folder'
 	| 'close-folder'
-	| 'export-html'
-	| 'toggle-toc'
-	| 'toggle-full-width'
 	| 'merge-windows'
 	| 'set-window-tag';
 
 export type MenuAction =
 	| { readonly viewer: ViewerCommand }
-	| { readonly editor: string }
 	| { readonly app: AppMenuCommand };
 
 type PredefinedItem = Exclude<PredefinedMenuItemOptions['item'], 'Separator'>;
@@ -49,11 +45,7 @@ export type MenuNode =
 export type MenuState = {
 	readonly language: LanguageCode;
 	readonly liveMode: boolean;
-	/** The editor is on screen, so the Format items have somewhere to act. */
-	readonly hasEditorPane: boolean;
-	readonly showToc: boolean;
 	readonly showTabs: boolean;
-	readonly previewFullWidth: boolean;
 };
 
 /**
@@ -80,14 +72,6 @@ export function buildMenuModel(state: MenuState): MenuNode[] {
 	const viewer = (text: string, command: ViewerCommand, shortcutId?: string, chord?: number) =>
 		item(text, { viewer: command }, shortcutId, chord);
 	const app = (text: string, command: AppMenuCommand, shortcutId?: string) => item(text, { app: command }, shortcutId);
-	// The toolbar's buttons run the same action ids through the same call.
-	const format = (text: string, actionId: string): MenuNode => ({
-		kind: 'item',
-		text,
-		action: { editor: actionId },
-		accelerator: acceleratorOf(actionId),
-		enabled: state.hasEditorPane,
-	});
 	// Named after the state, checked while it is on (macOS convention).
 	const check = (text: string, action: MenuAction, checked: boolean, shortcutId?: string, enabled = true): MenuNode => ({
 		kind: 'check',
@@ -133,8 +117,6 @@ export function buildMenuModel(state: MenuState): MenuNode[] {
 				viewer(t('menu.reloadFromDisk', lang), 'reload-from-disk'),
 				viewer(t('menu.openFileLocation', lang), 'reveal-file', 'file-reveal'),
 				separator,
-				app(t('menu.exportHtml', lang), 'export-html'),
-				viewer(t('menu.exportPdf', lang), 'export-pdf', 'file-export-pdf'),
 			],
 		},
 		{
@@ -151,32 +133,6 @@ export function buildMenuModel(state: MenuState): MenuNode[] {
 				{ kind: 'predefined', item: 'Copy', text: t('menu.copy', lang) },
 				{ kind: 'predefined', item: 'Paste', text: t('menu.paste', lang) },
 				{ kind: 'predefined', item: 'SelectAll', text: t('menu.selectAll', lang) },
-				separator,
-				viewer(t('menu.find', lang), 'find', 'app-find'),
-				{
-					kind: 'submenu',
-					text: t('menu.format', lang),
-					items: [
-						format(t('menu.bold', lang), 'fmt-bold'),
-						format(t('menu.italic', lang), 'fmt-italic'),
-						format(t('menu.underline', lang), 'fmt-underline'),
-						format(t('menu.strikethrough', lang), 'fmt-strikethrough'),
-						format(t('menu.inlineCode', lang), 'fmt-inline-code'),
-						format(t('menu.codeBlock', lang), 'fmt-code-block'),
-						format(t('menu.quote', lang), 'fmt-quote'),
-						separator,
-						format(t('menu.heading1', lang), 'fmt-heading-1'),
-						format(t('menu.heading2', lang), 'fmt-heading-2'),
-						format(t('menu.heading3', lang), 'fmt-heading-3'),
-						separator,
-						format(t('menu.bulletList', lang), 'fmt-bullet-list'),
-						format(t('menu.numberedList', lang), 'fmt-numbered-list'),
-						format(t('menu.checklist', lang), 'fmt-checklist'),
-						separator,
-						format(t('menu.link', lang), 'fmt-link'),
-						format(t('menu.insertTable', lang), 'insert-table-simple'),
-					],
-				},
 			],
 		},
 		{
@@ -185,13 +141,7 @@ export function buildMenuModel(state: MenuState): MenuNode[] {
 			items: [
 				check(t('menu.autoReload', lang), { viewer: 'toggle-live-mode' }, state.liveMode, 'view-toggle-live'),
 				separator,
-				check(t('menu.tableOfContents', lang), { app: 'toggle-toc' }, state.showToc),
 				check(t('menu.tabBar', lang), { viewer: 'toggle-tabs' }, state.showTabs, 'toggle-tabs'),
-				check(t('menu.fullWidth', lang), { app: 'toggle-full-width' }, state.previewFullWidth),
-				// ⌘⌥[ and ⌘⌥] stay text-field keys inside a field, where the page
-				// lets them through; an accelerator here would catch them there.
-				viewer(t('menu.previewNarrower', lang), 'preview-width-narrower'),
-				viewer(t('menu.previewWider', lang), 'preview-width-wider'),
 				separator,
 				viewer(t('menu.zoomIn', lang), 'zoom-in', 'view-zoom-in'),
 				viewer(t('menu.zoomOut', lang), 'zoom-out', 'view-zoom-out'),
@@ -208,9 +158,6 @@ export function buildMenuModel(state: MenuState): MenuNode[] {
 				{ kind: 'predefined', item: 'Minimize', text: t('common.minimize', lang) },
 				{ kind: 'predefined', item: 'Maximize', text: t('menu.zoomWindow', lang) },
 				separator,
-				// No accelerators: ⌥←/→ and ⌘[/] are caret and indent keys in the editor.
-				viewer(t('menu.back', lang), 'history-back'),
-				viewer(t('menu.forward', lang), 'history-forward'),
 				viewer(t('menu.home', lang), 'toggle-home', 'app-home'),
 				separator,
 				// Ctrl+Tab is not a reliable menu key equivalent; the page answers it.

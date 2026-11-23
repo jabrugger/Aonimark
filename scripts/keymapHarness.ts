@@ -1,52 +1,26 @@
 import assert from 'node:assert/strict';
 
-import { decodeKeybinding, type KeyCodeChord } from 'monaco-editor/esm/vs/base/common/keybindings.js';
-import { KeyCodeUtils } from 'monaco-editor/esm/vs/base/common/keyCodes.js';
-import { KeyCode } from 'monaco-editor/esm/vs/editor/common/standalone/standaloneEnums.js';
-import { KeyMod } from 'monaco-editor/esm/vs/editor/common/services/editorBaseApi.js';
-
 import { viewerCommandFor, type KeyContext, type ViewerCommand } from '../src/lib/utils/viewerKeymap.js';
 import { viewerCommandTable, type ViewerCommandHost } from '../src/lib/utils/viewerCommands.js';
-import { editorActions, editorKeyCommands, type EditorActionDeps, type EditorKeyCommand } from '../src/lib/utils/editorActions.js';
 
 /*
- * RUNNING the app's two keyboard layers, so tests can ask what a chord DOES.
+ * RUNNING the app's keyboard layer, so tests can ask what a chord DOES.
  *
- * Extracted (#480) when a second test file
- * — the shortcut-registry contract — needed the same two functions. It is the
- * same harness, not a parallel one: both callers get the same keymaps from the
- * same extraction, so there is no way for one of them to be checked against a
- * more forgiving model of the app than the other.
- *
- * Both layers are imported and run: the editor's keymap from
- * `src/lib/utils/editorActions.ts`, the document-level dispatcher from
- * `src/lib/utils/viewerKeymap.ts`. Keybinding numbers come from Monaco's real
- * `KeyMod` and `KeyCode` and are turned back into chords by Monaco's real
- * `decodeKeybinding`, once per operating system. Changing a KEY changes the
- * answer; renaming a local does not.
+ * The document-level dispatcher, `viewerCommandFor` in
+ * `src/lib/utils/viewerKeymap.ts`, is imported and called. A chord is spelled
+ * the way the registry spells it once translated by `toChordLabel`: modifiers in
+ * the order Ctrl, Shift, Alt, Meta, then the key name.
  *
  * WHAT IT DOES NOT ESTABLISH
  *
- * - That Monaco delivers these chords at runtime. Resolution order, the `when`
- *   clauses and the vim adapter all live in a browser. What is pinned here is
+ * - That the webview delivers these chords at runtime. What is pinned here is
  *   the keymap the app declares.
  * - Layout-dependent `key` values. The synthetic events carry the UNSHIFTED
  *   character (`key: ','`, not `'<'`), because that is the only value that is
  *   the same on every keyboard layout.
  */
 
-// --------------------------------------------------------------- chord labels
-
 export type Chord = string;
-
-/**
- * `OperatingSystem` is a TypeScript `const enum` in Monaco, so the shipped ESM
- * has the numbers inlined and exports no symbol to import. The values are the
- * ones `vs/base/common/platform.js` inlines when it computes its own `OS`.
- */
-export const OperatingSystem = { Windows: 1, Macintosh: 2, Linux: 3 } as const;
-
-type OperatingSystemValue = (typeof OperatingSystem)[keyof typeof OperatingSystem];
 
 const MODIFIER_ORDER = ['Ctrl', 'Shift', 'Alt', 'Meta'] as const;
 
@@ -55,7 +29,7 @@ export function label(parts: {
 	shiftKey: boolean;
 	altKey: boolean;
 	metaKey: boolean;
-	keyCode: number;
+	keyName: string;
 }): string {
 	const mods = [
 		parts.ctrlKey && 'Ctrl',
@@ -63,154 +37,61 @@ export function label(parts: {
 		parts.altKey && 'Alt',
 		parts.metaKey && 'Meta',
 	].filter(Boolean) as Array<(typeof MODIFIER_ORDER)[number]>;
-	return [...MODIFIER_ORDER.filter((m) => mods.includes(m)), KeyCodeUtils.toString(parts.keyCode)].join('+');
-}
-
-/** A Monaco keybinding number, as the chord (or chord sequence) Monaco resolves it to. */
-export function chordOf(binding: number, os: OperatingSystemValue): Chord {
-	const decoded = decodeKeybinding(binding, os);
-	assert.ok(decoded, `Monaco could not decode keybinding ${binding}`);
-	return decoded.chords.map((chord) => label(chord as KeyCodeChord)).join(' ');
+	return [...MODIFIER_ORDER.filter((m) => mods.includes(m)), parts.keyName].join('+');
 }
 
 export const PLATFORMS = [
-	{ name: 'macOS', os: OperatingSystem.Macintosh, osType: 'macos', mac: true },
-	{ name: 'Windows', os: OperatingSystem.Windows, osType: 'windows', mac: false },
-	{ name: 'Linux', os: OperatingSystem.Linux, osType: 'linux', mac: false },
+	{ name: 'macOS', osType: 'macos', mac: true },
+	{ name: 'Windows', osType: 'windows', mac: false },
+	{ name: 'Linux', osType: 'linux', mac: false },
 ] as const;
-
-// ------------------------------------------------- the editor (Monaco) layer
-
-type ActionDescriptor = {
-	id: string;
-	label: string;
-	keybindings?: number[];
-	keybindingContext?: string;
-	run: (ed?: unknown) => unknown;
-};
-
-/**
- * Every action `editorActions` (utils/editorActions.ts) declares, for one
- * platform, labelled in English.
- *
- * The keybinding numbers come from Monaco's real `KeyMod`/`KeyCode`. Everything
- * an action's `run` reaches — the component's editing primitives, `oncommand`,
- * the settings store — is a recording stub, so `calls` says what running an
- * action did: `oncommand("new-file")`, `toggleLineMarkerTool("fmt-quote")`,
- * `settings.toggleWordWrap`.
- */
-export function registeredActions(mac: boolean): { actions: ActionDescriptor[]; calls: string[] } {
-	const calls: string[] = [];
-	const record = (name: string) =>
-		(...args: unknown[]) => {
-			calls.push(args.length ? `${name}(${args.map((a) => JSON.stringify(a)).join(',')})` : name);
-			return undefined;
-		};
-	const recorder = (prefix: string) =>
-		new Proxy({}, { get: (_target, key) => record(`${prefix}${String(key)}`) });
-
-	const deps = new Proxy(
-		{ monaco: { KeyMod, KeyCode }, isMac: mac, settings: recorder('settings.') } as Record<string, unknown>,
-		{ get: (target, key) => (typeof key === 'string' && key in target ? target[key] : record(String(key))) },
-	) as unknown as EditorActionDeps;
-
-	const actions = editorActions(deps, 'en') as unknown as ActionDescriptor[];
-	return { actions, calls };
-}
-
-/** actionId -> chord, for the actions that declare one. */
-export function editorKeymap(mac: boolean, os: OperatingSystemValue): Map<string, Chord[]> {
-	const map = new Map<string, Chord[]>();
-	for (const action of registeredActions(mac).actions) {
-		if (!action.keybindings?.length) continue;
-		map.set(
-			action.id,
-			action.keybindings.map((binding) => chordOf(binding, os)),
-		);
-	}
-	return map;
-}
-
-// ----------------------------------------------- the document (window) layer
 
 /**
  * The keys the document-level handler is fired with.
  *
  * `key` is the unshifted character and `code` the physical key, which is what a
  * US layout reports and what every layout reports for letters and digits.
+ * `keyName` is how a chord on that key is written in a label.
  */
-const FUZZ_KEYS: Array<{ keyCode: number; key: string; code: string }> = [
-	...'abcdefghijklmnopqrstuvwxyz'.split('').map((c) => ({
-		keyCode: KeyCode.KeyA + (c.charCodeAt(0) - 97),
-		key: c,
-		code: `Key${c.toUpperCase()}`,
-	})),
-	...'0123456789'.split('').map((c) => ({
-		keyCode: KeyCode.Digit0 + (c.charCodeAt(0) - 48),
-		key: c,
-		code: `Digit${c}`,
-	})),
-	{ keyCode: KeyCode.Tab, key: 'Tab', code: 'Tab' },
-	{ keyCode: KeyCode.PageUp, key: 'PageUp', code: 'PageUp' },
-	{ keyCode: KeyCode.PageDown, key: 'PageDown', code: 'PageDown' },
-	{ keyCode: KeyCode.LeftArrow, key: 'ArrowLeft', code: 'ArrowLeft' },
-	{ keyCode: KeyCode.RightArrow, key: 'ArrowRight', code: 'ArrowRight' },
-	{ keyCode: KeyCode.F4, key: 'F4', code: 'F4' },
-	{ keyCode: KeyCode.F5, key: 'F5', code: 'F5' },
-	{ keyCode: KeyCode.Backslash, key: '\\', code: 'Backslash' },
-	{ keyCode: KeyCode.IntlBackslash, key: '\\', code: 'IntlBackslash' },
-	{ keyCode: KeyCode.BracketLeft, key: '[', code: 'BracketLeft' },
-	{ keyCode: KeyCode.BracketRight, key: ']', code: 'BracketRight' },
-	{ keyCode: KeyCode.Period, key: '.', code: 'Period' },
-	{ keyCode: KeyCode.Comma, key: ',', code: 'Comma' },
-	{ keyCode: KeyCode.Minus, key: '-', code: 'Minus' },
-	{ keyCode: KeyCode.Equal, key: '=', code: 'Equal' },
+const FUZZ_KEYS: Array<{ keyName: string; key: string; code: string }> = [
+	...'abcdefghijklmnopqrstuvwxyz'.split('').map((c) => ({ keyName: c.toUpperCase(), key: c, code: `Key${c.toUpperCase()}` })),
+	...'0123456789'.split('').map((c) => ({ keyName: c, key: c, code: `Digit${c}` })),
+	{ keyName: 'Tab', key: 'Tab', code: 'Tab' },
+	{ keyName: 'PageUp', key: 'PageUp', code: 'PageUp' },
+	{ keyName: 'PageDown', key: 'PageDown', code: 'PageDown' },
+	{ keyName: 'LeftArrow', key: 'ArrowLeft', code: 'ArrowLeft' },
+	{ keyName: 'RightArrow', key: 'ArrowRight', code: 'ArrowRight' },
+	{ keyName: 'F4', key: 'F4', code: 'F4' },
+	{ keyName: 'F5', key: 'F5', code: 'F5' },
+	{ keyName: '\\', key: '\\', code: 'Backslash' },
+	{ keyName: 'OEM_102', key: '\\', code: 'IntlBackslash' },
+	{ keyName: '[', key: '[', code: 'BracketLeft' },
+	{ keyName: ']', key: ']', code: 'BracketRight' },
+	{ keyName: '.', key: '.', code: 'Period' },
+	{ keyName: ',', key: ',', code: 'Comma' },
+	{ keyName: '-', key: '-', code: 'Minus' },
+	{ keyName: '=', key: '=', code: 'Equal' },
 ];
 
-/**
- * Reading the document, not editing it, with nothing in front of it — the state
- * every caller of `documentKeymap` is asking about.
- *
- * `editorHasFocus: false` is the reporter's scenario in #153 (preview mode) and
- * the one in which the app's own chords, rather than Monaco's, are supposed to
- * answer.
- */
-function readingContext(osType: string): KeyContext {
+/** The state every caller of `documentKeymap` is asking about: a dialog-free app window. */
+function appContext(osType: string): KeyContext {
 	return {
 		mode: 'app',
 		osType: osType as KeyContext['osType'],
-		isSplit: false,
 		overlayOpen: false,
 		dialogOpen: false,
-		isEditing: false,
-		editorHasFocus: false,
 	};
 }
 
 /**
  * Which command the document-level dispatcher means by each chord.
  *
- * The dispatcher is IMPORTED and called — `viewerCommandFor` is a plain
- * function of the keystroke and a seven-field context, so there is nothing to
- * extract, transpile or stand in for. It used to be the body of
- * `handleKeyDown` inside MarkdownViewer.svelte, and getting at it meant slicing
- * the function out of the component by name, running it through
- * `ts.transpileModule`, and evaluating it inside a `with` block whose scope
- * object answered EVERY free identifier with a recording stub.
- *
- * That last part is why the extraction was worth doing. A stub is indexable,
- * callable and self-similar, which makes it a plausible answer to a question the
- * harness has never heard of — and its result compares false to everything. #649
- * hit exactly that: `platformOf(...)` inside the handler resolved to a stub,
- * every `=== 'macos'` test against it was false, and the harness cheerfully
- * reported 610 answered chords where the app answers 51. The failure was silent
- * in both directions, because a stub neither throws nor refuses.
- *
- * Nothing here can go that way again. `viewerCommandFor` closes over nothing, so
- * a dependency it grows is a compile error at this call site rather than a stub.
+ * `viewerCommandFor` is a plain function of the keystroke and a small context,
+ * so it is called as it is: a dependency it grows is a compile error at this
+ * call site rather than a stand-in that answers every question.
  */
 export function documentKeymap(osType: string): Map<Chord, ViewerCommand> {
-	const context = readingContext(osType);
+	const context = appContext(osType);
 	const map = new Map<Chord, ViewerCommand>();
 
 	for (const primary of [
@@ -225,7 +106,7 @@ export function documentKeymap(osType: string): Map<Chord, ViewerCommand> {
 						{ ...primary, shiftKey, altKey, key: entry.key, code: entry.code, target: null },
 						context,
 					);
-					if (command) map.set(label({ ...primary, shiftKey, altKey, keyCode: entry.keyCode }), command);
+					if (command) map.set(label({ ...primary, shiftKey, altKey, keyName: entry.keyName }), command);
 				}
 			}
 		}
@@ -239,13 +120,12 @@ export function documentKeymap(osType: string): Map<Chord, ViewerCommand> {
 
 /**
  * What each `ViewerCommand` reaching the keyboard does, as the names of the
- * host members it touched: `'appExit'` for a call, `'settings.previewMaxWidth'`
- * for a read, `'settings.showTabs='` for a write.
+ * host members it touched: `'appExit'` for a call, `'settings.showTabs='` for a
+ * write.
  *
  * Runs the real `viewerCommandTable` (`viewerCommands.ts`) against a recording
  * host: any member the table asks for exists and is logged, so a command that
- * reached for something the host type never had (`addHomeTab`) shows up by
- * name. The active tab is `'tab-1'`, so split view has a tab to toggle.
+ * reached for something the host type never had shows up by name.
  */
 export function viewerCommandCalls(): Record<ViewerCommand, string[]> {
 	let calls: string[] = [];
@@ -284,29 +164,8 @@ export function viewerCommandCalls(): Record<ViewerCommand, string[]> {
 	return result;
 }
 
-// ------------------------------------- the nameless commands, and their handlers
-
-
-/** One `editor.addCommand(binding, handler, when)` call, as Monaco is handed it. */
-export type BareCommand = EditorKeyCommand;
-
-/**
- * Every bare `addCommand` the editor registers (`editorKeyCommands`): a
- * keybinding number from Monaco's real `KeyMod`/`KeyCode`, the name of the
- * handler, and the `when` clause.
- *
- * These are the keys with no action id — Enter, Tab, Shift+Tab, the clipboard
- * chords — so `registeredActions` above cannot see them.
- */
-export function bareCommands(): BareCommand[] {
-	return editorKeyCommands({ KeyMod, KeyCode } as never);
-}
-
-/**
- * The key names Monaco's `KeyCodeUtils.toString` prints, where they differ from
- * the way the registry spells the key for a human.
- */
-const MONACO_KEY_NAMES: Record<string, string> = {
+/** The key names the registry spells differently from a chord label. */
+const KEY_NAMES: Record<string, string> = {
 	Left: 'LeftArrow',
 	Right: 'RightArrow',
 };
@@ -314,34 +173,24 @@ const MONACO_KEY_NAMES: Record<string, string> = {
 /**
  * A registry chord as the harness spells the same chord.
  *
- * The registry is written for a reader (`Mod+Shift+E`); Monaco's decoder emits
- * `Shift+Meta+E` on macOS and `Ctrl+Shift+E` elsewhere, in its own modifier
- * order. Translating in this direction — registry into harness — rather than
- * the other way keeps the registry human-facing, and a mistake here makes
- * assertions FAIL rather than pass, because the comparison is against chords
- * the real code produced.
+ * The registry is written for a reader (`Mod+Shift+E`); a label puts the
+ * modifiers in a fixed order (`Shift+Meta+E` on macOS, `Ctrl+Shift+E`
+ * elsewhere). Translating in this direction keeps the registry human-facing,
+ * and a mistake here makes assertions FAIL rather than pass, because the
+ * comparison is against chords the real code produced.
  */
 export function toMonacoLabel(chord: string, mac: boolean): Chord {
 	return chord
-		.split(' ') // a chord SEQUENCE ("Mod+K T") is two chords
+		.split(' ')
 		.map((single) => {
 			const parts = single.split('+');
 			const key = parts.pop()!;
 			const mods = new Set(parts);
 			const ctrl = mods.has('Ctrl') || (mods.has('Mod') && !mac);
 			// A literal `Meta` stays Meta on every platform, the same way a literal
-			// `Ctrl` does. The registry has no such row — the chords that need this
-			// spelling are the unadvertised ones named in
-			// DOCUMENT_CHORDS_NOT_ADVERTISED, which are written in registry syntax so
-			// the exemption list and the registry read alike.
+			// `Ctrl` does.
 			const meta = mods.has('Meta') || (mods.has('Mod') && mac);
-			return [
-				ctrl && 'Ctrl',
-				mods.has('Shift') && 'Shift',
-				mods.has('Alt') && 'Alt',
-				meta && 'Meta',
-				MONACO_KEY_NAMES[key] ?? key,
-			]
+			return [ctrl && 'Ctrl', mods.has('Shift') && 'Shift', mods.has('Alt') && 'Alt', meta && 'Meta', KEY_NAMES[key] ?? key]
 				.filter(Boolean)
 				.join('+');
 		})

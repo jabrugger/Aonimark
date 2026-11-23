@@ -106,7 +106,6 @@ const ariaRange = {
 };
 
 const VIEWER = 'src/lib/MarkdownViewer.svelte';
-const EDITOR = 'src/lib/components/Editor.svelte';
 const BINDINGS = 'src/lib/bindings.ts';
 const SANITIZER_FILES = ['src/lib/utils/richContent.ts', 'src/lib/utils/sanitize.ts'];
 const callOf = (/** @type {string} */ name) => `CallExpression[callee.name='${name}'], CallExpression[callee.property.name='${name}']`;
@@ -161,36 +160,8 @@ const CONVENTIONS = {
 	},
 
 	// -------------------------------------------------------------------- editing
-	'one-copy-reference-builder': {
-		ignores: ['src/lib/utils/headingReference.ts'],
-		ban: {
-			"CallExpression[callee.name='referenceForTab']:not(FunctionDeclaration[id.name='copyHeadingReference'] *)":
-				'Copy Reference has one builder (copyHeadingReference in MarkdownViewer.svelte); the three menu entries used to build the string inline and disagreed.',
-		},
-	},
 
 	// --------------------------------------------------------------------- layout
-	'outline-takes-no-document-string': {
-		files: ['src/lib/components/Toc.svelte'],
-		ban: {
-			"Identifier[name='htmlContent']":
-				'The outline follows the revision the preview patch publishes, not the rendered document string.',
-		},
-	},
-	'split-ratio-is-clamped-by-the-store': {
-		files: ['src/lib/utils/splitPanes.ts'],
-		ban: {
-			"MemberExpression[object.name='Math'][property.name=/^(min|max)$/]":
-				'TabManager.setSplitRatio clamps; a second copy of the bounds here drifts from it.',
-		},
-	},
-	'splitter-direction-has-one-source': {
-		files: [VIEWER],
-		ban: {
-			"ConditionalExpression[test.right.value='left']:matches([test.left.name='splitEditorSide'], [test.left.property.name='splitEditorSide'])":
-				'Both splitter routes take the direction from the same place; a third route spelling it is the drift.',
-		},
-	},
 	'fold-layout-is-rooted-at-the-visible-host': {
 		files: [VIEWER],
 		ban: {
@@ -214,105 +185,13 @@ const CONVENTIONS = {
 				'One derivation, `lineCoords = $derived(lineCoordinates(rawContent))`: the render is what the front matter was stripped out of, so measuring it answers 0.',
 		},
 	},
-	'editor-derives-the-anchor-once': {
-		files: [EDITOR, 'src/lib/utils/editorDocument.svelte.ts'],
-		ban: {
-			"Identifier[name='tabAnchorForEditorTopLine']":
-				'The editor crosses from buffer to renderer numbering in editorReadingPosition (utils/editorPosition.ts) only.',
-		},
-		atMost: {
-			[callOf('editorReadingPosition')]: [1, 'The editor derives its reading position in one place.'],
-		},
-	},
 
 	// --------------------------------------------------------------------- editor
-	'one-update-options-effect': {
-		files: [EDITOR],
-		atMost: {
-			"CallExpression[callee.object.name='editor'][callee.property.name='updateOptions']": [
-				1,
-				'Two effects writing the same Monaco options (fontSize with and without zoom) made the winner depend on effect order.',
-			],
-		},
-	},
 	'settings-os-type-is-written-by-the-store': {
 		ignores: ['src/lib/stores/settings.svelte.ts'],
 		ban: {
 			"AssignmentExpression[left.object.name='settings'][left.property.name='osType']":
 				'settings.osType is filled in by the store from get_os_type; ask platformOf() instead of writing it.',
-		},
-	},
-	'editor-clipboard-goes-through-editor-clipboard': {
-		files: [EDITOR],
-		ban: {
-			[command('clipboardWriteText')]:
-				'Cut and copy write the clipboard in utils/editorClipboard.ts, so they cannot drift apart and the whole-line rule is implemented once.',
-		},
-	},
-	'one-cut-one-copy': {
-		files: ['src/lib/utils/editorClipboard.ts'],
-		atMost: {
-			[command('clipboardWriteText')]: [
-				2,
-				'copyToClipboard and cutToClipboard are the editor\'s two clipboard writers; a third derives the text again.',
-			],
-		},
-	},
-	'monaco-theme-writers': {
-		ignores: [EDITOR, 'src/lib/utils/mountEditor.ts', 'src/lib/utils/theme.ts'],
-		ban: {
-			"CallExpression[callee.object.property.name='editor'][callee.property.name='setTheme']":
-				'The editor pane, its mount and the theme importer (which defines `vscode-custom`) are the only Monaco theme writers.',
-		},
-	},
-	'an-edit-is-its-own-undo-step': {
-		files: [EDITOR, 'src/lib/utils/editorClipboard.ts'],
-		requireEarlier: {
-			call: 'executeEdits',
-			earlier: 'pushUndoStop',
-			message:
-				'executeEdits appends to the undo element typing left open, so Cmd+Z takes the typing too; call editor.pushUndoStop() before it.',
-		},
-	},
-	'on-mount-is-synchronous': {
-		files: [EDITOR],
-		ban: {
-			"CallExpression[callee.name='onMount'] > :matches(ArrowFunctionExpression, FunctionExpression)[async=true]":
-				'Svelte only takes a synchronously returned function as the unmount cleanup; an async onMount leaks what it set up.',
-		},
-	},
-	'editor-effects-wait-for-editor-ready': {
-		files: [EDITOR],
-		ban: {
-			"CallExpression[callee.name='$effect']:has(Identifier[name='editor']):not(:has(Identifier[name='editorReady']))":
-				'`editor` is a plain let assigned after an await; an effect gated on it alone runs once against nothing and never again.',
-		},
-	},
-	'monaco-is-loaded-on-demand': {
-		ban: {
-			"ImportDeclaration[importKind!='type'][source.value=/^monaco-(editor|vim)($|\\/)/]:not([source.value=/[?]worker$/]), ExportNamedDeclaration[exportKind!='type'][source.value=/^monaco-(editor|vim)($|\\/)/], ExportAllDeclaration[exportKind!='type'][source.value=/^monaco-(editor|vim)($|\\/)/]":
-				'Monaco is most of the startup JavaScript and only the editor needs it: load it with `await import()` (Editor.svelte), or `import type`.',
-		},
-	},
-	'one-image-link-writer': {
-		files: [EDITOR, 'src/lib/utils/editorClipboard.ts'],
-		ban: {
-			"Literal[value=/%20/], TemplateElement[value.raw=/%20/]":
-				'A hand-rolled space escape is back; imageEmbed (utils/imageEmbed.ts) escapes the destination.',
-		},
-	},
-	'one-image-directory-resolver': {
-		ignores: ['src/lib/utils/imageEmbed.ts'],
-		ban: {
-			"LogicalExpression[operator='||'][left.object.name='settings'][left.property.name='imageDirectory'], LogicalExpression[operator='||'][right.name='DEFAULT_IMAGE_DIRECTORY'], LogicalExpression[operator='||'][right.value='img']":
-				'Paste, drop and the path completion read the image directory through one resolver (utils/imageEmbed.ts), so `${filename}` expands at all three.',
-		},
-	},
-	'delete-line-stays-bound': {
-		files: [EDITOR],
-		ban: {
-			"Literal[value='-editor.action.deleteLines']":
-				'Mod+Shift+K deletes a line, as in Monaco (#821); unbinding it took a key users asked for back.',
 		},
 	},
 
@@ -321,28 +200,6 @@ const CONVENTIONS = {
 		ban: {
 			"ImportExpression[source.value=/^katex\\/dist\\/contrib\\//], ImportDeclaration[source.value=/^katex\\/dist\\/contrib\\//]":
 				'katex/dist/contrib/*.js is CommonJS with its own KaTeX copy, so a macro mhchem registers there never reaches renderToString (#745). Import katex/contrib/*.',
-		},
-	},
-	'one-copy-handler': {
-		ban: {
-			"ImportExpression[source.value=/copy-tex/], ImportDeclaration[source.value=/copy-tex/]":
-				'copy-tex rewrote the clipboard for selections with math and undid the preview copy handler (#674); its behaviour is utils/previewCopy.ts.',
-			"CallExpression[callee.property.name='addEventListener'][arguments.0.value='copy']":
-				'The preview copy handler writes the clipboard itself (#549, #674); a second copy listener lets the webview decide again.',
-		},
-	},
-	'viewer-markup-sinks': {
-		files: [VIEWER],
-		ban: {
-			"SvelteMustacheTag[kind='raw']:not([expression.object.name='tooltip'][expression.property.name='html'])":
-				'The document reaches the article through patchHost (the sanitizer\'s output); the footnote tooltip re-injects a clone of that DOM. Any other {@html} is a new unsanitized sink.',
-			"Identifier[name='ALLOWED_URI_REGEXP']":
-				'The viewer must not carry its own copy of the URI policy (utils/sanitize.ts).',
-			"CallExpression[callee.name='processMarkdownHtml']":
-				'The preview processes the blocks it inserts in processAndSanitize (utils/previewPatch.ts) and nowhere else.',
-		},
-		atMost: {
-			"CallExpression[callee.name='patchHost']": [1, 'The preview reaches the article through one patchHost call.'],
 		},
 	},
 	'one-sanitizer-policy': {
@@ -357,19 +214,6 @@ const CONVENTIONS = {
 		ban: {
 			"ImportDeclaration[source.value=/\\/sanitize(\\.js)?$/]":
 				'The diagram filter needs the <style> the document policy forbids; do not adopt the document policy here.',
-		},
-	},
-	'preview-processes-before-it-sanitizes': {
-		files: ['src/lib/utils/previewPatch.ts'],
-		ban: {
-			"CallExpression[callee.name='processBlockMarkup']:not(FunctionDeclaration[id.name='processAndSanitize'] *)":
-				'processAndSanitize is the one place that processes the renderer output.',
-		},
-		requireEarlier: {
-			call: 'sanitizeMarkdownFragment',
-			earlier: 'processBlockMarkup',
-			message:
-				'The preview processes first and sanitizes at the sink, so what reaches the article is exactly the sanitizer\'s output.',
 		},
 	},
 	'render-through-render-markdown-preview': {
@@ -483,13 +327,6 @@ const CONVENTIONS = {
 		ban: {
 			"CallExpression[callee.object.name='localStorage'][callee.property.name='setItem']":
 				'A bare setItem is the write no other window hears and no range validates; use writeStoredSetting (stores/settings.svelte.ts).',
-		},
-	},
-	'one-image-embed-writer': {
-		ignores: ['src/lib/utils/imageEmbed.ts'],
-		ban: {
-			"Literal[value=/!\\[alt\\]\\(/], TemplateElement[value.raw=/!\\[alt\\]\\(/]":
-				'imageEmbed (utils/imageEmbed.ts) is the single writer of an image link; the two inline copies broke on `note#1.png`.',
 		},
 	},
 	'one-platform-probe': {

@@ -7,7 +7,6 @@ import { exportContextFrom, previewLayout } from '../src/lib/utils/previewLayout
 import { parseFrontMatter } from '../src/lib/utils/frontMatter.js';
 import { isAssetUrl, normalizeAssetPath, renderStaticFrontMatterPanel, resolveExportImagePath, rewriteMarkdownHrefForExport } from '../src/lib/utils/exportHtml.js';
 import { hasMarkdownLinkExtension, MARKDOWN_LINK_EXTENSIONS, resolveMarkdownTargetPath } from '../src/lib/utils/markdownLinks.js';
-import { askToOpenExportedFile } from '../src/lib/utils/openExportedFile.js';
 import { fontFamilyValue } from '../src/lib/utils/fontFamily.js';
 import { absolutizeKatexFontUrls, collectUsedKatexFamilies, findKatexFontFaces, inlineKatexFontFaces, katexFontUrlsToEmbed } from '../src/lib/utils/exportFonts.ts';
 import { renderRichContent } from '../src/lib/utils/richContent.ts';
@@ -469,75 +468,6 @@ draft: false
 		const parsed = parseFrontMatter('---\ntype: plan\n---\n');
 		assert.match(renderStaticFrontMatterPanel(parsed, '属性'), /<span class="frontmatter-title">属性<\/span>/);
 		assert.match(renderStaticFrontMatterPanel(parsed, '<b>'), /<span class="frontmatter-title">&lt;b&gt;<\/span>/);
-	});
-});
-
-describe('open the exported file', () => {
-	test('askToOpenExportedFile opens the exported file after user confirmation', async () => {
-		const opened: string[] = [];
-		const asked: Array<{ message: string; options?: unknown }> = [];
-
-		const result = await askToOpenExportedFile('C:/Docs/export.html', 'HTML', {
-			ask: async (message, options) => {
-				asked.push({ message, options });
-				return true;
-			},
-			openPath: async (path) => {
-				opened.push(path);
-			},
-			labels: {
-				title: 'Open exported file?',
-				message: 'Open exported HTML file now?',
-			},
-		});
-
-		assert.equal(result, 'opened');
-		assert.deepEqual(opened, ['C:/Docs/export.html']);
-		assert.equal(asked[0]?.message, 'Open exported HTML file now?');
-		assert.deepEqual(asked[0]?.options, {
-			title: 'Open exported file?',
-			kind: 'info',
-		});
-	});
-
-	test('askToOpenExportedFile leaves the file closed when user declines', async () => {
-		const opened: string[] = [];
-
-		const result = await askToOpenExportedFile('/tmp/export.html', 'HTML', {
-			ask: async () => false,
-			openPath: async (path) => {
-				opened.push(path);
-			},
-			labels: {
-				title: 'Open exported file?',
-				message: 'Open exported HTML file now?',
-			},
-		});
-
-		assert.equal(result, 'declined');
-		assert.deepEqual(opened, []);
-	});
-
-	test('askToOpenExportedFile reports opener failures without throwing', async () => {
-		const errors: unknown[] = [];
-
-		const result = await askToOpenExportedFile('/tmp/export.html', 'HTML', {
-			ask: async () => true,
-			openPath: async () => {
-				throw new Error('no default app');
-			},
-			onError: (error) => {
-				errors.push(error);
-			},
-			labels: {
-				title: 'Open exported file?',
-				message: 'Open exported HTML file now?',
-			},
-		});
-
-		assert.equal(result, 'failed');
-		assert.equal(errors.length, 1);
-		assert.match(String(errors[0]), /no default app/);
 	});
 });
 

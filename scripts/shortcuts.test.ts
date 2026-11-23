@@ -38,7 +38,7 @@ describe('shortcut registry', () => {
 	test('the registry was actually read, and is internally coherent', () => {
 		// Every assertion below iterates SHORTCUTS. If it were empty — or if a filter
 		// silently dropped everything — they would all pass having checked nothing.
-		assert.ok(SHORTCUTS.length > 25, `the registry holds ${SHORTCUTS.length} entries`);
+		assert.ok(SHORTCUTS.length > 15, `the registry holds ${SHORTCUTS.length} entries`);
 
 		const ids = SHORTCUTS.map((entry) => entry.id);
 		assert.equal(new Set(ids).size, ids.length, 'shortcut ids are unique');
@@ -61,7 +61,7 @@ describe('shortcut registry', () => {
 		// that implements it, or it cannot be checked and must not be advertised.
 		for (const entry of SHORTCUTS) {
 			assert.ok(
-				entry.editorAction || entry.editorCommand || entry.documentCommands || entry.monacoCommand,
+				entry.documentCommands,
 				`${entry.id} names no implementation, so nothing here can confirm its chord fires`,
 			);
 		}
@@ -120,7 +120,7 @@ describe('shortcut registry', () => {
 	function menuAccelerators(): Array<{ text: string; accelerator: string; action: MenuNode & { kind: 'item' | 'check' } }> {
 		const flatten = (nodes: readonly MenuNode[]): MenuNode[] =>
 			nodes.flatMap((node) => (node.kind === 'submenu' ? flatten(node.items) : [node]));
-		return flatten(buildMenuModel({ language: 'en', liveMode: true, hasEditorPane: true, showToc: true, showTabs: true, previewFullWidth: false })).flatMap((node) =>
+		return flatten(buildMenuModel({ language: 'en', liveMode: true, showTabs: true})).flatMap((node) =>
 			(node.kind === 'item' || node.kind === 'check') && node.accelerator
 				? [{ text: node.text, accelerator: node.accelerator, action: node }]
 				: [],
@@ -147,22 +147,15 @@ describe('shortcut registry', () => {
 			assert.equal(t(entry.labelKey, 'en'), text, `${row.id}: the panel and the menu disagree`);
 			compared++;
 		}
-		assert.ok(compared > 30, `only ${compared} menu items compared`);
+		assert.ok(compared > 10, `only ${compared} menu items compared`);
 		// Windows and Linux have no app menu; their in-app menu says Exit.
 		const windows = shortcutSections('windows').flatMap((section) => section.entries);
 		assert.equal(windows.find((entry) => entry.id === 'app-exit')?.labelKey, 'menu.exit');
 	});
 
-	test('the command palette row says it only works in the editor', () => {
-		const palette = shortcutSections('macos')
-			.flatMap((section) => section.entries)
-			.find((entry) => entry.id === 'app-command-palette');
-		assert.equal(palette?.hintKey, 'settings.toolbarEditOrSplit');
-	});
-
 	test('every macOS menu accelerator is a chord the registry advertises for the command the item runs', () => {
 		const items = menuAccelerators();
-		assert.ok(items.length > 30, `${items.length} menu accelerators`);
+		assert.ok(items.length > 10, `${items.length} menu accelerators`);
 		const seen = new Set<string>();
 		for (const { text, accelerator, action: { action } } of items) {
 			assert.ok(!seen.has(accelerator), `${accelerator} is on two menu items`);
@@ -332,22 +325,6 @@ describe('shortcut registry', () => {
 		}
 	});
 
-	test('the contextual keys are shown as single keystrokes, never as chord sequences', () => {
-		// What separates this group from the four menu groups is not the absence of a
-		// modifier — Mod+Enter is in it — but that each row is ONE keystroke whose
-		// meaning depends on where the caret is. A two-part `Mod+K …` sequence is a
-		// command being invoked by name and belongs under the menu it lives in.
-		const shown = shortcutSections('macos').find((section) => section.group === 'keys');
-		assert.ok(shown, 'the panel renders the keys group');
-		assert.deepEqual(
-			shown.entries.flatMap((entry) => entry.chords),
-			['Enter', 'Tab', 'Shift+Tab', 'Cmd+Enter', 'Cmd+Shift+Enter'],
-		);
-		for (const chord of shown.entries.flatMap((entry) => entry.chords)) {
-			assert.ok(!chord.includes(' '), `${chord} is a chord sequence, not a key`);
-		}
-	});
-
 	// ------------------------------------------------------------------- i18n
 
 	test('every label the registry names is a key English already defines', () => {
@@ -356,7 +333,7 @@ describe('shortcut registry', () => {
 		// already translated everywhere. This is the assertion that keeps it that
 		// way — a new key would have to be added to the dictionary first.
 		const labelKeys = [...SHORTCUTS.map((e) => e.labelKey), ...SHORTCUT_GROUPS.map((g) => g.labelKey)];
-		assert.ok(labelKeys.length > 30, `checking ${labelKeys.length} label keys`);
+		assert.ok(labelKeys.length > 15, `checking ${labelKeys.length} label keys`);
 
 		for (const key of labelKeys) {
 			assert.notEqual(t(key, 'en'), key, `${key} is defined in English`);
@@ -426,14 +403,14 @@ describe('shortcut registry', () => {
 		const mac = shortcutSections('macos').flatMap((s) => s.entries);
 		const win = shortcutSections('windows').flatMap((s) => s.entries);
 
-		assert.equal(mac.find((e) => e.id === 'fmt-bold')?.chords[0], 'Cmd+B');
-		assert.equal(win.find((e) => e.id === 'fmt-bold')?.chords[0], 'Ctrl+B');
+		assert.equal(mac.find((e) => e.id === 'file-save')?.chords[0], 'Cmd+S');
+		assert.equal(win.find((e) => e.id === 'file-save')?.chords[0], 'Ctrl+S');
 		// A literal Ctrl is not a Mod: tab cycling is Ctrl+Tab on macOS too.
 		assert.equal(mac.find((e) => e.id === 'tab-next')?.chords[0], 'Ctrl+Tab');
 		// F5 has no modifier at all.
 		assert.equal(mac.find((e) => e.id === 'file-reload')?.chords[0], 'F5');
 
-		assert.equal(shortcutLabel('fmt-quote', 'Cmd'), 'Cmd+Shift+.');
+		assert.equal(shortcutLabel('file-save', 'Cmd'), 'Cmd+S');
 		assert.equal(shortcutLabel('no-such-command', 'Cmd'), undefined);
 	});
 
@@ -655,7 +632,7 @@ describe('formatting shortcuts keymap', () => {
 		// above both layers above, and neither of them could see it.
 		const flatten = (nodes: readonly MenuNode[]): MenuNode[] =>
 			nodes.flatMap((node) => (node.kind === 'submenu' ? flatten(node.items) : [node]));
-		const claims = flatten(buildMenuModel({ language: 'en', liveMode: true, hasEditorPane: true, showToc: true, showTabs: true, previewFullWidth: false })).flatMap(
+		const claims = flatten(buildMenuModel({ language: 'en', liveMode: true, showTabs: true})).flatMap(
 			(node) =>
 				(node.kind === 'item' || node.kind === 'check') && /^CmdOrCtrl\+[TN]$/.test(node.accelerator ?? '')
 					? [[node.accelerator, node.action]]
@@ -674,10 +651,10 @@ describe('macOS app menu', () => {
 	const base: MenuState = {
 		language: 'en',
 		liveMode: true,
-		hasEditorPane: false,
-		showToc: true,
+		
+		
 		showTabs: true,
-		previewFullWidth: false,
+		
 	};
 
 	function flatten(nodes: readonly MenuNode[]): MenuNode[] {
@@ -715,18 +692,6 @@ describe('macOS app menu', () => {
 		return node;
 	}
 
-	test('each View toggle is a check item that follows its own state', () => {
-		const toggles = [
-			['Auto-Reload', 'liveMode'],
-			['Table of Contents', 'showToc'],
-			['Tab Bar', 'showTabs'],
-			['Full Width', 'previewFullWidth'],
-		] as const;
-		for (const [text, key] of toggles) {
-			for (const on of [true, false]) assert.equal(check({ ...base, [key]: on }, text).checked, on, `${text} with ${key}=${on}`);
-		}
-	});
-
 	test('Tab Bar carries the registry chord', () => {
 		const model = buildMenuModel(base);
 		for (const [text, id] of [
@@ -735,38 +700,6 @@ describe('macOS app menu', () => {
 			const item = find(model, text);
 			const chord = SHORTCUTS.find((row) => row.id === id)!.chords[0];
 			assert.equal(item.kind === 'check' && item.accelerator, chord.replace(/^Mod\b/, 'CmdOrCtrl'), text);
-		}
-	});
-
-	test('the View toggles read as state names in Chinese', () => {
-		const zh = { ...base, language: 'zh-CN' } as const;
-		for (const text of ['自动重载', '目录', '标签栏', '全宽']) check(zh, text);
-	});
-
-	test('View has no radio group of modes left', () => {
-		const view = buildMenuModel(base)[3];
-		assert.ok(view.kind === 'submenu');
-		const checks = view.items.flatMap((node) => (node.kind === 'check' ? [node.text] : []));
-		assert.deepEqual(checks, ['Auto-Reload', 'Table of Contents', 'Tab Bar', 'Full Width']);
-	});
-
-	test('Format acts on the editor, so it is disabled without one', () => {
-		for (const hasEditorPane of [false, true]) {
-			const formatting = flatten(buildMenuModel({ ...base, hasEditorPane })).filter(
-				(node) => node.kind === 'item' && 'editor' in node.action,
-			);
-			assert.equal(formatting.length, 15);
-			assert.ok(formatting.every((node) => node.kind === 'item' && node.enabled === hasEditorPane));
-		}
-	});
-
-	test('Back, Forward and tab cycling carry no accelerator', () => {
-		// ⌥←/→ and ⌘[/] belong to the editor's caret and indent; Ctrl+Tab is
-		// answered by the page, not reliably by AppKit.
-		const model = buildMenuModel(base);
-		for (const text of ['Back', 'Forward', 'Next Tab', 'Previous Tab']) {
-			const item = find(model, text);
-			assert.equal(item.kind === 'item' && item.accelerator, undefined, `${text} has an accelerator`);
 		}
 	});
 

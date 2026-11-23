@@ -438,56 +438,6 @@ describe('preview width', () => {
 		assert.equal(getStoredPreviewFullWidth(null, null), false);
 	});
 
-	test('preview width keyboard shortcuts avoid editable controls and app modals', () => {
-		// Six source-shape assertions until the dispatcher got its own module: two
-		// about a chord condition, three about a function signature and its body,
-		// one about the width arithmetic. Four of them are questions the imported
-		// functions can be asked directly.
-		const reading: KeyContext = {
-			mode: 'app',
-			osType: 'windows',
-			isSplit: false,
-			overlayOpen: false,
-			dialogOpen: false,
-			isEditing: false,
-			editorHasFocus: false,
-		};
-		const chord = (code: string) => ({ key: code === 'BracketLeft' ? '[' : ']', code, ctrlKey: true, metaKey: false, shiftKey: false, altKey: true });
-
-		// The chord, and which way round the two keys go — never checked before,
-		// because both keys matched the same line of text.
-		assert.equal(viewerCommandFor(chord('BracketLeft'), reading), 'preview-width-narrower');
-		assert.equal(viewerCommandFor(chord('BracketRight'), reading), 'preview-width-wider');
-		// And nothing else on that chord: no Alt, or an extra Shift, is a different
-		// gesture and must not resize the preview.
-		assert.equal(viewerCommandFor({ ...chord('BracketLeft'), altKey: false }, reading), null);
-		assert.equal(viewerCommandFor({ ...chord('BracketLeft'), shiftKey: true }, reading), null);
-
-		// An overlay in front, or the editor alone on screen, and the chord is not
-		// the preview's to answer.
-		assert.equal(viewerCommandFor(chord('BracketLeft'), { ...reading, overlayOpen: true }), null);
-		assert.equal(viewerCommandFor(chord('BracketLeft'), { ...reading, isEditing: true }), null);
-		// …but split view puts the preview back on screen, so it applies again.
-		assert.equal(
-			viewerCommandFor(chord('BracketLeft'), { ...reading, isEditing: true, isSplit: true }),
-			'preview-width-narrower',
-		);
-
-		// The text-field carve-out needs a real DOM and a real selector match, so it
-		// is asserted in `shortcuts.spec.ts` under jsdom rather than faked here.
-
-		// What the command does: leave full width, then step the cap by 40px.
-		const settings = { previewFullWidth: true, previewMaxWidth: 880, showTabs: true } as ViewerCommandHost['settings'];
-		const commands = viewerCommandTable({ settings } as ViewerCommandHost);
-		commands['preview-width-narrower']();
-		assert.deepEqual([settings.previewFullWidth, settings.previewMaxWidth], [false, 840]);
-		commands['preview-width-wider']();
-		commands['preview-width-wider']();
-		assert.equal(settings.previewMaxWidth, 920);
-		settings.previewMaxWidth = MAX_PREVIEW_MAX_WIDTH;
-		commands['preview-width-wider']();
-		assert.equal(settings.previewMaxWidth, MAX_PREVIEW_MAX_WIDTH);
-	});
 });
 
 describe('save image as', () => {

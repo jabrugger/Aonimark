@@ -34,37 +34,6 @@ describe('editor toolbar', () => {
 		]);
 	});
 
-	test('each tool carries the label, name and shortcut the toolbar renders', () => {
-		const byId = new Map(getEditorToolbarTools(null).map((tool) => [tool.id, tool]));
-
-		assert.deepEqual(
-			getEditorToolbarTools(null)
-				.filter((tool) => tool.group === 'inline')
-				.map((tool) => tool.id),
-			['fmt-bold', 'fmt-italic', 'fmt-underline', 'fmt-strikethrough', 'fmt-inline-code'],
-		);
-
-		// The inline tools whose accelerator the editor also binds; a tool that
-		// loses its shortcut still renders, so nothing else would notice.
-		assert.equal(byId.get('fmt-bold')?.shortcut?.('Ctrl'), 'Ctrl+B');
-		assert.equal(byId.get('fmt-italic')?.shortcut?.('Cmd'), 'Cmd+I');
-		assert.equal(byId.get('fmt-underline')?.shortcut?.('Ctrl'), 'Ctrl+U');
-		assert.equal(byId.get('fmt-underline')?.label, 'U');
-		assert.equal(byId.get('fmt-underline')?.labelKey, 'menu.underline');
-		assert.equal(byId.get('fmt-strikethrough')?.shortcut?.('Cmd'), 'Cmd+Shift+X');
-		assert.equal(byId.get('fmt-strikethrough')?.label, 'S');
-		assert.equal(byId.get('fmt-strikethrough')?.labelKey, 'menu.strikethrough');
-		assert.equal(byId.get('insert-table-simple')?.shortcut?.('Cmd'), 'Cmd+Opt+T');
-
-		// The four buttons that gained a hint when the keymap was reworked. Three list
-		// buttons had actions and no key at all, and Link — the chord four independent
-		// editors agree on — had none either, so the tooltip had nothing to print.
-		assert.equal(byId.get('fmt-link')?.shortcut?.('Cmd'), 'Cmd+K');
-		assert.equal(byId.get('fmt-numbered-list')?.shortcut?.('Ctrl'), 'Ctrl+Shift+7');
-		assert.equal(byId.get('fmt-bullet-list')?.shortcut?.('Ctrl'), 'Ctrl+Shift+8');
-		assert.equal(byId.get('fmt-checklist')?.shortcut?.('Cmd'), 'Cmd+Shift+9');
-	});
-
 	test('normalizeEditorToolbarOrder drops unknown ids, deduplicates, and appends new defaults', () => {
 		assert.deepEqual(
 			normalizeEditorToolbarOrder([
@@ -582,47 +551,47 @@ describe('title bar toolbar', () => {
 
 	test('normalizeTitlebarToolbarHidden keeps only known optional actions', () => {
 		assert.deepEqual(
-			normalizeTitlebarToolbarHidden(['reload', 'settings', 'unknown-action', 'find']),
-			['reload', 'find'],
+			normalizeTitlebarToolbarHidden(['reload', 'settings', 'unknown-action', 'zen']),
+			['reload', 'zen'],
 		);
 	});
 
 	test('normalizeTitlebarToolbarPlacement keeps known bar and menu values', () => {
 		const placement = normalizeTitlebarToolbarPlacement({
 			reload: 'menu',
-			find: 'bar',
+			zen: 'bar',
 			settings: 'bar',
 			unknown: 'bar',
-			fullWidth: 'hidden',
+			tabs: 'hidden',
 		});
 
 		assert.equal(placement.reload, 'menu');
-		assert.equal(placement.find, 'bar');
+		assert.equal(placement.zen, 'bar');
 		assert.equal(placement.settings, 'bar');
-		assert.equal(placement.fullWidth, 'bar');
+		assert.equal(placement.tabs, 'menu');
 		assert.equal('unknown' in placement, false);
 	});
 
 	test('getConfiguredTitlebarToolbarIds applies context, order, hidden ids, and placement', () => {
 		const configured = getConfiguredTitlebarToolbarIds(
-			['back', 'forward', 'reload', 'find', 'settings', 'open_loc'],
-			['settings', 'find', 'reload', 'back', 'forward'],
-			['forward'],
-			{ find: 'bar', reload: 'menu', settings: 'menu' },
+			['home', 'zen', 'reload', 'tabs', 'settings', 'open_loc'],
+			['settings', 'tabs', 'reload', 'home', 'zen'],
+			['zen'],
+			{ tabs: 'bar', reload: 'menu', settings: 'menu' },
 		);
 
-		assert.deepEqual(configured.visibleIds, ['settings', 'find', 'reload', 'back']);
-		assert.deepEqual(configured.barIds, ['find', 'back']);
+		assert.deepEqual(configured.visibleIds, ['settings', 'tabs', 'reload', 'home']);
+		assert.deepEqual(configured.barIds, ['tabs', 'home']);
 		assert.deepEqual(configured.menuIds, ['settings', 'reload']);
 	});
 
 	test('titlebar toolbar reorder helpers resolve drag and keyboard moves', () => {
-		const order = ['back', 'reload', 'settings'];
+		const order = ['home', 'reload', 'settings'];
 
-		assert.deepEqual(getTitlebarToolbarReorderMove(order, 'settings', 'back'), { fromIndex: 2, toIndex: 0 });
+		assert.deepEqual(getTitlebarToolbarReorderMove(order, 'settings', 'home'), { fromIndex: 2, toIndex: 0 });
 		assert.deepEqual(getTitlebarToolbarAdjacentMove(order, 'reload', 'down'), { fromIndex: 1, toIndex: 2 });
-		assert.equal(getTitlebarToolbarReorderMove(order, 'back', 'back'), null);
-		assert.equal(getTitlebarToolbarAdjacentMove(order, 'back', 'up'), null);
+		assert.equal(getTitlebarToolbarReorderMove(order, 'home', 'home'), null);
+		assert.equal(getTitlebarToolbarAdjacentMove(order, 'home', 'up'), null);
 	});
 
 	/*
@@ -659,18 +628,12 @@ describe('title bar toolbar', () => {
 		);
 	});
 
-	test('Find is offered for a Markdown document', () => {
-		assert.ok(visibleTitlebarActionIds(documentContext).includes('find'));
-	});
-
 	test('a non-Markdown file gets none of the Markdown actions', () => {
 		// `.txt` would not do here: it is in MARKDOWN_LINK_EXTENSIONS.
 		const ids = visibleTitlebarActionIds({ ...documentContext, currentFile: '/notes/data.json' });
-		for (const id of ['toc', 'fullWidth', 'live', 'find']) {
+		for (const id of ['live']) {
 			assert.ok(!ids.includes(id), `${id} was offered for a .json file`);
 		}
-		// An unsaved buffer has no extension to read and is treated as Markdown.
-		assert.ok(visibleTitlebarActionIds({ ...documentContext, currentFile: '' }).includes('find'));
 	});
 
 	test('the home screen offers only the actions that are not about a document', () => {

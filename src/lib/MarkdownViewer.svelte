@@ -1,44 +1,31 @@
 <script lang="ts">
-	import { convertFileSrc } from '@tauri-apps/api/core';
 	import { commands, events, type Appearance } from './bindings.js';
 	import { emitToWindow, type WindowEventName } from './windowEvents.js';
 	import type { EventCallback } from '@tauri-apps/api/event';
 	import { getAllWindows, getCurrentWindow } from '@tauri-apps/api/window';
 	import { onMount, tick, untrack } from 'svelte';
-	import { fade, fly, slide } from 'svelte/transition';
-	import { cubicOut } from 'svelte/easing';
-	import { openPath, openUrl } from '@tauri-apps/plugin-opener';
+import { fade } from 'svelte/transition';
+import { openPath } from '@tauri-apps/plugin-opener';
 	import { open, save, ask } from '@tauri-apps/plugin-dialog';
 	import Settings from './components/Settings.svelte';
 	import TitleBar from './components/TitleBar.svelte';
 	import Sidebar from './components/Sidebar.svelte';
 	import { folderManager, snapshotFolder, type FolderEntry } from './stores/folder.svelte.js';
-	import DiffOverlay from './components/DiffOverlay.svelte';
-	import Editor from './components/Editor.svelte';
 	import WysiwygEditor from './components/WysiwygEditor.svelte';
 	import Modal from './components/Modal.svelte';
 	import UpdateDialog from './components/UpdateDialog.svelte';
 	import { updateStore } from './stores/update.svelte.js';
 	import ContextMenu, { type ContextMenuItem } from './components/ContextMenu.svelte';
-	import Toc from './components/Toc.svelte';
 	import Toast from './components/Toast.svelte';
-	import FindBar from './components/FindBar.svelte';
 	import { createWindowExit } from './sessions/windowExit.js';
 	import { createExternalChange } from './sessions/externalChange.svelte.js';
 	import { createViewMode } from './sessions/viewMode.svelte.js';
 import { createFrontMatterEdit } from './sessions/frontMatterEdit.js';
 import { createColdEnrichmentRestore } from './sessions/coldEnrichmentRestore.js';
 	import { autoSaveFailureNeedsToast, isAutoSaveEligible } from './utils/autoSaveTimer.js';
-	import { exportAsHtml as _exportHtml, exportAsPdf as _exportPdf } from './utils/export';
-	import { askToOpenExportedFile } from './utils/openExportedFile.js';
 	import { showsHomeScreen } from './utils/homeTab.js';
-	import { handleCopy as handlePreviewCopy } from './utils/previewCopy.js';
-	import { hasExportableDocument } from './utils/tabFileActions.js';
 	import { editorLanguageFor } from './utils/editorLanguage.js';
-	import { editorReadOnly } from './utils/editorOptions.js';
-	import { viewModeOf } from './utils/titlebarToolbar.js';
 	import { buildMenuModel, installAppMenu, type MenuAction } from './utils/appMenu.js';
-	import ZoomOverlay from './components/ZoomOverlay.svelte';
 import { MARKDOWN_OPEN_FILTERS } from './utils/markdownLinks.js';
 import {
 	resolveMermaidTheme,
@@ -48,19 +35,7 @@ import {
 	renderRichContent as renderRichContentInto,
 } from './utils/richContent.js';
 import { type FoldLayoutObservation } from './utils/foldLayout.js';
-import { followFoldLayout, previewPaneShown } from './utils/foldLayoutEffect.svelte.js';
-import { followPreviewPatch } from './utils/previewPatchEffect.svelte.js';
-import { patchHost } from './utils/previewPatch.js';
 import { stampImageGeneration } from './utils/markdown.js';
-import { refreshesPreviewCache } from './utils/previewRefresh.js';
-import {
-	revealFold,
-	toggleFold,
-	toggleFoldFromClick,
-	type FoldHost,
-} from './utils/foldState.js';
-import { dropPaneFor, dropZoneLabel, handleDrop } from './utils/fileDrop.js';
-import { headingSlug, headingText, referenceForTab } from './utils/headingReference.js';
 import {
 	measureAnchorBox,
 	restorePreviewReadingPosition,
@@ -69,53 +44,26 @@ import {
 	type AnchorNode,
 	type OffsetLayoutNode,
 } from './utils/previewAnchor.js';
-import { pointAtSource, sourceAtPoint, type SourceLineReader } from './utils/previewCursor.js';
-import { annotationOf, hitAt, occurrenceRanges, overlapping, rangeOf, type Annotation } from './utils/previewAnnotations.js';
-import {
-	asRendererLine,
-	lineCoordinates,
-	type BufferLine,
-	type RendererLine,
-} from './utils/lineCoordinates.js';
-import {
-	addFrontMatterListItems,
-	getMarkdownBodyWithoutFrontMatter,
-	getFrontMatterListItems,
-	parseFrontMatter,
-	removeFrontMatterListItem,
-	updateFrontMatterListItem,
-	updateFrontMatterField,
-	type FrontMatterField,
-} from './utils/frontMatter.js';
+import { type SourceLineReader } from './utils/previewCursor.js';
+import { asRendererLine, lineCoordinates, type RendererLine } from './utils/lineCoordinates.js';
+import { getMarkdownBodyWithoutFrontMatter, updateFrontMatterField, type FrontMatterField } from './utils/frontMatter.js';
 import { FrontMatterFieldState } from './utils/frontMatterFieldState.svelte.js';
-import {
-	anchorIdCandidates,
-	getMarkdownLinkTarget as getRelativeMarkdownTarget,
-	hasMarkdownLinkExtension,
-	resolveMarkdownTargetPath,
-	type MarkdownLinkTarget as RelativeMarkdownTarget,
-} from './utils/markdownLinks.js';
-import { COPYABLE_INLINE_CODE_CLASS, handleInlineCodeCopyClick } from './utils/inlineCodeCopy.js';
+import { anchorIdCandidates, hasMarkdownLinkExtension, type MarkdownLinkTarget as RelativeMarkdownTarget } from './utils/markdownLinks.js';
 import { diagramToPngBase64 } from './utils/diagramImage.js';
-import { blockMiddleClickNavigation, followDocumentLink, handlePreviewClick, handlePreviewMiddleClick, linkTooltipFor, openRelativeMarkdownTarget as openRelativeTarget, openWithSystem as openPathWithSystem } from './utils/previewLinks.js';
+import { openRelativeMarkdownTarget as openRelativeTarget, openWithSystem as openPathWithSystem } from './utils/previewLinks.js';
 import { basename, canonicalizePath, isSameFilePath } from './utils/pathIdentity.js';
 import { ChoiceDialog } from './utils/choiceDialog.svelte.js';
-import { contextMenuFor, editorContextMenuItems, imageMenuItems, saveImageAs as saveImageAsFile } from './utils/viewerContextMenu.js';
-import { seedFindBar } from './utils/findSeed.js';
+import { saveImageAs as saveImageAsFile } from './utils/viewerContextMenu.js';
 import { createRecentFiles } from './utils/recentFiles.js';
 
 	const appWindow = getCurrentWindow();
 
 	import HomePage from './components/HomePage.svelte';
 	import { openNewWindow, pinnedTagFromWindowLabel } from './utils/pinnedTagWindow.js';
-	import { attachTableColumnResize } from './utils/tableColumnResize.js';
 import { tabManager, type Tab } from './stores/tabs.svelte.js';
 import { createTabMovers, createTransferOptions } from './sessions/windowTransfer.js';
-import { createPaneSlider, planPaneSlide, type PanesShown } from './utils/paneSlide.js';
 import { viewerCommandTable } from './utils/viewerCommands.js';
-import { dismissesToc, tocAutoCollapses } from './utils/tocOverlay.js';
-import { exportContextFrom, previewAppearanceFrom, previewLayout } from './utils/previewLayout.js';
-import { splitRatioAfterDrag, splitRatioAfterKey } from './utils/splitPanes.js';
+import { previewAppearanceFrom } from './utils/previewLayout.js';
 import { dispatchViewerKey, type KeyContext, type ViewerCommand } from './utils/viewerKeymap.js';
 import {
 	getPreviewScrollAnchor as previewScrollAnchor,
@@ -123,9 +71,8 @@ import {
 	getPreviewScrollTopForSyncPosition,
 } from './utils/previewScrollSync.js';
 import { type ScrollSyncPosition } from './utils/scrollSync.js';
-import { resolveTheme, settings, TOC_WIDTH_RANGE, wheelZoomFactor } from './stores/settings.svelte.js';
+import { resolveTheme, settings, wheelZoomFactor } from './stores/settings.svelte.js';
 import { t } from './utils/i18n.js';
-import { formatChord, modifierFor, opensInNewTab } from './utils/shortcuts.js';
 import { commitWithoutTransitions, jumpScrollBehavior } from './utils/motion.js';
 import { createWindowSession } from './sessions/windowSession.svelte.js';
 import { reportWindowMeta } from './sessions/windowMeta.svelte.js';
@@ -166,34 +113,12 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	let previewHosts = $state<Record<string, HTMLElement | null>>({});
 	// Filled by `exportAsPdf` for the duration of a print and emptied again;
 	// `@media print` reveals it and hides everything else under `#app`.
-	let printRootEl = $state<HTMLElement | null>(null);
-
+	
 	let previewBlocks = $derived(
 		tabManager.activeTabId ? (previewHosts[tabManager.activeTabId] ?? null) : null,
 	);
 	const foldLayout: { current: FoldLayoutObservation | null } = { current: null };
 	
-	let editorPane = $state<{ 
-		syncScrollToPosition: (position: ScrollSyncPosition, options?: { cursorIntoView?: boolean }) => void;
-		setCursor: (line: number, column: number) => void;
-		scrollSyncPosition: () => ScrollSyncPosition | null;
-		handleDroppedFile: (path: string, x: number, y: number) => Promise<void>;
-		updateDragCaret: (x: number, y: number) => void;
-		hideDragCaret: () => void;
-		runEditorAction: (actionId: string, payload?: any) => void;
-		undo: () => void;
-		redo: () => void;
-		selectAll: () => void;
-		revealHeader: (sourceLine: BufferLine | null, text: string) => void;
-		revealSourceRange: (startLine: number, endLine: number) => void;
-		triggerFind: () => void;
-		flushPositionTo: (tabId: string) => void;
-		// The three the editor's context menu runs, which are the three its
-		// keyboard shortcuts run (#207).
-		cutToClipboard: () => Promise<void>;
-		copyToClipboard: () => Promise<void>;
-		pasteFromClipboard: () => Promise<void>;
-	} | null>(null);
 	// On by default, as in VS Code: a clean tab follows the file on disk.
 	let liveMode = $state(true);
 
@@ -201,51 +126,21 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	// `Editor` for theirs. See `utils/motion.ts`.
 	const jumpBehavior = $derived(jumpScrollBehavior(settings.animateJumpScroll));
 
-	let findOpen = $state(false);
-	let findBar = $state<{
-		reapply: () => void;
-		clearHighlights: () => void;
-		focusInput: () => void;
-		setQuery: (value: string) => void;
-	} | null>(null);
-
-	// Decide where Cmd/Ctrl+F should land based on what's visible and where
-	// focus is. The in-window shortcut remains the canonical route on every
-	// platform.
-	function triggerFindAction() {
-		const active = document.activeElement as Node | null;
-		const editorHasFocus = !!editorPaneEl && !!active && editorPaneEl.contains(active);
-		const previewVisible = hasPreviewPane;
-		if (editorHasFocus || !previewVisible) {
-			editorPane?.triggerFind?.();
-		} else if (markdownBody) {
-			seedFindBar(findBar, window.getSelection(), markdownBody);
-			// Focus explicitly: `findOpen = true` is a no-op once open.
-			findOpen = true;
-			findBar?.focusInput();
-		}
-	}
 
 	let isDragging = $state(false);
-	let dragTarget = $state<'editor' | 'preview' | null>(null);
-	let dragPaths = $state<string[]>([]);
-
+		
 	/**
 	 * The reference for a heading of THIS document, in the spelling this
 	 * document is written in. See `headingReference.ts` — the inference falls
 	 * back to what the menu has always produced.
 	 */
-	function copyHeadingReference(text: string, slug: string) {
-		commands.clipboardWriteText(referenceForTab(text, slug, tabManager.activeTab));
-	}
-
+	
 	function reportUnsupportedDrop(path: string) {
 		const filename = path.split(/[/\\]/).pop() || 'File';
 		addToast(t('toast.unsupportedFile', settings.language).replace('{{filename}}', filename), 'error');
 	}
 	let editorPaneEl = $state<HTMLElement>();
-	let viewerPaneEl = $state<HTMLElement>();
-	let isProgrammaticScroll = false;
+		let isProgrammaticScroll = false;
 
 	let toasts = $state<{ id: string; message: string; type: 'info' | 'error' | 'warning'; sticky?: boolean }[]>([]);
 	function addToast(message: string, type: 'info' | 'error' | 'warning' = 'info', sticky = false): string {
@@ -287,19 +182,16 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		}
 	}
 
-	let zoomData = $state<{ src?: string; html?: string } | null>(null);
-
+	
 	// What a document with no tab behind it has folded. Never written to — every
 	// write goes through `foldHost.setFolds`, which needs an active tab.
-	const NO_FOLD_OVERRIDES = new Set<string>();
-
+	
 	let activeTab = $derived(tabManager.activeTab);
 	// Fold state belongs to the document, so it lives on the tab (see
 	// `Tab.foldOverrides`). Reading it through a derived is what makes a tab
 	// switch swap the whole set: the preview render, the table of contents and
 	// find all see the folds of the document on screen and no other document's.
-	let foldOverrides = $derived(activeTab?.foldOverrides ?? NO_FOLD_OVERRIDES);
-	let isEditing = $derived(activeTab?.isEditing ?? false);
+		let isEditing = $derived(activeTab?.isEditing ?? false);
 	let rawContent = $derived(activeTab?.rawContent ?? '');
 	let isSplit = $derived(activeTab?.isSplit ?? false);
 	/**
@@ -307,38 +199,26 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	 * in single-pane edit mode: split view keeps Monaco, because its scroll
 	 * sync and shared cursor are built around Monaco's line model.
 	 */
-	let editorKind = $derived(activeTab?.editorKind ?? 'source');
-	let isWysiwyg = $derived(isEditing && !isSplit && editorKind === 'wysiwyg');
-	/**
+			/**
 	 * Is there an editor on screen? The two flags are independent — split
 	 * view is `isSplit` alone when entered from reading mode — so anything
 	 * that hands the reader over to the editor has to ask both. The outline
 	 * asked only `isEditing`, and a click on it in split view moved the
 	 * preview but not the editor beside it (#744).
 	 */
-	let hasEditorPane = $derived(isEditing || isSplit);
-	let hasPreviewPane = $derived(previewPaneShown(isEditing, isSplit));
-	let frontMatterInfo = $derived(parseFrontMatter(rawContent));
-
+			
 	let currentFile = $derived(tabManager.activeTab?.path ?? '');
 	let frontMatterPanelKey = $derived(currentFile || tabManager.activeTabId || 'untitled');
-	let frontMatterCollapsedByKey = $state<Record<string, boolean>>({});
-	const frontMatterFields = new FrontMatterFieldState(() => frontMatterPanelKey);
-	let isFrontMatterCollapsed = $derived(frontMatterCollapsedByKey[frontMatterPanelKey] ?? true);
-	// An untitled tab is Markdown until saved under another name; see `editorLanguageFor`.
-	let isMarkdown = $derived(currentFile === '' || hasMarkdownLinkExtension(currentFile));
-	let editorLanguage = $derived(editorLanguageFor(currentFile));
-	let htmlContent = $derived(tabManager.activeTab?.content ?? '');
-	let scrollTop = $derived(tabManager.activeTab?.scrollTop ?? 0);
+		const frontMatterFields = new FrontMatterFieldState(() => frontMatterPanelKey);
+		// An untitled tab is Markdown until saved under another name; see `editorLanguageFor`.
+		let editorLanguage = $derived(editorLanguageFor(currentFile));
+		let scrollTop = $derived(tabManager.activeTab?.scrollTop ?? 0);
 	let isScrolled = $derived(scrollTop > 0);
 	let windowTitle = $derived(tabManager.activeTab?.title ?? 'Markpad');
 	let isScrollSynced = $derived(tabManager.activeTab?.isScrollSynced ?? false);
-	let canGoBackInFileHistory = $derived(tabManager.activeTabId ? tabManager.canGoBack(tabManager.activeTabId) : false);
-	let canGoForwardInFileHistory = $derived(tabManager.activeTabId ? tabManager.canGoForward(tabManager.activeTabId) : false);
-
+		
 	let loadingTabs = $state<string[]>([]);
-	let isAtBottom = $state(false);
-
+	
 	let showHome = $state(false);
 	// Which side the tab column is on, or null while the tabs are across the
 	// title bar or hidden (#884). Zen mode clears `showTabs`, so it hides the
@@ -349,16 +229,11 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	const folderShown = $derived(folderManager.root !== null && !settings.zenMode);
 	// With the tabs in a column the folder stacks into it; otherwise it takes its own side.
 	const sidebarSide = $derived(tabColumnSide ?? (folderShown ? settings.folderSide : null));
-	let viewerWidth = $state(0);
-	// The bounds come from TOC_WIDTH_RANGE, the same object settings.setTocWidth
+		// The bounds come from TOC_WIDTH_RANGE, the same object settings.setTocWidth
 	// clamps against, so the handle cannot offer a width persistence would shrink.
 	// The keyboard increment stays local: TOC_WIDTH_RANGE.step is 1, the spin-button
 	// granularity of the numeric settings input, and arrow keys move the splitter 16px.
-	const TOC_RESIZE_STEP = 16;
-	let isTocResizing = $state(false);
-	let tocWrapperEl = $state<HTMLElement | null>(null);
-	let tocToggleEl = $state<HTMLElement | null>(null);
-
+				
 	/*
 	 * How tall the editor toolbar currently is, measured rather than assumed.
 	 *
@@ -387,46 +262,14 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	// A zoom step reflows the preview under a scrollTop that stays put. CSS zoom used to
 	// scale that offset with the text; now the line at the top is taken before the
 	// reflow and put back after it, where WebKit has no scroll anchoring to do it.
-	let lineBeforeZoom: ScrollSyncPosition | null = null;
-	$effect.pre(() => {
-		void contentZoom;
-		untrack(() => {
-			lineBeforeZoom = markdownBody && hasPreviewPane ? getPreviewScrollSyncPosition(markdownBody) : null;
-		});
-	});
-	$effect(() => {
-		void contentZoom;
-		const line = lineBeforeZoom;
-		lineBeforeZoom = null;
-		if (!line) return;
-		// The fold wrappers are still pinned to heights measured at the old size; placed
-		// before they re-measure, the line drifted a paragraph up per step.
-		foldLayout.current?.measureNow();
-		scrollPreviewToSyncPosition(line);
-	});
-	let layout = $derived(previewLayout(settings, { isEditing, isSplit, viewerWidth, zoom: contentZoom }));
-	let isOverhanging = $derived(layout.isOverhanging);
-
+					
 	/**
 	 * Reaching past a floating outline to touch what it is covering is a request
 	 * for it to move. Only while it IS covering something: pinned it is a
 	 * sidebar, and one sitting in the margin is not in anybody's way.
 	 */
-	$effect(() => {
-		if (!settings.showToc || !tocAutoCollapses(() => isOverhanging, settings.pinnedToc)) return;
-		const dismiss = (e: PointerEvent) => {
-			if (dismissesToc(e.target as Node | null, tocWrapperEl, tocToggleEl)) settings.showToc = false;
-		};
-		// Capture, so a handler that stops propagation on its way up cannot leave
-		// the outline stranded over the text.
-		window.addEventListener('pointerdown', dismiss, { passive: true, capture: true });
-		return () => window.removeEventListener('pointerdown', dismiss, { capture: true });
-	});
-
-	$effect(() => {
-		if (markdownBody) return attachTableColumnResize(markdownBody);
-	});
-
+	
+	
 	import { followTheme } from './utils/themeEffect.svelte.js';
 
 	onMount(() => {
@@ -533,33 +376,8 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		modalState.close('discard');
 	}
 
-	function handleSplitterKeyDown(e: KeyboardEvent) {
-		const activeTab = tabManager.activeTab;
-		if (!activeTab || !tabManager.activeTabId) return;
-
-		const next = splitRatioAfterKey(activeTab.splitRatio, e.key, settings.splitEditorSide);
-		if (next === null) return;
-		tabManager.setSplitRatio(tabManager.activeTabId, next);
-	}
-
-	function handleTocResizeKeyDown(e: KeyboardEvent) {
-		const keyDelta = e.key === 'ArrowRight' ? TOC_RESIZE_STEP : e.key === 'ArrowLeft' ? -TOC_RESIZE_STEP : 0;
-		if (keyDelta !== 0) {
-			e.preventDefault();
-			const widthDelta = settings.tocSide === 'left' ? keyDelta : -keyDelta;
-			settings.setTocWidth(settings.tocWidth + widthDelta);
-			return;
-		}
-
-		if (e.key === 'Home') {
-			e.preventDefault();
-			settings.setTocWidth(TOC_WIDTH_RANGE.min);
-		} else if (e.key === 'End') {
-			e.preventDefault();
-			settings.setTocWidth(TOC_WIDTH_RANGE.max);
-		}
-	}
-
+	
+	
 	let identifyFlash = $state('');
 	let identifyFlashTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -615,7 +433,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	let restoredFolder: string | null = null;
 
 	const transferOptions = createTransferOptions({
-		editorPane: () => editorPane,
 		windowStateJson,
 		isCloseWalkActive: () => windowExit.isCloseWalkActive(),
 		isDisposed: () => isDisposed,
@@ -722,11 +539,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		saveRecentFile,
 		deleteRecentFile,
 		setLoadingTabs: (tabIds) => (loadingTabs = tabIds),
-		measureInitialViewport: () => {
-			tick().then(() => {
-				if (markdownBody) isAtBottom = markdownBody.scrollHeight <= markdownBody.clientHeight + 100;
-			});
-		},
+		measureInitialViewport: () => {},
 		isScrolling: () => isScrolling,
 		onError: (message, error) => {
 			console.error(message, error);
@@ -779,7 +592,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		noteExternalChangeConflict,
 		resolveExternalChangeByReloading,
 		reloadFromDisk,
-		compareExternalChange,
 		resolveExternalChangeByKeepingBuffer,
 	} = externalChange;
 
@@ -793,9 +605,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		tick,
 		addToast,
 		t,
-		get editorPane() {
-			return editorPane;
-		},
+		editorPane: null,
 		get markdownBody() {
 			return markdownBody;
 		},
@@ -810,16 +620,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		scrollPreviewToSyncPosition,
 		getPreviewScrollAnchor,
 	});
-	const {
-		handleEditorCursor,
-		placePreviewCursor,
-		handleEditorScrollSync,
-		followPreviewScroll,
-		syncEditorToPreviewScroll,
-		toggleEdit,
-		editSourceRangeAt,
-	} = viewMode;
-
+	
 	// Persisted through Rust, not localStorage: setItem is an async message
 	// to the WebKit storage process that dies in transit when the last
 	// window's close ends the process (reproduced in QA as "close secondary
@@ -881,7 +682,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		const container = untrack(() => layoutContainerEl);
 		if (container) commitWithoutTransitions(container);
 		showHome = false;
-		findOpen = false;
 	});
 
 	/*
@@ -890,30 +690,9 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	 * starts after it. A tab switch is not a mode switch and does not slide
 	 * (see the effect above).
 	 */
-	const paneSlider = createPaneSlider();
-	let panesShown: { tabId: string | null; shown: PanesShown } | null = null;
-
-	$effect.pre(() => {
-		const now = { tabId: tabManager.activeTabId, shown: { editor: hasEditorPane, viewer: hasPreviewPane } };
-		untrack(() => {
-			const last = panesShown;
-			panesShown = now;
-			if (!last || last.tabId !== now.tabId) return paneSlider.settle();
-			const plan = planPaneSlide(last.shown, now.shown);
-			if (plan && layoutContainerEl && editorPaneEl && viewerPaneEl)
-				paneSlider.capture({ container: layoutContainerEl, editor: editorPaneEl, viewer: viewerPaneEl }, plan);
-		});
-	});
-
-	$effect(() => {
-		void isEditing;
-		void isSplit;
-		untrack(() => {
-			if (layoutContainerEl && editorPaneEl && viewerPaneEl)
-				paneSlider.play({ container: layoutContainerEl, editor: editorPaneEl, viewer: viewerPaneEl });
-		});
-	});
-
+		
+	
+	
 	followActiveFile(() => currentFile);
 
 	// The preview and the export run the same filter in opposite orders, on
@@ -949,25 +728,10 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		await tick();
 	}
 
-	function frontMatterFieldId(key: string) {
-		return `frontmatter-${key.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
-	}
-
-	function tagsEqual(left: string[], right: string[]) {
-		return left.length === right.length && left.every((value, index) => value === right[index]);
-	}
-
-	function focusAndSelect(node: HTMLInputElement) {
-		requestAnimationFrame(() => {
-			node.focus();
-			node.select();
-		});
-	}
-
-	function setFrontMatterCollapsed(collapsed: boolean) {
-		frontMatterCollapsedByKey[frontMatterPanelKey] = collapsed;
-	}
-
+	
+	
+	
+	
 	function clearFrontMatterEditError(field: FrontMatterField) {
 		frontMatterFields.clearEditError(field);
 	}
@@ -993,100 +757,19 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		applyFrontMatter,
 	});
 
-	function getFrontMatterTagDraft(field: FrontMatterField) {
-		return frontMatterFields.tagDraft(field);
-	}
-
-	function setFrontMatterTagDraft(field: FrontMatterField, value: string) {
-		frontMatterFields.setTagDraft(field, value);
-	}
-
-	function clearFrontMatterTagDraft(field: FrontMatterField) {
-		frontMatterFields.clearTagDraft(field);
-	}
-
-	function getFrontMatterTagEditIndex(field: FrontMatterField) {
-		return frontMatterFields.tagEditIndex(field);
-	}
-
-	function getFrontMatterTagEditDraft(field: FrontMatterField, fallback: string) {
-		return frontMatterFields.tagEditDraft(field, fallback);
-	}
-
-	function setFrontMatterTagEditDraft(field: FrontMatterField, value: string) {
-		frontMatterFields.setTagEditDraft(field, value);
-	}
-
-	function startFrontMatterTagEdit(field: FrontMatterField, index: number, value: string) {
-		frontMatterFields.startTagEdit(field, index, value);
-	}
-
-	function clearFrontMatterTagEdit(field: FrontMatterField) {
-		frontMatterFields.clearTagEdit(field);
-	}
-
-	async function commitFrontMatterTagAdd(field: FrontMatterField) {
-		const draft = getFrontMatterTagDraft(field);
-		if (!draft.trim()) return;
-
-		const currentItems = getFrontMatterListItems(field);
-		const nextItems = addFrontMatterListItems(currentItems, [draft]);
-		if (tagsEqual(currentItems, nextItems)) {
-			clearFrontMatterTagDraft(field);
-			return;
-		}
-
-		await handleFrontMatterListChange(field, nextItems);
-		clearFrontMatterTagDraft(field);
-	}
-
-	async function removeFrontMatterTag(field: FrontMatterField, index: number) {
-		const currentItems = getFrontMatterListItems(field);
-		const nextItems = removeFrontMatterListItem(currentItems, index);
-		if (tagsEqual(currentItems, nextItems)) return;
-
-		await handleFrontMatterListChange(field, nextItems);
-	}
-
-	async function commitFrontMatterTagEdit(field: FrontMatterField, index: number) {
-		if (getFrontMatterTagEditIndex(field) !== index) return;
-
-		const draft = getFrontMatterTagEditDraft(field, '');
-		const currentItems = getFrontMatterListItems(field);
-		const nextItems = updateFrontMatterListItem(currentItems, index, draft);
-
-		clearFrontMatterTagEdit(field);
-		if (tagsEqual(currentItems, nextItems)) return;
-
-		await handleFrontMatterListChange(field, nextItems);
-	}
-
-	function handleFrontMatterTagAddKeydown(event: KeyboardEvent, field: FrontMatterField) {
-		if (event.key === 'Enter' || event.key === ',') {
-			event.preventDefault();
-			void commitFrontMatterTagAdd(field);
-			return;
-		}
-
-		if (event.key === 'Escape') {
-			event.preventDefault();
-			clearFrontMatterTagDraft(field);
-		}
-	}
-
-	function handleFrontMatterTagEditKeydown(event: KeyboardEvent, field: FrontMatterField, index: number) {
-		if (event.key === 'Enter') {
-			event.preventDefault();
-			void commitFrontMatterTagEdit(field, index);
-			return;
-		}
-
-		if (event.key === 'Escape') {
-			event.preventDefault();
-			clearFrontMatterTagEdit(field);
-		}
-	}
-
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 	async function loadMarkdown(filePath: string, options: LoadMarkdownOptions = {}) {
 		return documentSession.loadMarkdown(filePath, options);
 	}
@@ -1141,33 +824,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	 * restores the reading position again, because KaTeX and Mermaid can push
 	 * the anchor down by hundreds of pixels.
 	 */
-	const previewPatch = followPreviewPatch(() => previewBlocks, () => htmlContent, (host, htmlContent) => {
-		// This document is injected into the app's own document, so it runs the
-		// same policy the export runs — the one place a document is untrusted
-		// must not have its own private copy of the rules. The preview used to
-		// inline a duplicate of the URI pattern and nothing else, which left a
-		// `style` tag (on DOMPurify's default allowlist, CSS unfiltered) live
-		// inside the app's document: an author stylesheet is not scoped to the
-		// article, so it could hide the title bar and beacon out through
-		// `background-image: url(https://…)`, neither of which the app CSP blocks
-		// (`style-src 'unsafe-inline'`, `img-src … https:`). See
-		// ./utils/sanitize.ts for the policy itself, and renderMarkdownPreview
-		// for why this path sanitizes last.
-		//
-		// Untracked inside patchHost: a fold toggle or a rename is not a new document.
-		const patch = patchHost(
-			host,
-			htmlContent,
-			() => {
-				const tab = tabManager.activeTab;
-				return { filePath: tab?.path ?? '', foldOverrides: tab?.foldOverrides ?? NO_FOLD_OVERRIDES };
-			},
-			(scope) => foldLayout.current?.observe(scope),
-		);
-		// A host's first enrichment is the cold start above: see `coldRestore`.
-		coldRestore.afterEnrichment(host, patch.inserted.length, renderRichContent(patch.inserted));
-	});
-
+	
 	const coldRestore = createColdEnrichmentRestore({
 		tabManager,
 		tick,
@@ -1178,53 +835,8 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	});
 
 	// A hidden host is not observed: its boxes measure 0 (see `previewHosts`).
-	followFoldLayout(foldLayout, () => previewBlocks, () => hasPreviewPane);
-
-	// Re-apply find highlights after a render. The patch only replaces the blocks
-	// that changed, so most highlights now survive on their own nodes — but the
-	// ones inside a replaced block do not, and without this they vanish until the
-	// user re-types in the find bar.
-	$effect(() => {
-		const _ = htmlContent;
-		if (!findOpen || !findBar) return;
-		tick().then(() => findBar?.reapply());
-	});
-
-	$effect(() => {
-		// Depend on the ID and body existence to trigger restore
-		const id = tabManager.activeTabId;
-		const body = markdownBody;
-		// ...and on WHICH DOCUMENT that tab holds. Following a link, and
-		// back/forward, keep the tab and swap the document under it, and
-		// `clearReadingPosition` puts the tab at the top of the new one. This
-		// effect is the only thing that moves the preview to a tab's recorded
-		// position, so without this dependency that reset reaches nothing: the
-		// container keeps the pixel offset the reader had in the PREVIOUS
-		// document, and the new document opens part-way down.
-		void currentFile;
-
-		if (id && body) {
-			untrack(() => {
-				const tab = tabManager.tabs.find((t) => t.id === id);
-				// The cascade itself is `restorePreviewReadingPosition` in
-				// previewAnchor.ts, next to the three measurements it runs. It is a
-				// function and not this block because the arrival of a transferred
-				// tab has to run the SAME cascade after its document lands (see
-				// `acceptTransferredTab`), and two copies consulting the same three
-				// fields in different orders would be two answers for one tab.
-				if (tab) restorePreviewReadingPosition(body, tab, getPreviewScrollMax(body), measurePreviewBox);
-			});
-		}
-	});
-
-	$effect(() => {
-		if (markdownBody && !isEditing && tabManager.activeTabId) {
-			tick().then(() => {
-				markdownBody?.focus({ preventScroll: true });
-			});
-		}
-	});
-
+	
+	
 	function getPreviewScrollMax(target: HTMLElement) {
 		return Math.max(0, target.scrollHeight - target.clientHeight);
 	}
@@ -1267,200 +879,56 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	const readRendererLine: SourceLineReader = (line) => bufferLines[lineCoords.toBufferLine(asRendererLine(line)) - 1];
 
 	/** The drawn cursor, in the article's scroll content; null while it isn't shown. */
-	let previewCursorBox = $state<{ top: number; left: number; height: number } | null>(null);
-
+	
 	/**
 	 * Bumped whenever the document on screen changes size: a rewrap when split
 	 * view narrows the pane, a fold, an image arriving. The drawn cursor is
 	 * measured in that layout, so it has to be measured again.
 	 */
-	let previewLayoutVersion = $state(0);
-
-	$effect(() => {
-		const host = previewBlocks;
-		if (!host) return;
-		const observer = new ResizeObserver(() => previewLayoutVersion++);
-		observer.observe(host);
-		return () => observer.disconnect();
-	});
-
-	$effect(() => {
-		const cursor = viewMode.activeCursor;
-		const shown = settings.previewCursor && cursor !== null && hasPreviewPane;
-		void htmlContent;
-		void previewLayoutVersion;
-		if (!shown) {
-			previewCursorBox = null;
-			return;
-		}
-		tick().then(() => {
-			previewCursorBox = measurePreviewCursor(cursor);
-		});
-	});
-
-	function measurePreviewCursor(cursor: { line: BufferLine; column: number }) {
-		if (!previewBlocks || !markdownBody) return null;
-		const at = pointAtSource(previewBlocks, { line: lineCoords.toRendererLine(cursor.line), column: cursor.column }, readRendererLine);
-		if (!at) return null;
-
-		const range = document.createRange();
-		range.setStart(at.node, at.offset);
-		const rect = range.getClientRects()[0] ?? (at.node instanceof Element ? at.node : at.node.parentElement)?.getBoundingClientRect();
-		if (!rect || rect.height === 0) return null;
-
-		const body = markdownBody.getBoundingClientRect();
-		return {
-			top: rect.top - body.top + markdownBody.scrollTop,
-			left: rect.left - body.left + markdownBody.scrollLeft,
-			height: rect.height,
-		};
-	}
-
+	
+	
+	
+	
 	/**
 	 * The reader's highlights, per tab, for this session only. Each list is
 	 * tied to the source it was made on: once the text changes its points no
 	 * longer name the same words, so the list is dropped rather than drawn on
 	 * the wrong ones.
 	 */
-	let annotationsByTab = $state.raw<Record<string, { source: string; marks: Annotation[] }>>({});
-	let activeAnnotations = $derived.by(() => {
-		const entry = tabManager.activeTabId ? annotationsByTab[tabManager.activeTabId] : undefined;
-		return settings.previewAnnotations && entry && entry.source === rawContent ? entry.marks : [];
-	});
-	const canAnnotate = typeof CSS !== 'undefined' && 'highlights' in CSS;
+			const canAnnotate = typeof CSS !== 'undefined' && 'highlights' in CSS;
 
-	function setAnnotations(marks: Annotation[]) {
-		const tabId = tabManager.activeTabId;
-		if (tabId) annotationsByTab = { ...annotationsByTab, [tabId]: { source: rawContent, marks } };
-	}
-
+	
 	/** The preview selection as source points, or null when it is empty or outside the document. */
-	function selectionAnnotation(): Annotation | null {
-		const selection = window.getSelection();
-		if (!previewBlocks || !selection || selection.isCollapsed || !selection.rangeCount) return null;
-		const range = selection.getRangeAt(0);
-		return previewBlocks.contains(range.commonAncestorContainer) ? annotationOf(previewBlocks, range, readRendererLine) : null;
-	}
-
-	function annotationPointAt(e: MouseEvent) {
-		const caret = previewBlocks && document.caretRangeFromPoint(e.clientX, e.clientY);
-		return caret ? sourceAtPoint(previewBlocks!, { node: caret.startContainer, offset: caret.startOffset }, readRendererLine) : null;
-	}
-
+	
+	
 	/**
 	 * One Highlight per kind, kept and refilled. WebKit repaints when a
 	 * Highlight's ranges change, but not when the registry entry is swapped
 	 * for a new one: a removed highlight stayed on screen until the next click.
 	 */
-	const annotationHighlight = canAnnotate ? new Highlight() : null;
-	const occurrenceHighlight = canAnnotate ? new Highlight() : null;
-	if (annotationHighlight && occurrenceHighlight) {
-		CSS.highlights.set('markpad-annotation', annotationHighlight);
-		CSS.highlights.set('markpad-occurrence', occurrenceHighlight);
-	}
-
-	function refill(highlight: Highlight, ranges: Range[]) {
-		highlight.clear();
-		for (const range of ranges) highlight.add(range);
-	}
-
-	$effect(() => {
-		if (!annotationHighlight) return;
-		const marks = activeAnnotations;
-		const host = previewBlocks;
-		void htmlContent;
-		tick().then(() => {
-			refill(annotationHighlight, host ? marks.map((mark) => rangeOf(host, mark, readRendererLine)).filter((range) => range !== null) : []);
-		});
-	});
-
+			
+	
+	
 	/** Longer selections are passages, not words to look for. */
-	const OCCURRENCE_MAX_LENGTH = 100;
-	const OCCURRENCE_LIMIT = 1000;
-
+		
 	/** The preview selection's text when it is one to look for copies of, else null. */
-	function occurrenceText(): string | null {
-		const selection = window.getSelection();
-		if (!previewBlocks || !selection || selection.isCollapsed || !selection.rangeCount) return null;
-		if (!previewBlocks.contains(selection.getRangeAt(0).commonAncestorContainer)) return null;
-		const text = selection.toString();
-		return text.trim() !== '' && !text.includes('\n') && text.length <= OCCURRENCE_MAX_LENGTH ? text : null;
-	}
-
+	
 	/** Every copy of `text` not already highlighted, as annotations. */
-	function occurrenceAnnotations(text: string): Annotation[] {
-		if (!previewBlocks) return [];
-		const found: Annotation[] = [];
-		for (const range of occurrenceRanges(previewBlocks, text, OCCURRENCE_LIMIT)) {
-			const mark = annotationOf(previewBlocks, range, readRendererLine);
-			if (mark && !overlapping([...activeAnnotations, ...found], mark).length) found.push(mark);
-		}
-		return found;
-	}
-
-	$effect(() => {
-		if (!occurrenceHighlight || !settings.previewOccurrences) return;
-		const update = () => {
-			const text = occurrenceText();
-			refill(occurrenceHighlight, text ? occurrenceRanges(previewBlocks!, text, OCCURRENCE_LIMIT) : []);
-		};
-		document.addEventListener('selectionchange', update);
-		return () => {
-			document.removeEventListener('selectionchange', update);
-			occurrenceHighlight.clear();
-		};
-	});
-
+	
+	
 	function getPreviewScrollAnchor(target: HTMLElement): RendererLine | null {
 		return previewScrollAnchor(target, measurePreviewBox);
 	}
 
 	let isScrolling = $state(false);
-	let scrollIdleTimer: ReturnType<typeof setTimeout>;
-
+	
 	// Whether the reader's last input in the panes was outside the editor: in the
 	// preview, its outline or find bar. Only then is a preview scroll theirs for the
 	// editor to follow; one that arrives while they type is the browser keeping
 	// re-rendered content in place, and following it fought Monaco's cursor reveal on
 	// every keystroke (#1071). Input elsewhere, the title bar or a dialog, leaves it.
-	let previewLeads = true;
-	function noteInput(e: Event) {
-		const target = e.target as Node;
-		if (editorPaneEl?.contains(target)) previewLeads = false;
-		else if (layoutContainerEl?.contains(target)) previewLeads = true;
-	}
-
-	function handleScroll(e: Event) {
-		const target = e.target as HTMLElement;
-
-		isAtBottom = Math.abs(target.scrollHeight - target.scrollTop - target.clientHeight) < 100;
-
-		isScrolling = true;
-		clearTimeout(scrollIdleTimer);
-		scrollIdleTimer = setTimeout(() => {
-			isScrolling = false;
-		}, 300);
-
-		if (tabManager.activeTabId) tabManager.updateTabScroll(tabManager.activeTabId, target.scrollTop);
-
-		if (isProgrammaticScroll) {
-			isProgrammaticScroll = false;
-			return;
-		}
-
-		if (tabManager.activeTabId) {
-			// Percentage fallback
-			if (target.scrollHeight > target.clientHeight) {
-				const percentage = target.scrollTop / (target.scrollHeight - target.clientHeight);
-				tabManager.updateTabScrollPercentage(tabManager.activeTabId, percentage);
-			}
-
-			followPreviewScroll(target);
-		}
-
-		if (previewLeads) syncEditorToPreviewScroll(target);
-	}
-
+		
+	
 	/**
 	 * What the fold drivers in `foldState.ts` act on: the document on screen,
 	 * and the tab that document belongs to.
@@ -1469,22 +937,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	 * the fold is a fold OF — a fold is per document (see `Tab.foldOverrides`),
 	 * and the read above is what makes a tab switch swap the whole set.
 	 */
-	const foldHost: FoldHost = {
-		// The active tab's host, not the article. `foldState` answers both of its
-		// questions with `root.querySelectorAll('[data-fold-key]')`, and the
-		// article holds a host per open tab — so from there a fold key would
-		// resolve against whichever document happened to be earlier in the DOM.
-		get root() {
-			return previewBlocks ?? null;
-		},
-		get folds() {
-			return foldOverrides;
-		},
-		setFolds(next) {
-			if (tabManager.activeTabId) tabManager.setTabFoldOverrides(tabManager.activeTabId, next);
-		},
-	};
-
+	
 	// Looked up in the visible host, not the article. Heading ids are minted per
 	// document, so with a host per open tab the same `#id` exists once per tab
 	// that has that heading; the article would hand back whichever came first in
@@ -1539,57 +992,11 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		});
 	}
 
-	async function openMarkdownTargetInNewTab(target: RelativeMarkdownTarget) {
-		const resolved = resolveMarkdownTargetPath(currentFile, target);
-		if (!resolved) return;
-
-		await documentSession.openInNewTab(resolved);
-		if (target.hash) {
-			await scrollToAnchorWhenReady(target.hash, { pushHistory: false }, tabManager.activeTab?.path);
-		}
-	}
-
-	async function openMarkdownTargetInBackground(target: RelativeMarkdownTarget) {
-		const resolved = resolveMarkdownTargetPath(currentFile, target);
-		if (resolved) await documentSession.openInBackgroundTab(resolved, target.hash || undefined);
-	}
-
-	function handleLinkClick(e: MouseEvent) {
-		if (handleInlineCodeCopyClick(e, (text) => commands.clipboardWriteText(text))) return;
-		return handlePreviewClick(e, {
-			hideTooltip: () => { tooltip.show = false; },
-			toggleFold: (target) => toggleFoldFromClick(foldHost, target),
-			scrollToAnchor: (id) => scrollToAnchorWhenReady(id),
-			opensInNewTab: (event) => opensInNewTab(settings.osType, event, settings.linksOpenInNewTab),
-			openInNewTab: openMarkdownTargetInNewTab,
-			openHere: openRelativeMarkdownTarget,
-			zoom: (data) => { zoomData = data; },
-			placeCursor: placePreviewCursor,
-		});
-	}
-
-	async function handleTaskCheckboxChange(event: Event) {
-		const checkbox = event.target as HTMLInputElement;
-		if (checkbox.tagName !== 'INPUT' || checkbox.type !== 'checkbox' || !checkbox.hasAttribute('data-task-checkbox')) return;
-
-		const nowChecked = checkbox.checked;
-		if (!(await toggleTaskCheckbox(checkbox, nowChecked))) {
-			checkbox.checked = !nowChecked;
-		}
-	}
-
-	async function toggleTaskCheckbox(checkbox: HTMLInputElement, nowChecked: boolean): Promise<boolean> {
-		const sourcePosition = checkbox.closest('li')?.getAttribute('data-sourcepos');
-		const sourceLine = Number(sourcePosition?.match(/^(\d+):/)?.[1]);
-		if (!Number.isInteger(sourceLine) || sourceLine < 1) return false;
-		if (!(await documentSession.toggleTaskCheckbox(sourceLine, nowChecked))) return false;
-		const li = checkbox.closest('li');
-		if (li) {
-			li.classList.toggle('task-done', nowChecked);
-		}
-		return true;
-	}
-
+	
+	
+	
+	
+	
 
 
 	function saveRecentFile(path: string) {
@@ -1620,15 +1027,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		return documentSession.canCloseTab(tabId);
 	}
 
-	// `viewMode.pendingEditReveal`, spent the moment the editor exists.
-	$effect(() => {
-		const range = viewMode.pendingEditReveal;
-		if (!range || !editorPane) return;
-
-		viewMode.pendingEditReveal = null;
-		editorPane.revealSourceRange(range.startLine, range.endLine);
-	});
-
 	/**
 	 * This document's two line numberings, and the only thing that converts
 	 * between them.
@@ -1656,8 +1054,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		tabManager.activeTabId ? hasExternalChangeConflict(tabManager.activeTabId) : false,
 	);
 
-	$effect(() => externalChange.closeStaleComparison());
-
+	
 	/**
 	 * Auto-save effect.
 	 *
@@ -1776,101 +1173,9 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		});
 	});
 
-	async function exportAsHtml() {
-		const tab = tabManager.activeTab;
-		const result = await _exportHtml(
-			exportContextFrom(settings, {
-				rawContent,
-				tabTitle: tab?.title || '',
-				tabPath: tab?.path || '',
-				// The exported page carries the appearance it was made in (see
-				// `exportThemeAttribute`), and Mermaid bakes its theme into the SVG,
-				// so the diagrams have to be rendered for the same appearance.
-				mermaidTheme: currentMermaidTheme(),
-			}),
-		);
-		if (result?.missingImages) {
-			addToast(
-				t('toast.exportedHtmlMissingImages', settings.language).replace(
-					'{{count}}',
-					String(result.missingImages),
-				),
-				'warning',
-			);
-		}
-		if (result?.path) {
-			const openResult = await askToOpenExportedFile(result.path, 'HTML', {
-				ask,
-				openPath,
-				labels: {
-					title: t('modal.openExportedFileTitle', settings.language),
-					message: t('modal.openExportedHtmlMessage', settings.language),
-				},
-				onError: (error) => {
-					console.error('Failed to open exported HTML file', result.path, error);
-				},
-			});
-			if (openResult === 'failed') {
-				addToast(t('toast.openExportedFileFailed', settings.language), 'error');
-			}
-		}
-	}
-
+	
 	// One export at a time: a second would refill `#print-root` under the first.
-	let pdfExporting = false;
-	async function exportAsPdf() {
-		// The gate belongs here rather than at each caller: the menu hides its
-		// item behind the same condition, but the chord reaches this function
-		// through two different layers — the document handler in reading mode
-		// and the editor's own action in edit mode — and a guard on one of them
-		// still printed a blank page from the other (#673).
-		if (!hasExportableDocument(tabManager.activeTab?.rawContent)) return;
-		const tab = tabManager.activeTab;
-		if (!printRootEl || pdfExporting) return;
-		pdfExporting = true;
-		let progressToast: string | null = null;
-		let path: string | null = null;
-		try {
-			// The same context the HTML export is given: the PDF is now rendered
-			// from the buffer through the same path, so neither the preview's
-			// state nor the window's has anything to do with what prints (#668).
-			path = await _exportPdf({
-				...exportContextFrom(settings, {
-					rawContent,
-					tabTitle: tab?.title || '',
-					tabPath: tab?.path || '',
-					mermaidTheme: currentMermaidTheme(),
-				}),
-				osType: settings.osType,
-				printRoot: printRootEl,
-				onStart: () => {
-					progressToast = addToast(t('toast.exportingPdf', settings.language), 'info', true);
-				},
-			});
-		} catch (error) {
-			console.error('Failed to export PDF', error);
-			addToast(t('toast.exportPdfFailed', settings.language), 'error');
-		} finally {
-			if (progressToast) removeToast(progressToast);
-			pdfExporting = false;
-		}
-		if (!path) return;
-		const openResult = await askToOpenExportedFile(path, 'PDF', {
-			ask,
-			openPath,
-			labels: {
-				title: t('modal.openExportedFileTitle', settings.language),
-				message: t('modal.openExportedPdfMessage', settings.language),
-			},
-			onError: (error) => {
-				console.error('Failed to open exported PDF file', path, error);
-			},
-		});
-		if (openResult === 'failed') {
-			addToast(t('toast.openExportedFileFailed', settings.language), 'error');
-		}
-	}
-
+		
 	function handleNewFile() {
 		tabManager.addNewTab();
 		showHome = false;
@@ -1966,23 +1271,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		});
 	}
 
-	async function saveDiagramAs(container: HTMLElement) {
-		const svg = container.querySelector('svg')?.outerHTML;
-		if (!svg) return;
-		const dest = await save({ 
-			defaultPath: 'diagram.svg',
-			filters: [{ name: 'SVG Image', extensions: ['svg'] }]
-		});
-		if (dest) {
-			try {
-				await commands.saveFileContent(dest, svg, 'UTF-8');
-				addToast(t('toast.diagramSavedAsSVG', settings.language));
-			} catch (e) {
-				addToast(`${t('toast.failedToSaveDiagram', settings.language)}: ${e}`, 'error');
-			}
-		}
-	}
-
+	
 	/** A diagram onto the clipboard as a PNG (#1085). The button flashes "Copied!"; the menu item toasts. */
 	async function copyDiagram(container: HTMLElement, button?: HTMLElement) {
 		try {
@@ -1995,245 +1284,30 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	}
 
 	/**
-	 * Cut, Copy and Paste for the editor pane.
-	 *
-	 * Markpad draws this rather than letting Monaco draw its own, because
-	 * Monaco's Paste reads the clipboard through the webview and cannot work
-	 * here (#207) — see `contextmenu: false` in Editor.svelte for the whole of
-	 * that reasoning. Each item runs the same function its keyboard shortcut
-	 * runs, so there is one implementation per operation rather than one per
-	 * entry point.
-	 *
-	 * Cut and Copy are always enabled: with nothing selected they take the
-	 * current line, which is what ⌘X and ⌘C already do here.
-	 */
-	function showEditorContextMenu(e: MouseEvent) {
-		if (!editorPane) return;
-		e.preventDefault();
-
-		docContextMenu = {
-			show: true,
-			x: e.clientX,
-			y: e.clientY,
-			items: editorContextMenuItems(() => editorPane, settings.language, settings.osType),
-		};
-	}
-
-	/**
 	 * The preview's copy: plain text plus HTML, from `copyableFlavours`.
 	 * Cancelling the native copy stops WebKit from also writing a WebArchive,
 	 * which measured 19 MB under `tauri dev` (#549). Text fields and Monaco's
 	 * hidden textarea are skipped: `getSelection()` cannot read their
 	 * selection, so cancelling there would copy an empty string.
 	 */
-	function handleCopy(e: ClipboardEvent) {
-		handlePreviewCopy(e, currentFile);
-	}
-
-	function handleContextMenu(e: MouseEvent) {
-		const menu = contextMenuFor(e.target as HTMLElement, { modalOpen: modalState.show, inApp: mode === 'app' });
-		if (menu === 'editor') {
-			showEditorContextMenu(e);
-			return;
-		}
-		if (menu !== 'document') return;
-		e.preventDefault();
-
-		const selection = window.getSelection();
-		const hasSelection = selection ? selection.toString().length > 0 : false;
-		const link = (e.target as HTMLElement).closest('a') as HTMLAnchorElement | null;
-		const linkTarget = link ? getRelativeMarkdownTarget(link.getAttribute('href') || '') : null;
-		const linkItems: ContextMenuItem[] =
-			linkTarget && resolveMarkdownTargetPath(currentFile, linkTarget)
-				? [
-						{ label: t('menu.openInNewTab', settings.language), onClick: () => openMarkdownTargetInNewTab(linkTarget) },
-						{ separator: true },
-					]
-				: [];
-
-		const heading = (e.target as HTMLElement).closest('h1, h2, h3, h4, h5, h6');
-		let copyRefItem: any[] = [];
-		if (heading) {
-			const text = headingText(heading);
-			const slug = headingSlug(heading);
-			copyRefItem = [
-				{ label: t('menu.copyReference', settings.language), onClick: () => copyHeadingReference(text, slug) },
-				{ separator: true },
-			];
-		}
-
-		let mediaItems: any[] = imageMenuItems(e.target as HTMLElement, settings.language, saveImageAs);
-
-		// Resolved now: see `editSourceRangeAt`.
-		const editAtTarget = editSourceRangeAt(e);
-
-		// Read now for the same reason: the click on the item clears the selection.
-		const selected = canAnnotate && settings.previewAnnotations ? selectionAnnotation() : null;
-		const selectedText = selected ? occurrenceText() : null;
-		const hit = !canAnnotate || !settings.previewAnnotations ? [] : selected ? overlapping(activeAnnotations, selected) : (() => {
-			const at = annotationPointAt(e);
-			return at ? hitAt(activeAnnotations, at) : [];
-		})();
-		// The highlights reading the same as the one clicked, when there is more than it.
-		const textOf = (mark: Annotation) => (previewBlocks && rangeOf(previewBlocks, mark, readRendererLine)?.toString()) ?? null;
-		const hitText = hit.length === 1 ? textOf(hit[0]) : null;
-		const sameText = hitText ? activeAnnotations.filter((mark) => textOf(mark) === hitText) : [];
-		const annotationItems: ContextMenuItem[] = hit.length
-			? [{ label: t('menu.removeTemporaryHighlight', settings.language), onClick: () => {
-				setAnnotations(activeAnnotations.filter((mark) => !hit.includes(mark)));
-				window.getSelection()?.removeAllRanges();
-			} }, ...(sameText.length > 1 ? [{ label: t('menu.removeTemporaryHighlightAll', settings.language), onClick: () => {
-				setAnnotations(activeAnnotations.filter((mark) => !sameText.includes(mark)));
-				window.getSelection()?.removeAllRanges();
-			} }] : [])]
-			: selected
-				? [{ label: t('menu.temporaryHighlight', settings.language), onClick: () => {
-					setAnnotations([...activeAnnotations, selected]);
-					window.getSelection()?.removeAllRanges();
-				} }, ...(selectedText ? [{ label: t('menu.temporaryHighlightAll', settings.language), onClick: () => {
-					setAnnotations([...activeAnnotations, ...occurrenceAnnotations(selectedText)]);
-					window.getSelection()?.removeAllRanges();
-				} }] : [])]
-				: [];
-
-		const mermaidDiag = (e.target as HTMLElement).closest('.mermaid-diagram');
-		if (mermaidDiag) {
-			mediaItems = [
-				{ label: t('menu.copyDiagramAsImage', settings.language), onClick: () => copyDiagram(mermaidDiag as HTMLElement) },
-				{ label: t('menu.saveDiagramAsSvg', settings.language), onClick: () => saveDiagramAs(mermaidDiag as HTMLElement) },
-				{ separator: true }
-			];
-		}
-
-		docContextMenu = {
-			show: true,
-			x: e.clientX,
-			y: e.clientY,
-			items: [
-				...linkItems,
-				...copyRefItem,
-				...mediaItems,
-				...(hasSelection ? [{ label: t('menu.copy', settings.language), onClick: () => {
-					const selection = window.getSelection()?.toString();
-					if (selection) commands.clipboardWriteText(selection);
-				} }] : []),
-				...annotationItems,
-				{ label: t('menu.selectAll', settings.language), onClick: () => {
-					// The document on screen. Selecting the article would select
-					// every open tab's text, including the hosts that are hidden.
-					if (!previewBlocks) return;
-					const range = document.createRange();
-					range.selectNodeContents(previewBlocks);
-					const selection = window.getSelection();
-					selection?.removeAllRanges();
-					selection?.addRange(range);
-				} },
-				{ separator: true },
-				{ label: t('menu.openFileLocation', settings.language), onClick: openFileLocation, disabled: !currentFile },
-				{ label: t('menu.edit', settings.language), onClick: editAtTarget },
-				{ separator: true },
-				{ label: t('menu.closeFile', settings.language), onClick: closeFile },
-			],
-		};
-	}
-
+	
+	
 	// HTML links only: an SVG `<a>` (inside a diagram) is not handled.
-	function linkAt(target: EventTarget | null): HTMLAnchorElement | null {
-		const link = target instanceof Element ? target.closest('a') : null;
-		return link instanceof HTMLAnchorElement ? link : null;
-	}
-
-	function handleMouseOver(event: MouseEvent) {
-		if (mode !== 'app') return;
-		const anchor = linkAt(event.target);
-		if (!anchor) return;
-		const label = linkTooltipFor(anchor, { findAnchorTarget, footnoteRoot: previewBlocks });
-		if (label) {
-			const rect = anchor.getBoundingClientRect();
-			tooltip = { show: true, ...label, shortcut: '', x: rect.left + rect.width / 2, y: rect.top - 8, align: 'top' };
-		}
-	}
-
-	function handleMouseOut(event: MouseEvent) {
-		if (linkAt(event.target)) tooltip.show = false;
-	}
-
-	async function handleDocumentClick(event: MouseEvent) {
-		if (mode !== 'app') return;
-		const anchor = linkAt(event.target);
-		if (!anchor) return;
-		await followLink(event, anchor);
-	}
-
-	function handleLinkMiddleClick(event: MouseEvent) {
-		return handlePreviewMiddleClick(event, linkAt(event.target), {
-			openInBackgroundTab: openMarkdownTargetInBackground,
-			follow: followLink,
-		});
-	}
-
-	function followLink(event: MouseEvent, anchor: HTMLAnchorElement) {
-		return followDocumentLink(event, anchor, {
-			currentFile,
-			openHere: openRelativeMarkdownTarget,
-			openWithSystem,
-			openUrl,
-			openFailed: (rawHref) => addToast(t('toast.openFailed', settings.language).replace('{{target}}', rawHref), 'error'),
-		});
-	}
-
+	
+	
+	
+	
+	
+	
 	function handleWheel(e: WheelEvent) {
 		if (e.ctrlKey || e.metaKey) {
 			settings.zoomBy(wheelZoomFactor(e.deltaY));
 		}
 	}
 
-	let previewRenderRevision = 0;
-
-	$effect(() => {
-		const tab = tabManager.activeTab;
-		const renderRevision = ++previewRenderRevision;
-		if (tab && refreshesPreviewCache(tab, () => isEditing, () => settings.showToc)) {
-			const tabId = tab.id;
-			const rawContent = tab.rawContent;
-			if (tab.previewedRawContent === rawContent) return;
-
-			// 120ms: above the gap between keys in a fast burst (60-80ms), so a
-			// word costs one render, and below the pause before a reader looks at
-			// the preview.
-			const timer = setTimeout(() => {
-				renderMarkdownPreview(rawContent)
-					.then((rendered) => {
-						const currentTab = tabManager.activeTab;
-						if (
-							previewRenderRevision !== renderRevision ||
-							tabManager.activeTabId !== tabId ||
-							currentTab?.rawContent !== rawContent
-						) return;
-						tabManager.updateTabContent(tabId, rendered);
-						currentTab.previewedRawContent = rawContent;
-						// No `tick().then(renderRichContent)`: the new content is a
-						// dependency of the patch effect, which patches the blocks
-						// that changed and enriches exactly those. Calling it from
-						// here as well would re-run the whole document — the work
-						// this path exists to stop doing.
-					})
-					.catch(console.error);
-			}, 120);
-
-			return () => clearTimeout(timer);
-		}
-	});
-
-	$effect(() => {
-		window.addEventListener('auxclick', blockMiddleClickNavigation, true);
-		window.addEventListener('click', blockMiddleClickNavigation, true);
-		return () => {
-			window.removeEventListener('auxclick', blockMiddleClickNavigation, true);
-			window.removeEventListener('click', blockMiddleClickNavigation, true);
-		};
-	});
-
+	
+	
+	
 	// Lazy restore: a restored tab is read when it is first shown (`Tab.unread`).
 	$effect(() => {
 		if (!tabManager.activeTab?.unread) return;
@@ -2253,11 +1327,8 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		return {
 			mode,
 			osType: settings.osType,
-			isSplit: !!tabManager.activeTab?.isSplit,
 			overlayOpen: showSettings || modalState.show || promptModal.show || openFilePicker.state.show || showHome,
 			dialogOpen: modalState.show || promptModal.show || openFilePicker.state.show,
-			isEditing,
-			editorHasFocus: !!editorPaneEl && !!active && editorPaneEl.contains(active),
 		};
 	}
 
@@ -2275,12 +1346,9 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		saveContentAs,
 		saveActiveTab,
 		handleUndoCloseTab,
-		navigateFileHistory,
 		openSettings: () => (showSettings = true),
 		toggleHome,
-		exportAsPdf,
 		openFileLocation,
-		triggerFindAction,
 	});
 
 	function runViewerCommand(command: ViewerCommand) {
@@ -2304,10 +1372,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		const model = buildMenuModel({
 			language: settings.language,
 			liveMode,
-			hasEditorPane,
-			showToc: settings.showToc,
 			showTabs: settings.showTabs,
-			previewFullWidth: settings.previewFullWidth,
 		});
 		void installAppMenu(model, runMenuAction, () => isFocused);
 	});
@@ -2319,7 +1384,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		const context = keyContext();
 		if (context.mode !== 'app' || context.dialogOpen) return;
 		if ('viewer' in action) return runViewerCommand(action.viewer);
-		if ('editor' in action) return editorPane?.runEditorAction(action.editor);
 		switch (action.app) {
 			case 'check-updates':
 				return updateStore.openDialog();
@@ -2327,14 +1391,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 				return void selectFolder();
 			case 'close-folder':
 				return void folderManager.close();
-			case 'export-html':
-				return void exportAsHtml();
-			case 'toggle-toc':
-				settings.showToc = !settings.showToc;
-				return;
-			case 'toggle-full-width':
-				settings.previewFullWidth = !settings.previewFullWidth;
-				return;
 			case 'merge-windows':
 				return void mergeAllWindowsHere();
 			case 'set-window-tag':
@@ -2346,23 +1402,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		dispatchViewerKey(e, keyContext(), runViewerCommand);
 	}
 
-	async function navigateFileHistory(direction: 'back' | 'forward') {
-		const activeTabId = tabManager.activeTabId;
-		if (!activeTabId) return;
-		if (!(await canCloseTab(activeTabId))) return;
-
-		const path = direction === 'back'
-			? tabManager.goBack(activeTabId)
-			: tabManager.goForward(activeTabId);
-
-		if (path) {
-			// No `resetScrollHistory` here: goBack/goForward repoint the tab, so
-			// `clearReadingPosition` has already dropped its in-page stacks along
-			// with the rest of the position.
-			await loadMarkdown(path, { skipTabManagement: true });
-		}
-	}
-
+	
 	// The in-page jump stacks belong to the tab the offsets were measured in —
 	// see `Tab.scrollHistory`. These three wrappers exist only to name that tab
 	// and to read the offset off the preview, which the store cannot see.
@@ -2376,30 +1416,8 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	 * Where an in-page back/forward would land, or null if this tab has no jump
 	 * to walk — the caller then falls through to the FILE history.
 	 */
-	function popScrollHistory(direction: 'back' | 'forward'): number | null {
-		if (!markdownBody || !tabManager.activeTabId) return null;
-		return direction === 'back'
-			? tabManager.popScrollHistoryBack(tabManager.activeTabId, markdownBody.scrollTop)
-			: tabManager.popScrollHistoryForward(tabManager.activeTabId, markdownBody.scrollTop);
-	}
-
-	async function handleMouseUp(e: MouseEvent) {
-		if (e.button !== 3 && e.button !== 4) return;
-		const direction = e.button === 3 ? 'back' : 'forward';
-		e.preventDefault();
-		// In-page scroll history first; only a tab with no jump left to undo
-		// moves to another document.
-		const pos = popScrollHistory(direction);
-		if (pos !== null && markdownBody) {
-			// Only a jump that moves gets a scroll event to clear the flag (see `scrollPreviewToSyncPosition`).
-			const reachable = Math.min(pos, markdownBody.scrollHeight - markdownBody.clientHeight);
-			isProgrammaticScroll = Math.abs(markdownBody.scrollTop - reachable) >= 1;
-			markdownBody.scrollTo({ top: pos, behavior: jumpBehavior });
-		} else {
-			await navigateFileHistory(direction);
-		}
-	}
-
+	
+	
 	async function handleUndoCloseTab() {
 		const path = tabManager.popRecentlyClosed();
 		if (path) {
@@ -2430,71 +1448,8 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		await Promise.all(others.map((window) => emitToWindow(window.label, 'merge-into', appWindow.label)));
 	}
 
-	function startDrag(e: MouseEvent, tabId: string | null) {
-		if (!tabId) return;
-		e.preventDefault();
-		const startX = e.clientX;
-		const tab = tabManager.tabs.find((t) => t.id === tabId);
-		if (!tab) return;
-
-		const startRatio = tab.splitRatio ?? 0.5;
-		const containerWidth = window.innerWidth;
-
-		const onMove = (moveEvent: MouseEvent) => {
-			tabManager.setSplitRatio(
-				tabId,
-				splitRatioAfterDrag(startRatio, startX, moveEvent.clientX, containerWidth, settings.splitEditorSide),
-			);
-		};
-
-		const onUp = () => {
-			window.removeEventListener('mousemove', onMove);
-			window.removeEventListener('mouseup', onUp);
-			document.body.style.cursor = '';
-		};
-
-		window.addEventListener('mousemove', onMove);
-		window.addEventListener('mouseup', onUp);
-		document.body.style.cursor = 'col-resize';
-	}
-
-	function startTocResize(e: PointerEvent) {
-		e.preventDefault();
-		const target = e.currentTarget as HTMLElement;
-		target.setPointerCapture?.(e.pointerId);
-
-		const startX = e.clientX;
-		const startWidth = settings.tocWidth;
-		const side = settings.tocSide;
-		isTocResizing = true;
-		document.body.style.cursor = 'col-resize';
-		document.body.style.userSelect = 'none';
-
-		const onMove = (moveEvent: PointerEvent) => {
-			const deltaX = moveEvent.clientX - startX;
-			const widthDelta = side === 'left' ? deltaX : -deltaX;
-			settings.setTocWidth(startWidth + widthDelta);
-		};
-
-		const onUp = (upEvent: PointerEvent) => {
-			window.removeEventListener('pointermove', onMove);
-			window.removeEventListener('pointerup', onUp);
-			window.removeEventListener('pointercancel', onUp);
-			try {
-				target.releasePointerCapture?.(upEvent.pointerId);
-			} catch {
-				// Pointer capture may already be gone after a cancel path.
-			}
-			document.body.style.cursor = '';
-			document.body.style.userSelect = '';
-			isTocResizing = false;
-		};
-
-		window.addEventListener('pointermove', onMove);
-		window.addEventListener('pointerup', onUp);
-		window.addEventListener('pointercancel', onUp);
-	}
-
+	
+	
 	onMount(() => {
 		loadRecentFiles();
 		isDisposed = false;
@@ -2645,41 +1600,15 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 			unlisteners.push(
 				await appWindow.onDragDropEvent((event) => {
 					if (event.payload.type === 'enter' || event.payload.type === 'over') {
-						const { x, y } = event.payload.position;
 						isDragging = true;
-						// Only `enter` carries the paths; `over` repeats the position.
-						if (event.payload.type === 'enter') dragPaths = event.payload.paths;
-						
-						const contains = (el: HTMLElement) => {
-							const rect = el.getBoundingClientRect();
-							return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
-						};
-						if (editorPaneEl) {
-							if (contains(editorPaneEl)) {
-								dragTarget = 'editor';
-								if (editorPane) editorPane.updateDragCaret(x, y);
-							} else {
-								dragTarget = viewerPaneEl && contains(viewerPaneEl) ? 'preview' : null;
-								if (editorPane) editorPane.hideDragCaret();
-							}
-						}
 					} else if (event.payload.type === 'drop') {
-						const { x, y } = event.payload.position;
-						const paths = event.payload.paths;
-						const currentEditor = editorPane;
-						if (currentEditor) currentEditor.hideDragCaret();
-						handleDrop(paths, dragTarget, !!currentEditor, {
-							insert: (path) => currentEditor?.handleDroppedFile(path, x, y),
-							open: (path) => loadMarkdown(path),
-							unsupported: reportUnsupportedDrop,
-						});
-						
+						for (const path of event.payload.paths) {
+							if (hasMarkdownLinkExtension(path)) void loadMarkdown(path);
+							else reportUnsupportedDrop(path);
+						}
 						isDragging = false;
-						dragTarget = null;
 					} else if (event.payload.type === 'leave') {
 						isDragging = false;
-						dragTarget = null;
-						if (editorPane) editorPane.hideDragCaret();
 					}
 				}),
 			);
@@ -2716,14 +1645,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	});
 </script>
 
-<svelte:document
-	onclick={handleDocumentClick}
-	oncopy={handleCopy}
-	oncontextmenu={handleContextMenu}
-	onmouseover={handleMouseOver}
-	onmouseout={handleMouseOut}
-	onkeydown={handleKeyDown}
-	onmouseup={handleMouseUp} />
+<svelte:document onkeydown={handleKeyDown} />
 
 {#if mode === 'loading'}
 	<TitleBar
@@ -2743,20 +1665,15 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		onsaveFile={saveContent}
 		onsaveFileAs={saveContentAs}
 		onreloadFromDisk={reloadFromDisk}
-		onexportHtml={exportAsHtml}
-		onexportPdf={exportAsPdf}
 		onexit={appExit}
 		ontoggleHome={toggleHome}
 		ononpenFileLocation={openFileLocation}
 		ontoggleLiveMode={toggleLiveMode}
 		ontabclick={() => (showHome = false)}
 		onresetZoom={() => settings.resetZoom()}
-		isFullWidth={settings.previewFullWidth}
-		ontoggleFullWidth={() => { settings.previewFullWidth = !settings.previewFullWidth; }}
 		theme={settings.theme}
 		onSetTheme={(t: string) => (settings.theme = resolveTheme(t))}
 		onopenSettings={() => (showSettings = true)}
-		onfind={triggerFindAction}
 		oncloseTab={closeTabAndWindowIfLast} />
 	<div class="loading-screen">
 		<svg class="spinner" viewBox="0 0 50 50">
@@ -2781,43 +1698,18 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		onsaveFile={saveContent}
 		onsaveFileAs={saveContentAs}
 		onreloadFromDisk={reloadFromDisk}
-		onexportHtml={exportAsHtml}
-		onexportPdf={exportAsPdf}
 		onexit={appExit}
 		ontoggleHome={toggleHome}
 		ononpenFileLocation={openFileLocation}
 		ontoggleLiveMode={toggleLiveMode}
 		ontabclick={() => (showHome = false)}
 		onresetZoom={() => settings.resetZoom()}
-		isFullWidth={settings.previewFullWidth}
-		ontoggleFullWidth={() => { settings.previewFullWidth = !settings.previewFullWidth; }}
 		theme={settings.theme}
 		onSetTheme={(t: string) => (settings.theme = resolveTheme(t))}
 		onopenSettings={() => (showSettings = true)}
-		onfind={triggerFindAction}
-		canGoBack={canGoBackInFileHistory}
-		canGoForward={canGoForwardInFileHistory}
-		onback={() => navigateFileHistory('back')}
-		onforward={() => navigateFileHistory('forward')}
 		oncloseTab={closeTabAndWindowIfLast} />
 
 	<Settings show={showSettings} theme={settings.theme} onSetTheme={(t) => (settings.theme = t)} onclose={() => (showSettings = false)} />
-
-	<DiffOverlay
-		show={externalChange.comparison !== null}
-		onDisk={externalChange.comparison?.onDisk ?? ''}
-		mine={externalChange.comparison?.mine ?? ''}
-		language={externalChange.comparison?.language ?? 'markdown'}
-		labels={{
-			onDisk: t('externalChange.onDisk', settings.language),
-			mine: t('externalChange.mine', settings.language),
-			reload: t('externalChange.reload', settings.language),
-			keepMine: t('externalChange.keepMine', settings.language),
-			close: t('externalChange.close', settings.language),
-		}}
-		onclose={externalChange.closeComparison}
-		onreload={() => externalChange.comparison && resolveExternalChangeByReloading(externalChange.comparison.tabId)}
-		onkeep={() => externalChange.comparison && resolveExternalChangeByKeepingBuffer(externalChange.comparison.tabId)} />
 
 	{#if sidebarSide}
 		<Sidebar
@@ -2844,10 +1736,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	{#if activeExternalChangeConflict && !showHome}
 		<div class="external-change-bar" role="status" style:top="{36 + paneTopChrome}px">
 			<span class="external-change-text">{t('externalChange.message', settings.language)}</span>
-			<button class="external-change-action" onclick={compareExternalChange}>
-				{t('externalChange.compare', settings.language)}
-			</button>
-			<button class="external-change-action" onclick={() => resolveExternalChangeByReloading(tabManager.activeTabId ?? '')}>
+				<button class="external-change-action" onclick={() => resolveExternalChangeByReloading(tabManager.activeTabId ?? '')}>
 				{t('externalChange.reload', settings.language)}
 			</button>
 			<button class="external-change-action primary" onclick={() => resolveExternalChangeByKeepingBuffer(tabManager.activeTabId ?? '')}>
@@ -2861,335 +1750,22 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 				style="--code-font: {previewAppearance.codeFontFamily}; --code-font-size: {previewAppearance.codeFontSize * contentZoom}px; --highlight-color: {previewAppearance.highlightColor};"
 				onwheel={handleWheel}
 				role="presentation">
-				<div class="layout-container" 
-					bind:this={layoutContainerEl}
-					class:split={isSplit} 
-					class:editor-on-right={isSplit && settings.splitEditorSide === 'right'} 
-					class:editing={isEditing} 
-					class:has-pinned-toc={isMarkdown && settings.pinnedToc && settings.showToc}
-					class:toc-on-left={isMarkdown && settings.tocSide === 'left'}
-					class:toc-on-right={isMarkdown && settings.tocSide === 'right'}
-					class:toc-resizing={isTocResizing}
-					style="--toc-width: {settings.tocWidth}px; --pane-top-chrome: {paneTopChrome}px;">
+				<div class="layout-container" bind:this={layoutContainerEl} class:editing={isEditing} style="--pane-top-chrome: {paneTopChrome}px;">
 					<!-- Editor Pane -->
-					<div bind:this={editorPaneEl} class="pane editor-pane" style:flex={isSplit ? tabManager.activeTab.splitRatio : null}>
-						{#if hasEditorPane}
-							{#if isWysiwyg}
-								{#key tabManager.activeTabId}
-									{@const tabId = tabManager.activeTabId}
-									<WysiwygEditor
-										value={tabManager.activeTab.rawContent}
-										readOnly={editorReadOnly(tabManager.activeTab)}
-										language={settings.language}
-										initialLine={viewMode.activeCursor?.line ?? 1}
-										initialColumn={viewMode.activeCursor?.column ?? 1}
-										onchange={(markdown) => tabManager.updateTabRawContent(tabId ?? '', markdown)}
-										onrequesturl={requestLinkUrl}
-										bind:toolbarHeight={editorToolbarHeight} />
-								{/key}
-							{:else}
-								<Editor
-									bind:this={editorPane}
-									value={tabManager.activeTab.rawContent}
-									readOnly={editorReadOnly(tabManager.activeTab)}
-									language={editorLanguage}
-									theme={settings.theme}
-									zoomLevel={settings.zoomLevel}
-									oncommand={runViewerCommand}
-									onscrollsync={handleEditorScrollSync}
-									oncursor={handleEditorCursor}
-									sharedCursor={settings.previewCursor ? viewMode.activeCursor : null} />
-							{/if}
-						{/if}
+					<div bind:this={editorPaneEl} class="pane editor-pane">
+						{#key tabManager.activeTabId}
+							{@const tabId = tabManager.activeTabId}
+							<WysiwygEditor
+								value={tabManager.activeTab.rawContent}
+								readOnly={tabManager.activeTab.isTruncated === true}
+								language={settings.language}
+								initialLine={viewMode.activeCursor?.line ?? 1}
+								initialColumn={viewMode.activeCursor?.column ?? 1}
+								onchange={(markdown) => tabManager.updateTabRawContent(tabId ?? '', markdown)}
+								onrequesturl={requestLinkUrl}
+								bind:toolbarHeight={editorToolbarHeight} />
+						{/key}
 					</div>
-
-					<!-- Splitter -->
-					{#if isSplit}
-						<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-						<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-						<div class="split-bar" onmousedown={(e) => startDrag(e, tabManager.activeTabId)} onkeydown={handleSplitterKeyDown} role="separator" aria-orientation="vertical" tabindex="0"></div>
-					{/if}
-
-					<!-- Viewer Pane -->
-					<div 
-						bind:this={viewerPaneEl} 
-						bind:clientWidth={viewerWidth}
-						class="pane viewer-pane" 
-						style:flex={isSplit ? 1 - tabManager.activeTab.splitRatio : null}>
-
-						<FindBar
-							bind:this={findBar}
-							bind:open={findOpen}
-							contentRoot={previewBlocks}
-							onunfold={(key: string) => revealFold(foldHost, key)}
-							language={settings.language} />
-
-							<div class="viewer-content">
-								<article
-									bind:this={markdownBody}
-									contenteditable="false"
-									class="markdown-body {COPYABLE_INLINE_CODE_CLASS} {settings.previewFullWidth ? 'full-width' : ''}"
-									class:toc-in-gutter={settings.showToc && !settings.pinnedToc && !isOverhanging}
-									class:table-breakout={settings.previewTableBreakout}
-									class:table-fit={!settings.previewTableScroll}
-									class:soft-breaks={!settings.previewNewlineBreaks}
-									onscroll={handleScroll}
-									onclick={handleLinkClick}
-									onmousedown={handleLinkMiddleClick}
-									onchange={handleTaskCheckboxChange}
-									onkeydown={(e) => {
-										const target = e.target as HTMLElement;
-										if (target.closest('.frontmatter-panel')) return;
-										if(e.key === 'Enter' || e.key === ' ') handleLinkClick(e as unknown as MouseEvent);
-									}}
-									tabindex="-1"
-									style="outline: none; font-family: {previewAppearance.fontFamily}; font-size: {previewAppearance.fontSize * contentZoom}px; flex: 1; --preview-max-width: {layout.maxWidthCss};">
-									{#if frontMatterInfo.exists}
-										<details
-											class="frontmatter-panel"
-											class:is-collapsed={isFrontMatterCollapsed}
-											open={!isFrontMatterCollapsed}
-											ontoggle={(e) => setFrontMatterCollapsed(!(e.currentTarget as HTMLDetailsElement).open)}>
-											<summary class="frontmatter-summary">
-												<span class="frontmatter-chevron" aria-hidden="true">›</span>
-												<span class="frontmatter-title">{t('frontMatter.properties', settings.language)}</span>
-												<span class="frontmatter-count">{frontMatterInfo.valid ? frontMatterInfo.fields.length : 0}</span>
-											</summary>
-
-											{#if frontMatterInfo.valid}
-												<div class="frontmatter-grid">
-													{#each frontMatterInfo.fields as field (field.key)}
-														<label class="frontmatter-key" for={frontMatterFieldId(field.key)}>{field.key}</label>
-														<div class="frontmatter-value">
-															{#if field.editable}
-																{#if field.kind === 'boolean'}
-																	<select
-																		id={frontMatterFieldId(field.key)}
-																		value={String(field.value)}
-																		onchange={(e) => handleFrontMatterEdit(field, (e.currentTarget as HTMLSelectElement).value)}>
-																		<option value="true">true</option>
-																		<option value="false">false</option>
-																	</select>
-																{:else if field.kind === 'list'}
-																	<div class="frontmatter-tags">
-																		<div class="frontmatter-tag-list" role="list" aria-label={t('frontMatter.tagList', settings.language).replace('{{field}}', field.key)}>
-																			{#each getFrontMatterListItems(field) as tag, index (`${tag}-${index}`)}
-																				<span class="frontmatter-tag" role="listitem">
-																					{#if getFrontMatterTagEditIndex(field) === index}
-																						<input
-																							class="frontmatter-tag-edit-input"
-																							type="text"
-																							value={getFrontMatterTagEditDraft(field, tag)}
-																							aria-label={t('frontMatter.editTag', settings.language).replace('{{field}}', field.key).replace('{{tag}}', tag)}
-																							use:focusAndSelect
-																							oninput={(e) => setFrontMatterTagEditDraft(field, (e.currentTarget as HTMLInputElement).value)}
-																							onkeydown={(e) => handleFrontMatterTagEditKeydown(e, field, index)}
-																							onblur={() => commitFrontMatterTagEdit(field, index)} />
-																					{:else}
-																						<button
-																							class="frontmatter-tag-text"
-																							type="button"
-																							aria-label={t('frontMatter.editTag', settings.language).replace('{{field}}', field.key).replace('{{tag}}', tag)}
-																							onclick={() => startFrontMatterTagEdit(field, index, tag)}>
-																							{tag}
-																						</button>
-																						<button
-																							class="frontmatter-tag-remove"
-																							type="button"
-																							aria-label={t('frontMatter.removeTag', settings.language).replace('{{field}}', field.key).replace('{{tag}}', tag)}
-																							onclick={() => removeFrontMatterTag(field, index)}>
-																							×
-																						</button>
-																					{/if}
-																				</span>
-																			{/each}
-																		</div>
-																		<div class="frontmatter-tag-add">
-																			<input
-																				id={frontMatterFieldId(field.key)}
-																				type="text"
-																				value={getFrontMatterTagDraft(field)}
-																				placeholder={t('frontMatter.addTag', settings.language)}
-																				autocomplete="off"
-																				enterkeyhint="done"
-																				oninput={(e) => setFrontMatterTagDraft(field, (e.currentTarget as HTMLInputElement).value)}
-																				onkeydown={(e) => handleFrontMatterTagAddKeydown(e, field)} />
-																			<button
-																				class="frontmatter-tag-add-button"
-																				type="button"
-																				aria-label={t('frontMatter.addTagTo', settings.language).replace('{{field}}', field.key)}
-																				onclick={() => commitFrontMatterTagAdd(field)}>
-																				+
-																			</button>
-																		</div>
-																	</div>
-																{:else}
-																	<input
-																		id={frontMatterFieldId(field.key)}
-																		type={field.kind === 'number' ? 'number' : 'text'}
-																		value={field.displayValue}
-																		onchange={(e) => handleFrontMatterEdit(field, (e.currentTarget as HTMLInputElement).value)} />
-																{/if}
-															{:else}
-																<code>{field.displayValue}</code>
-															{/if}
-															{#if frontMatterFields.editError(field)}
-																<div class="frontmatter-field-error" role="status">{frontMatterFields.editError(field)}</div>
-															{/if}
-														</div>
-													{/each}
-												</div>
-											{:else}
-												<div class="frontmatter-error" role="status">{frontMatterInfo.error}</div>
-											{/if}
-
-										</details>
-									{/if}
-									<!--
-										One host per tab, all mounted, only the active one displayed:
-										see `previewHosts`. The children are filled by the block patch,
-										not by Svelte.
-
-										`display`, not `visibility` or a zero height: a hidden host must
-										cost no layout.
-									-->
-									{#each tabManager.tabs as tab (tab.id)}
-										<div
-											class="markdown-blocks"
-											style:display={tab.id === tabManager.activeTabId ? null : 'none'}
-											bind:this={previewHosts[tab.id]}></div>
-									{/each}
-									{#if previewCursorBox}
-										<div class="preview-cursor" aria-hidden="true" style:top="{previewCursorBox.top}px" style:height="{previewCursorBox.height}px">
-											{#if settings.renderLineHighlight === 'line'}
-												<div class="preview-cursor-line"></div>
-											{/if}
-											<div class="preview-cursor-caret" style:left="{previewCursorBox.left}px"></div>
-										</div>
-									{/if}
-								</article>
-								{#if tabManager.activeTabId && loadingTabs.includes(tabManager.activeTabId) && isAtBottom}
-								<div class="loading-chip" transition:fly={{ y: 20, duration: 300, easing: cubicOut }}>
-									<div class="loading-spinner"></div>
-									<span>{t('common.loadingFullDocument', settings.language)}</span>
-								</div>
-							{/if}
-						</div>
-					</div>
-
-					<!-- Unified TOC Support -->
-					{#if isMarkdown && !showHome}
-						<div class="top-fade-mask" style="{settings.tocSide === 'left' ? 'left: 0;' : 'right: 0; left: auto;'}"></div>
-						<button
-							bind:this={tocToggleEl}
-							class="toc-toggle-floating {settings.showToc ? 'expanded' : ''}"
-							class:on-right={settings.tocSide === 'right'}
-								onclick={() => { settings.showToc = !settings.showToc; }}
-							aria-label={settings.showToc ? t('tooltip.hideTableOfContents', settings.language) : t('tooltip.showTableOfContents', settings.language)}
-							onmouseenter={(e) => {
-								const rect = e.currentTarget.getBoundingClientRect();
-								tooltip = { 
-									show: true, 
-									text: settings.showToc ? t('tooltip.hideTableOfContents', settings.language) : t('tooltip.showTableOfContents', settings.language), 
-									shortcut: '',
-									html: '', 
-									isFootnote: false, 
-									x: settings.tocSide === 'left' ? rect.right + 8 : rect.left - 8, 
-									y: rect.top + rect.height / 2,
-									align: settings.tocSide === 'left' ? 'right' : 'left'
-								};
-							}}
-							onmouseleave={() => tooltip.show = false}>
-							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-								<polyline points="9 18 15 12 9 6"></polyline>
-							</svg>
-						</button>
-
-						{#if settings.showToc}
-							<div
-								bind:this={tocWrapperEl}
-								transition:fly={{ x: settings.tocSide === 'left' ? -settings.tocWidth : settings.tocWidth, duration: 300, opacity: 1, easing: cubicOut }}
-								class="toc-overlay-wrapper"
-								class:is-overhanging={isOverhanging} 
-								class:is-pinned={settings.pinnedToc}
-								class:is-resizing={isTocResizing}
-								class:on-right={settings.tocSide === 'right'}>
-								<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-								<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-								<div
-									class="toc-resize-handle"
-									class:on-right={settings.tocSide === 'right'}
-									role="separator"
-									aria-label={t('toc.resizeTableOfContents', settings.language)}
-									aria-orientation="vertical"
-									aria-valuemin={TOC_WIDTH_RANGE.min}
-									aria-valuemax={TOC_WIDTH_RANGE.max}
-									aria-valuenow={settings.tocWidth}
-									tabindex="0"
-									onpointerdown={startTocResize}
-									onkeydown={handleTocResizeKeyDown}></div>
-								<Toc
-									activeLine={viewMode.tocActiveLine} 
-										{markdownBody} 
-										contentRoot={previewBlocks}
-										previewRevision={previewPatch.revision}
-										onBeforeJump={pushScrollHistory} 
-										{foldOverrides} 
-										ontoggleFold={(key: string) => toggleFold(foldHost, key)} 
-										oncopyref={(text: string, slug: string) => copyHeadingReference(text, slug)}
-										onjump={(id: string, text: string, sourceLine: RendererLine | null) => {
-											// A floating outline that is covering the text has done its
-											// job the moment you pick an entry: it exists to be called
-											// up, used once and dismissed. Pinned it is a permanent
-											// sidebar and stays; not overhanging it is sitting in the
-											// margin harming nothing, and closing it would take away a
-											// behaviour that was already fine.
-											if (tocAutoCollapses(() => isOverhanging, settings.pinnedToc)) settings.showToc = false;
-											if (hasEditorPane && editorPane) {
-												// Same renderer-to-buffer shift as the context menu: the
-												// outline reads `data-sourcepos` too, and has been landing
-												// short by the front matter's height for as long as both
-												// have existed.
-												editorPane.revealHeader(
-													sourceLine === null ? null : lineCoords.toBufferLine(sourceLine),
-													text,
-												);
-											}
-										}}
-										oncontext={(e, item) => {
-											docContextMenu = {
-												show: true,
-												x: e.clientX,
-												y: e.clientY,
-												items: [
-													{ 
-														label: t('menu.copyReference', settings.language),
-														onClick: () => {
-															copyHeadingReference(item.text, item.id);
-															docContextMenu.show = false;
-														} 
-													}
-												]
-											};
-										}}
-										onshowTooltip={(e, text, shortcut, align) => {
-											const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-											tooltip = {
-												show: true,
-												text,
-												shortcut: shortcut || '',
-												html: '',
-												isFootnote: false,
-												x: align === 'right' ? rect.right + 8 : (align as any === 'left' ? rect.left - 8 : rect.left + rect.width / 2),
-												y: align === 'right' || align as any === 'left' ? rect.top + rect.height / 2 : (align === 'below' ? rect.bottom + 8 : rect.top - 8),
-												align: align || 'top'
-											};
-										}}
-										onhideTooltip={() => tooltip.show = false}
-								/>
-							</div>
-						{/if}
-					{/if}
 				</div>
 			</div>
 	{:else}
@@ -3265,45 +1841,20 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		{/each}
 	</div>
 
-	{#if zoomData}
-		<ZoomOverlay 
-			src={zoomData.src} 
-			html={zoomData.html} 
-			onclose={() => zoomData = null} 
-		/>
-	{/if}
-
 	{#if isDragging}
 		<div class="drag-overlay" role="presentation">
-			<div class="drag-zones" class:split={isSplit} class:editor-on-right={isSplit && settings.splitEditorSide === 'right'}>
-				{#if hasEditorPane}
-					<div class="drag-zone editor-zone" class:active={dragTarget === 'editor'}>
-								<div class="drag-message">
-									<span>{dropZoneLabel(dragPaths, 'editor') === 'embed' ? t('dragAndDrop.embed', settings.language) : t('dragAndDrop.open', settings.language)}</span>
-								</div>
-							</div>
-				{/if}
-				{#if isSplit || !isEditing}
-					<div class="drag-zone viewer-zone" class:active={dragTarget === 'preview'}>
-								<div class="drag-message">
-									<span>{t('dragAndDrop.open', settings.language)}</span>
-								</div>
-							</div>
-				{/if}
+			<div class="drag-zones">
+				<div class="drag-zone editor-zone active">
+					<div class="drag-message">
+						<span>{t('dragAndDrop.open', settings.language)}</span>
+					</div>
+				</div>
 			</div>
 		</div>
 	{/if}
 {/if}
 
-<svelte:window onwheelcapture={noteInput} onpointerdowncapture={noteInput} onkeydowncapture={noteInput} />
-
 <ContextMenu {...docContextMenu} onhide={() => (docContextMenu.show = false)} />
-
-<!-- What a PDF is rendered from: empty on screen, filled for the duration of a
-     print by `exportAsPdf`. It is a sibling of the app's own markup so that the
-     print sheet can hide everything else under `#app` in one rule, rather than
-     naming each part of the interface (#668). -->
-<article id="print-root" class="markdown-body" bind:this={printRootEl}></article>
 
 <style>
 	:root {
@@ -3345,9 +1896,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	}
 
 	/* An outline floating in the margin keeps a wide table from sliding under it. */
-	.markdown-body.toc-in-gutter {
-		--breakout-inset: calc(var(--toc-width) + var(--gutter));
-	}
 
 	/*
 	 * With Wide Tables Can Exceed Max Width on, a table wider than the column
@@ -3468,8 +2016,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		--measure: 100cqi;
 	}
 
-
-
 	:global(.youtube-link) {
 		display: block;
 		max-width: 100%;
@@ -3535,9 +2081,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		transform: translateX(-50%) translateY(calc(-100% + 4px));
 		opacity: 0;
 		transition: 
-			opacity 0.15s ease,
-			transform 0.15s ease,
-			left 0.15s ease,
 			top 0.15s ease;
 		display: flex;
 		flex-direction: column;
@@ -3586,7 +2129,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		align-items: flex-end;
 	}
 
-
 	.tooltip.footnote-tooltip {
 		white-space: normal;
 		max-width: 500px;
@@ -3622,7 +2164,6 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		border-right: 6px solid transparent;
 		border-top: 6px solid var(--color-canvas-overlay);
 	}
-
 
 	.drag-overlay {
 		position: fixed;
@@ -3789,21 +2330,10 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		opacity: 0;
 	}
 
-	.layout-container:not(.split):not(.editing) .viewer-pane {
-		width: 100%;
-		flex: 1 !important;
-	}
-
 	/* Edit Mode */
 	.layout-container:not(.split).editing .editor-pane {
 		width: 100%;
 		flex: 1 !important;
-	}
-
-	.layout-container:not(.split).editing .viewer-pane {
-		width: 0 !important;
-		flex: 0 !important;
-		opacity: 0;
 	}
 
 	.split-bar {
@@ -3914,79 +2444,7 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 		z-index: 50;
 	}
 
-	.toc-overlay-wrapper {
-		position: absolute;
-		top: 36px;
-		left: 0;
-		bottom: 0;
-		z-index: 1000;
-		height: calc(100% - 36px);
-		width: var(--toc-width);
-		background-color: var(--color-canvas-default);
-		border-right: 1px solid transparent;
-		border-left: 1px solid transparent;
-		box-shadow: 10px 0 30px rgba(0, 0, 0, 0);
-		transition: box-shadow 0.3s ease, border-color 0.3s ease;
-	}
-
-	.layout-container.editing.has-pinned-toc.toc-on-left .editor-pane {
-		padding-left: 40px;
-	}
 	
-	.layout-container.editing.has-pinned-toc.toc-on-right .editor-pane {
-		padding-right: 40px;
-	}
-
-	.toc-overlay-wrapper.on-right {
-		left: auto;
-		right: 0;
-	}
-
-	.toc-overlay-wrapper.is-overhanging:not(.is-pinned) {
-		border-right-color: var(--color-border-default);
-		box-shadow: 10px 0 30px rgba(0, 0, 0, 0.12);
-	}
-	
-	.toc-overlay-wrapper.is-overhanging.on-right:not(.is-pinned) {
-		border-left-color: var(--color-border-default);
-		box-shadow: -10px 0 30px rgba(0, 0, 0, 0.12);
-	}
-
-	.toc-toggle-floating {
-		position: absolute;
-		/*
-		 * 36px of title bar, a 12px inset, and however tall the editor toolbar
-		 * is right now — 0 when there isn't one. See `paneTopChrome`: the last
-		 * term is measured because the toolbar's height is the toolbar's to
-		 * decide, and a copy of it here would silently go stale.
-		 */
-		top: calc(48px + var(--pane-top-chrome, 0px));
-		left: 8px;
-		width: 28px;
-		height: 28px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background-color: color-mix(in srgb, var(--color-canvas-default) 82%, transparent);
-		border: 1px solid var(--color-border-default);
-		border-radius: 4px;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-		backdrop-filter: blur(8px);
-		-webkit-backdrop-filter: blur(8px);
-		color: var(--color-fg-muted);
-		cursor: pointer;
-		z-index: 1001;
-		transition: 
-			left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-			background-color 0.2s ease,
-			border-color 0.2s ease,
-			box-shadow 0.2s ease,
-			color 0.2s ease,
-			opacity 0.2s ease,
-			transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-		opacity: 0.6;
-		padding: 0;
-	}
 
 	/**
 	 * Expanded, the button floats over the OUTLINE, which has no editor toolbar
@@ -3999,121 +2457,4 @@ import { followActiveFile } from './sessions/fileWatch.svelte.js';
 	 * Collapsed it keeps the offset, because there it really is floating over
 	 * the editor pane and the toolbar really is above it.
 	 */
-	.toc-toggle-floating.expanded {
-		left: 24px;
-		top: 48px;
-	}
-
-	.toc-toggle-floating.on-right {
-		left: auto;
-		right: 8px;
-	}
-
-	.toc-toggle-floating.on-right.expanded {
-		right: 24px;
-	}
-
-	.layout-container:hover .toc-toggle-floating,
-	.toc-toggle-floating:hover {
-		background-color: color-mix(in srgb, var(--color-canvas-default) 90%, transparent);
-		color: var(--color-fg-default);
-		opacity: 1;
-	}
-
-	.toc-toggle-floating:focus-visible {
-		outline: 2px solid var(--color-accent-fg);
-		outline-offset: 2px;
-		opacity: 1;
-	}
-
-	.toc-toggle-floating:active {
-		background-color: var(--color-border-muted);
-	}
-
-	.toc-toggle-floating svg {
-		transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-		transform: rotate(0deg);
-	}
-	
-	.toc-toggle-floating.on-right svg {
-		transform: rotate(180deg);
-	}
-
-	.toc-toggle-floating.expanded svg {
-		transform: rotate(180deg);
-	}
-	
-	.toc-toggle-floating.on-right.expanded svg {
-		transform: rotate(0deg);
-	}
-
-	.layout-container.toc-resizing,
-	.layout-container.toc-resizing .toc-overlay-wrapper,
-	.layout-container.toc-resizing .toc-toggle-floating {
-		transition: none !important;
-	}
-
-
-	.layout-container.has-pinned-toc.toc-on-left {
-		padding-left: var(--toc-width);
-	}
-
-	.layout-container.has-pinned-toc.toc-on-right {
-		padding-right: var(--toc-width);
-	}
-
-	.toc-overlay-wrapper.is-pinned {
-		z-index: 10;
-		box-shadow: none !important;
-		border-right: 1px solid var(--color-border-default);
-	}
-
-	.toc-overlay-wrapper.is-pinned.on-right {
-		border-right: none;
-		border-left: 1px solid var(--color-border-default);
-	}
-
-	.layout-container.editing .toc-overlay-wrapper:not(.on-right) {
-		border-right-color: var(--color-border-default);
-	}
-
-	.layout-container.editing .toc-overlay-wrapper.on-right {
-		border-left-color: var(--color-border-default);
-	}
-
-	.toc-resize-handle {
-		position: absolute;
-		top: 0;
-		right: -5px;
-		bottom: 0;
-		width: 10px;
-		z-index: 80;
-		cursor: col-resize;
-		touch-action: none;
-		outline: none;
-	}
-
-	.toc-resize-handle.on-right {
-		right: auto;
-		left: -5px;
-	}
-
-	.toc-resize-handle::after {
-		content: '';
-		position: absolute;
-		top: 10px;
-		bottom: 10px;
-		left: 50%;
-		width: 1px;
-		transform: translateX(-50%);
-		background-color: var(--color-accent-fg);
-		opacity: 0;
-		transition: opacity 0.15s ease;
-	}
-
-	.toc-resize-handle:hover::after,
-	.toc-resize-handle:focus-visible::after,
-	.toc-overlay-wrapper.is-resizing .toc-resize-handle::after {
-		opacity: 0.85;
-	}
 </style>

@@ -1,18 +1,14 @@
 import { commands } from '../bindings.js';
 
 import { tabManager, type Tab } from '../stores/tabs.svelte.js';
-import { outgoingTabAnchorLine } from '../utils/editorPosition.js';
 import { isHomePath } from '../utils/homeTab.js';
 import { snapshotTab } from '../utils/tabTransfer.js';
-
-type EditorPane = { flushPositionTo(tabId: string): void } | null | undefined;
 
 /**
  * The viewer's half of the window session's options: what this window
  * sends when a tab leaves it, and how it takes one in.
  */
 export function createTransferOptions(options: {
-	editorPane: () => EditorPane;
 	windowStateJson: () => string;
 	isCloseWalkActive: () => boolean;
 	isDisposed: () => boolean;
@@ -29,7 +25,6 @@ export function createTransferOptions(options: {
 			// so the tab being edited would be persisted at the position it held
 			// when the editor last came down. Only the active tab can be the one
 			// the editor holds.
-			if (tabManager.activeTabId) options.editorPane()?.flushPositionTo(tabManager.activeTabId);
 			return options.windowStateJson();
 		},
 		// A partially loaded buffer must never be handed to another window.
@@ -55,7 +50,6 @@ export function createTransferOptions(options: {
 			// tab opened straight into edit mode with 0. The preview writes its
 			// own fields on every scroll and needs nothing; this is edit mode's
 			// equivalent, and it is a no-op for any tab the editor is not on.
-			options.editorPane()?.flushPositionTo(tabId);
 			// The other half of the same problem: the flush can only speak for
 			// the tab the editor is holding, and any other tab can be sent from
 			// here too — the tab context menu names one, and `mergeSelfInto`
@@ -64,7 +58,7 @@ export function createTransferOptions(options: {
 			// the anchor is recovered from it before it is dropped.
 			return JSON.stringify({
 				...snapshotTab(tab),
-				anchorLine: outgoingTabAnchorLine(tab, tabManager.activeTabId),
+				anchorLine: tab.anchorLine,
 			});
 		},
 		acceptTransferredTab: async (snapshot: Parameters<typeof tabManager.insertTransferredTab>[0]) => {

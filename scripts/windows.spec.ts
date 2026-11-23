@@ -1299,7 +1299,7 @@ describe('window organization', () => {
 		// Carry: the chord names the command, and the command carries the tab.
 		const command = viewerCommandFor(
 			{ key: 'm', code: 'KeyM', ctrlKey: true, metaKey: false, shiftKey: true, altKey: false },
-			{ mode: 'app', osType: 'windows', isSplit: false, overlayOpen: false, dialogOpen: false, isEditing: false, editorHasFocus: false },
+			{ mode: 'app', osType: 'windows', overlayOpen: false, dialogOpen: false},
 		);
 		assert.equal(command, 'move-tab-to-next-window');
 		const calls: string[] = [];
@@ -1310,7 +1310,7 @@ describe('window organization', () => {
 		assert.deepEqual(calls, ['carryActiveTabToNextWindow']);
 	});
 
-	test('the Home menu groups window organization below export actions', async () => {
+	test('the Home menu groups window organization above Exit', async () => {
 		const { view, labels } = await openHomeMenu(() => {});
 		using _ = view;
 		const at = (key: TranslationKey) => {
@@ -1318,7 +1318,6 @@ describe('window organization', () => {
 			assert.notEqual(index, -1, `${key} is in the menu`);
 			return index;
 		};
-		assert.ok(at('menu.exportPdf') < at('menu.setWindowTag'));
 		assert.ok(at('menu.setWindowTag') < at('menu.mergeAllWindows'));
 		assert.ok(at('menu.mergeAllWindows') < at('menu.exit'));
 	});

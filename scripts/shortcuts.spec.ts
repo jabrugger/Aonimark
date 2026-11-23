@@ -4,7 +4,7 @@ import { flushSync } from 'svelte';
 import { beforeAll, describe, onTestFinished, test } from 'vitest';
 
 import { handleModalBackdropContextMenu } from '../src/lib/utils/modalContextMenu.js';
-import { canUsePreviewWidthShortcut, type KeyContext, type KeyStroke, type ViewerCommand, viewerCommandFor } from '../src/lib/utils/viewerKeymap.js';
+import { type KeyContext, type KeyStroke, type ViewerCommand, viewerCommandFor } from '../src/lib/utils/viewerKeymap.js';
 import { PLATFORMS } from './keymapHarness.js';
 import { ChoiceDialog } from '../src/lib/utils/choiceDialog.svelte.js';
 import { contextMenuFor } from '../src/lib/utils/viewerContextMenu.js';
@@ -28,11 +28,11 @@ describe('viewer keymap', () => {
 	const READING: KeyContext = {
 		mode: 'app',
 		osType: 'windows',
-		isSplit: false,
+		
 		overlayOpen: false,
 		dialogOpen: false,
-		isEditing: false,
-		editorHasFocus: false,
+		
+		
 	};
 
 	const chord = (key: string, code: string, mods: Partial<KeyStroke> = {}): KeyStroke => ({
@@ -69,16 +69,6 @@ describe('viewer keymap', () => {
 		}
 	});
 
-	test('Mod+F is Monaco’s while the caret is in the editor, and the app’s otherwise', () => {
-		// The one branch whose condition is where FOCUS is, which is why it is the
-		// one chord the app deliberately answers with nothing some of the time: a
-		// null means the caller does not preventDefault, and Monaco's own Find
-		// keybinding gets the keystroke.
-		const modF = chord('f', 'KeyF', { ctrlKey: true });
-		assert.equal(viewerCommandFor(modF, READING), 'find');
-		assert.equal(viewerCommandFor(modF, { ...READING, editorHasFocus: true }), null);
-	});
-
 	test('macOS leaves ⌘Q to the application menu, and the other two do not', () => {
 		// The early return, asked per platform. It is scoped by `osType` rather than
 		// by `platformOf`, which folds Linux into Windows and could not express it.
@@ -105,52 +95,12 @@ describe('viewer keymap', () => {
 			chord('q', 'KeyQ', { ctrlKey: true }),
 			chord('Tab', 'Tab', { ctrlKey: true }),
 			chord('t', 'KeyT', { ctrlKey: true, shiftKey: true }),
-			chord('ArrowLeft', 'ArrowLeft', { altKey: true }),
 		]) {
 			assert.notEqual(viewerCommandFor(stroke, READING), null, `${stroke.code} is bound at all`);
 			assert.equal(viewerCommandFor(stroke, behind), null, `${stroke.code} fired behind the dialog`);
 		}
 		// Settings and Home are overlays too, but not dialogs: the keymap stays live.
 		assert.equal(viewerCommandFor(chord('w', 'KeyW', { ctrlKey: true }), { ...READING, overlayOpen: true }), 'close-file');
-	});
-
-	test('the Alt+arrow chords leave a text field its word jumps', () => {
-		// Option+Left/Right is word-jump in every macOS text field, and
-		// Cmd+Option+Left/Right the tab chords. Both fired from the find bar, the
-		// settings fields and the tag input, moving the tab instead of the caret.
-		//
-		// Monaco's own input is the exception, kept as it was. On macOS Monaco binds
-		// Option+Left/Right itself (cursorWordLeft / cursorWordEndRight) and stops
-		// the event, so the handler never sees it there; the two tab chords, and
-		// Alt+Left/Right on Windows and Linux, are bound by nothing in Monaco and
-		// have always reached the document from the editor. The class names are
-		// Monaco's input for both of its edit-context implementations.
-		document.body.innerHTML = `
-		<div id="preview"><p id="prose">text</p></div>
-		<input id="field" />
-		<div class="monaco-editor">
-			<textarea id="inputarea" class="inputarea" role="textbox"></textarea>
-			<div id="edit-context" class="native-edit-context" role="textbox"></div>
-		</div>
-	`;
-		const at = (id: string) => document.getElementById(id)!;
-		const mac = { ...READING, osType: 'macos' as const };
-		const cases: Array<[KeyStroke, KeyContext, ViewerCommand]> = [
-			[chord('ArrowLeft', 'ArrowLeft', { altKey: true }), READING, 'history-back'],
-			[chord('ArrowRight', 'ArrowRight', { altKey: true }), READING, 'history-forward'],
-			[chord('ArrowLeft', 'ArrowLeft', { altKey: true }), mac, 'history-back'],
-			[chord('ArrowLeft', 'ArrowLeft', { metaKey: true, altKey: true }), mac, 'previous-tab'],
-			[chord('ArrowRight', 'ArrowRight', { metaKey: true, altKey: true }), mac, 'next-tab'],
-		];
-		for (const [stroke, context, command] of cases) {
-			const name = `${context.osType} ${stroke.metaKey ? 'Meta+' : ''}Alt+${stroke.code}`;
-			assert.equal(viewerCommandFor({ ...stroke, target: at('prose') }, context), command, name);
-			assert.equal(viewerCommandFor({ ...stroke, target: null }, context), command, name);
-			assert.equal(viewerCommandFor({ ...stroke, target: at('field') }, context), null, `${name} in a field`);
-			for (const id of ['inputarea', 'edit-context']) {
-				assert.equal(viewerCommandFor({ ...stroke, target: at(id) }, context), command, `${name} in Monaco`);
-			}
-		}
 	});
 
 	test('the zoom-in chord answers both spellings of “Mod plus”', () => {
@@ -166,33 +116,6 @@ describe('viewer keymap', () => {
 		assert.equal(viewerCommandFor(chord('+', 'Equal', { ctrlKey: true, shiftKey: true, altKey: true }), READING), null);
 	});
 
-	test('the preview-width chords keep out of a text field', () => {
-		// The one condition that reads the DOM. jsdom rather than a stub with a
-		// `closest` method, so the selector is matched by the browser's own engine:
-		// a stub would only prove the test and the code agree about a string.
-		const bracket = chord('[', 'BracketLeft', { ctrlKey: true, altKey: true });
-
-		document.body.innerHTML = `
-		<div id="preview"><p id="prose">text</p></div>
-		<input id="field" />
-		<div id="editable" contenteditable="true"><span id="inside">text</span></div>
-		<div id="box" role="textbox"><span id="in-box">text</span></div>
-	`;
-		const at = (id: string) => document.getElementById(id)!;
-
-		assert.equal(viewerCommandFor({ ...bracket, target: at('prose') }, READING), 'preview-width-narrower');
-		for (const id of ['field', 'editable', 'inside', 'box', 'in-box']) {
-			assert.equal(viewerCommandFor({ ...bracket, target: at(id) }, READING), null, `#${id} owns its own keys`);
-		}
-
-		// A target that is not an element at all — `document`, or null — is not a
-		// text field, so the chord applies. This is the case the old
-		// `target instanceof Element` spelling answered by accident and the current
-		// one answers on purpose.
-		assert.equal(canUsePreviewWidthShortcut(null, READING), true);
-		assert.equal(canUsePreviewWidthShortcut(document, READING), true);
-	});
-
 	test('Mod+L reaches Auto-Reload from every mode, including the preview', () => {
 		// #692. The chord used to exist only as an `editorAction`, so Monaco owned
 		// it and it did nothing in the preview — the exact inverse of where the
@@ -202,10 +125,10 @@ describe('viewer keymap', () => {
 		const modL = chord('l', 'KeyL', { ctrlKey: true });
 		assert.equal(viewerCommandFor(modL, READING), 'toggle-live-mode');
 		assert.equal(
-			viewerCommandFor(modL, { ...READING, isEditing: true, editorHasFocus: true }),
+			viewerCommandFor(modL, { ...READING}),
 			'toggle-live-mode',
 		);
-		assert.equal(viewerCommandFor(modL, { ...READING, isSplit: true }), 'toggle-live-mode');
+		assert.equal(viewerCommandFor(modL, { ...READING}), 'toggle-live-mode');
 
 		// And it is Mod+L, not the cross product Mod+Shift+L / Mod+Alt+L.
 		assert.equal(viewerCommandFor(chord('l', 'KeyL', { ctrlKey: true, shiftKey: true }), READING), null);
@@ -218,7 +141,7 @@ describe('viewer keymap', () => {
 		// Monaco on screen.
 		const zen = chord('z', 'KeyZ', { ctrlKey: true, altKey: true });
 		assert.equal(viewerCommandFor(zen, READING), 'toggle-zen-mode');
-		assert.equal(viewerCommandFor(zen, { ...READING, isSplit: true }), 'toggle-zen-mode');
+		assert.equal(viewerCommandFor(zen, { ...READING}), 'toggle-zen-mode');
 
 		// Option rewrites the key on a Mac; the physical key is what the chord names.
 		const macZen = chord('Ω', 'KeyZ', { metaKey: true, altKey: true });
@@ -238,7 +161,7 @@ describe('viewer keymap', () => {
 			getModifierState: (name: string) => name === 'AltGraph',
 		});
 		assert.equal(viewerCommandFor(altGr('ż', 'KeyZ'), READING), null);
-		assert.equal(viewerCommandFor(altGr('[', 'BracketLeft'), { ...READING, isSplit: true }), null);
+		assert.equal(viewerCommandFor(altGr('[', 'BracketLeft'), { ...READING}), null);
 
 		// A real Ctrl+Alt still is.
 		const zen = { ...chord('z', 'KeyZ', { ctrlKey: true, altKey: true }), getModifierState: () => false };

@@ -33,13 +33,11 @@
 import type { ViewerCommand } from './viewerKeymap.js';
 import type { TranslationKey } from './i18n.js';
 
-type ShortcutGroup = 'file' | 'edit' | 'keys' | 'view' | 'window';
+type ShortcutGroup = 'file' | 'view' | 'window';
 
 /** Display order of the groups, and the i18n key that titles each one. */
 export const SHORTCUT_GROUPS: ReadonlyArray<{ group: ShortcutGroup; labelKey: TranslationKey }> = [
 	{ group: 'file', labelKey: 'menu.file' },
-	{ group: 'edit', labelKey: 'menu.edit' },
-	{ group: 'keys', labelKey: 'keys.group' },
 	{ group: 'view', labelKey: 'menu.view' },
 	{ group: 'window', labelKey: 'menu.window' },
 ];
@@ -77,25 +75,6 @@ export type ShortcutEntry = {
 	 */
 	readonly chords: readonly string[];
 	readonly group: ShortcutGroup;
-	/** `Editor.svelte` registers this chord on a Monaco action whose id is `id`. */
-	readonly editorAction?: true;
-	/**
-	 * The name of the handler `Editor.svelte` binds this chord to with a bare
-	 * `editor.addCommand` — no action id, no label, no menu entry.
-	 *
-	 * Contextual keys and Cut/Paste need this because there is no action id to
-	 * check against. Recording the handler's name keeps the row as verifiable as
-	 * every other one — `shortcuts.editor.test.ts` reads
-	 * the component's `addCommand` calls, evaluates the keybinding with Monaco's
-	 * own `KeyMod`/`KeyCode`, and requires that this chord be bound to this
-	 * function.
-	 */
-	readonly editorCommand?: string;
-	/**
-	 * Monaco's own command for this chord, which the app leaves alone (Undo,
-	 * Redo). `editor.chords.spec.ts` checks it against Monaco's real keymap.
-	 */
-	readonly monacoCommand?: string;
 	/**
 	 * The command the document-level dispatcher means by this row's chords when
 	 * the editor does not have focus.
@@ -136,7 +115,6 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 		// button and the app menu have always printed.
 		chords: ['Mod+T', 'Mod+N'],
 		group: 'file',
-		editorAction: true,
 		documentCommands: ['new-file'],
 	},
 	{
@@ -151,7 +129,6 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 		labelKey: 'menu.openFile',
 		chords: ['Mod+O'],
 		group: 'file',
-		editorAction: true,
 		documentCommands: ['open-file'],
 	},
 	{
@@ -159,7 +136,6 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 		labelKey: 'menu.save',
 		chords: ['Mod+S'],
 		group: 'file',
-		editorAction: true,
 		documentCommands: ['save'],
 	},
 	{
@@ -184,28 +160,13 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 		labelKey: 'menu.closeFile',
 		chords: ['Mod+W'],
 		group: 'file',
-		editorAction: true,
 		documentCommands: ['close-file'],
-	},
-	{
-		id: 'file-export-pdf',
-		labelKey: 'menu.exportPdf',
-		// `Mod+Shift+E`, as #673 suggested, is Inline Code — bound since the
-		// formatting chords went in, and printed on the editor toolbar. `P` is
-		// the print mnemonic, and the app's `Mod+P` is the command palette, so
-		// the shifted spelling is both free and the nearest thing to what every
-		// other app calls Print.
-		chords: ['Mod+Shift+P'],
-		group: 'file',
-		editorAction: true,
-		documentCommands: ['export-pdf'],
 	},
 	{
 		id: 'file-reveal',
 		labelKey: 'menu.openFileLocation',
 		chords: ['Mod+Shift+R'],
 		group: 'file',
-		editorAction: true,
 		documentCommands: ['reveal-file'],
 	},
 	{
@@ -221,136 +182,6 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 		documentExempt: ['macos'],
 	},
 
-	// ---------------------------------------------------------------- edit
-	{ id: 'edit-undo', labelKey: 'menu.undo', chords: ['Mod+Z'], group: 'edit', monacoCommand: 'undo' },
-	// Windows and Linux also take `Mod+Y`. macOS does not, and a row has one
-	// chord list for every platform, so only the chord all three answer is shown.
-	{ id: 'edit-redo', labelKey: 'menu.redo', chords: ['Mod+Shift+Z'], group: 'edit', monacoCommand: 'redo' },
-	{ id: 'edit-cut', labelKey: 'menu.cut', chords: ['Mod+X'], group: 'edit', editorCommand: 'cutToClipboard' },
-	{ id: 'custom-copy', labelKey: 'menu.copy', chords: ['Mod+C'], group: 'edit', editorAction: true },
-	{ id: 'edit-paste', labelKey: 'menu.paste', chords: ['Mod+V'], group: 'edit', editorCommand: 'pasteFromClipboard' },
-	{ id: 'fmt-bold', labelKey: 'menu.bold', chords: ['Mod+B'], group: 'edit', editorAction: true },
-	{ id: 'fmt-italic', labelKey: 'menu.italic', chords: ['Mod+I'], group: 'edit', editorAction: true },
-	{ id: 'fmt-underline', labelKey: 'menu.underline', chords: ['Mod+U'], group: 'edit', editorAction: true },
-	{ id: 'fmt-strikethrough', labelKey: 'menu.strikethrough', chords: ['Mod+Shift+X'], group: 'edit', editorAction: true },
-	{ id: 'fmt-inline-code', labelKey: 'menu.inlineCode', chords: ['Mod+Shift+E'], group: 'edit', editorAction: true },
-	{ id: 'fmt-code-block', labelKey: 'menu.codeBlock', chords: ['Mod+Shift+F'], group: 'edit', editorAction: true },
-	{ id: 'fmt-quote', labelKey: 'menu.quote', chords: ['Mod+Shift+.'], group: 'edit', editorAction: true },
-	{ id: 'fmt-heading-1', labelKey: 'menu.heading1', chords: ['Mod+1'], group: 'edit', editorAction: true },
-	{ id: 'fmt-heading-2', labelKey: 'menu.heading2', chords: ['Mod+2'], group: 'edit', editorAction: true },
-	{ id: 'fmt-heading-3', labelKey: 'menu.heading3', chords: ['Mod+3'], group: 'edit', editorAction: true },
-	// GitHub's documented ordered/unordered list chords, identical on both
-	// platforms ("Inserts Markdown formatting for an ordered list" / "…an
-	// unordered list"). Numbered is 7 and bulleted is 8 because that is the way
-	// round GitHub has them, not because either digit resembles a list.
-	{ id: 'fmt-numbered-list', labelKey: 'menu.numberedList', chords: ['Mod+Shift+7'], group: 'edit', editorAction: true },
-	{ id: 'fmt-bullet-list', labelKey: 'menu.bulletList', chords: ['Mod+Shift+8'], group: 'edit', editorAction: true },
-	// 9 IS ARBITRARY, and deliberately not dressed up as a convention: GitHub
-	// documents no task-list chord at all, and neither does Typora or Obsidian.
-	// The two that do disagree and are both taken here — Bear's `Cmd+T` is New
-	// File, iA Writer's `Opt+Cmd+L` is Monaco's `toggleFindInSelection` on macOS
-	// — so the tie-break is adjacency: the third list button gets the digit next
-	// to the two the first two took.
-	{ id: 'fmt-checklist', labelKey: 'menu.checklist', chords: ['Mod+Shift+9'], group: 'edit', editorAction: true },
-	{
-		id: 'fmt-link',
-		labelKey: 'menu.link',
-		// The strongest competitor signal in the whole keymap: Typora, Bear, iA
-		// Writer and GitHub all document Mod+K for Insert Link, and it is the only
-		// command where four independent sources agree exactly. The link button had
-		// no shortcut at all until now.
-		//
-		// Taking it means Mod+K stops being a chord PREFIX, which is what
-		// `insert-table-simple` and `table-insert-column` used to hang off. What
-		// that costs on Monaco's side is argued in editor.chords.spec.ts.
-		chords: ['Mod+K'],
-		group: 'edit',
-		editorAction: true,
-	},
-	{
-		id: 'insert-table-simple',
-		labelKey: 'menu.insertTable',
-		// Typora's and Bear's macOS chord for the same command, and a single stroke
-		// rather than the `Mod+K T` sequence it replaces: the sequence was awkward
-		// enough to press that it is what started this rework.
-		chords: ['Mod+Alt+T'],
-		group: 'edit',
-		editorAction: true,
-	},
-	{
-		id: 'table-insert-column',
-		labelKey: 'menu.insertTableColumn',
-		// C for Column, and it joins the Mod+Shift+7/8/9 family above: those are all
-		// "insert a structure", which is what this is.
-		//
-		// NOT `Mod+Alt+C`, which was the obvious pick and is not available — on macOS
-		// that is Monaco's `toggleFindCaseSensitive`. The reason it cannot be taken is
-		// recorded in editor.chords.spec.ts, where the next person hunting for
-		// a free chord will be.
-		chords: ['Mod+Shift+C'],
-		group: 'edit',
-		editorAction: true,
-	},
-	{
-		id: 'table-delete-column',
-		labelKey: 'menu.deleteTableColumn',
-		// NOT a letter, and that is the whole point. `Mod+Shift+D` is free, but D is
-		// the physical neighbour of C — one slip would turn "insert a column" into
-		// "delete a column". A destructive verb must not sit next to its constructive
-		// counterpart; that is the defect the old `Mod+K Shift+R` had, one slip from
-		// Monaco's delete-line. Backspace is across the keyboard and already means
-		// "remove" everywhere, so it carries no mnemonic to learn.
-		chords: ['Mod+Shift+Backspace'],
-		group: 'edit',
-		editorAction: true,
-	},
-
-	// ---------------------------------------------------------------- keys
-	//
-	// What a key does when the caret is somewhere it means something extra. One
-	// row per KEY, not per behaviour: each of these is a single binding that
-	// dispatches on what the caret is sitting on, and two rows advertising `Enter`
-	// would be the panel claiming two shortcuts where the app has one.
-	//
-	// `Mod+Enter` carries a modifier and still belongs here rather than under Edit:
-	// it is not a command being invoked by name, it is Monaco's own Insert Line
-	// Below meaning one more thing inside a table.
-	{
-		id: 'key-enter',
-		labelKey: 'keys.enter',
-		chords: ['Enter'],
-		group: 'keys',
-		editorCommand: 'continueListOnEnter',
-	},
-	{
-		id: 'key-tab',
-		labelKey: 'keys.tab',
-		chords: ['Tab'],
-		group: 'keys',
-		editorCommand: 'handleTabKey',
-	},
-	{
-		id: 'key-shift-tab',
-		labelKey: 'keys.shiftTab',
-		chords: ['Shift+Tab'],
-		group: 'keys',
-		editorCommand: 'handleShiftTabKey',
-	},
-	{
-		id: 'key-mod-enter',
-		labelKey: 'keys.modEnter',
-		chords: ['Mod+Enter'],
-		group: 'keys',
-		editorCommand: 'handleModEnterKey',
-	},
-	{
-		id: 'key-mod-shift-enter',
-		labelKey: 'keys.modShiftEnter',
-		chords: ['Mod+Shift+Enter'],
-		group: 'keys',
-		editorCommand: 'handleModShiftEnterKey',
-	},
-
 	// ---------------------------------------------------------------- view
 	{
 		id: 'view-toggle-live',
@@ -361,7 +192,6 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 		// so the editor action is what stops the chord selecting a line, and the
 		// document command is what makes it work in the preview, where there is
 		// no Monaco to register anything on.
-		editorAction: true,
 		documentCommands: ['toggle-live-mode'],
 	},
 	{
@@ -374,7 +204,6 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 		// in Editor.svelte.
 		chords: ['Mod+Alt+Z'],
 		group: 'view',
-		editorAction: true,
 		documentCommands: ['toggle-zen-mode'],
 	},
 	{
@@ -382,15 +211,7 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 		labelKey: 'menu.toggleShowTabs',
 		chords: ['Mod+Shift+B'],
 		group: 'view',
-		editorAction: true,
 		documentCommands: ['toggle-tabs'],
-	},
-	{
-		id: 'app-find',
-		labelKey: 'menu.find',
-		chords: ['Mod+F'],
-		group: 'view',
-		documentCommands: ['find'],
 	},
 	{
 		id: 'app-settings',
@@ -405,22 +226,7 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 		// Shift+Cmd+H is Home in Finder and Safari. Monaco binds nothing to it.
 		chords: ['Mod+Shift+H'],
 		group: 'view',
-		editorAction: true,
 		documentCommands: ['toggle-home'],
-	},
-	{
-		id: 'view-preview-narrower',
-		labelKey: 'menu.previewNarrower',
-		chords: ['Mod+Alt+['],
-		group: 'view',
-		documentCommands: ['preview-width-narrower'],
-	},
-	{
-		id: 'view-preview-wider',
-		labelKey: 'menu.previewWider',
-		chords: ['Mod+Alt+]'],
-		group: 'view',
-		documentCommands: ['preview-width-wider'],
 	},
 	{ id: 'view-zoom-in', labelKey: 'menu.zoomIn', chords: ['Mod+='], group: 'view', documentCommands: ['zoom-in'] },
 	{ id: 'view-zoom-out', labelKey: 'menu.zoomOut', chords: ['Mod+-'], group: 'view', documentCommands: ['zoom-out'] },
@@ -434,7 +240,6 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 		// application switcher and never reaches the app.
 		chords: ['Ctrl+Tab'],
 		group: 'window',
-		editorAction: true,
 		documentCommands: ['next-tab'],
 	},
 	{
@@ -442,7 +247,6 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 		labelKey: 'menu.previousTab',
 		chords: ['Ctrl+Shift+Tab'],
 		group: 'window',
-		editorAction: true,
 		documentCommands: ['previous-tab'],
 	},
 	{
@@ -450,7 +254,6 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 		labelKey: 'menu.undoCloseTab',
 		chords: ['Mod+Shift+T'],
 		group: 'window',
-		editorAction: true,
 		documentCommands: ['undo-close-tab'],
 	},
 	{
@@ -459,29 +262,6 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 		chords: ['Mod+Shift+M'],
 		group: 'window',
 		documentCommands: ['move-tab-to-next-window'],
-	},
-	{
-		id: 'nav-back',
-		labelKey: 'menu.back',
-		chords: ['Alt+Left'],
-		group: 'window',
-		documentCommands: ['history-back'],
-	},
-	{
-		id: 'nav-forward',
-		labelKey: 'menu.forward',
-		chords: ['Alt+Right'],
-		group: 'window',
-		documentCommands: ['history-forward'],
-	},
-	{
-		id: 'app-command-palette',
-		labelKey: 'menu.commandPalette',
-		// Monaco's palette: there is none in the preview.
-		hintKey: 'settings.toolbarEditOrSplit',
-		chords: ['Mod+P'],
-		group: 'window',
-		editorAction: true,
 	},
 ];
 

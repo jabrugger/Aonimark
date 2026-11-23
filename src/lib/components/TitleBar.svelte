@@ -11,7 +11,6 @@
 	import { getConfiguredTitlebarToolbarIds, visibleTitlebarActionIds } from '../utils/titlebarToolbar.js';
 	import { shortcutLabel } from '../utils/shortcuts.js';
 	import { TitleBarPlatform } from '../stores/titleBarPlatform.svelte.js';
-	import { canExportTab } from '../utils/tabFileActions.js';
 	import { openNewWindow, openPinnedTagWindow } from '../utils/pinnedTagWindow.js';
 	import { getVersion } from '@tauri-apps/api/app';
 	import { TAG_COLORS, TitleBarPopovers, containClick, scopeLine } from '../stores/titleBarPopovers.svelte.js';
@@ -34,27 +33,18 @@
 		onsaveFile,
 		onsaveFileAs,
 		onreloadFromDisk,
-		onexportHtml,
-		onexportPdf,
 		onexit,
 		ontoggleHome,
 		ononpenFileLocation,
 		ontoggleLiveMode,
-		onback,
-		onforward,
-		canGoBack = false,
-		canGoForward = false,
 
 		ontabclick,
 		zoomLevel,
 		onresetZoom,
 		oncloseTab,
-		isFullWidth,
-		ontoggleFullWidth,
 		theme = 'system',
 		onSetTheme,
 		onopenSettings,
-		onfind,
 	} = $props<{
 		isFocused: boolean;
 		isScrolled: boolean;
@@ -71,16 +61,10 @@
 		onsaveFile?: () => void;
 		onsaveFileAs?: () => void;
 		onreloadFromDisk?: () => void;
-		onexportHtml?: () => void;
-		onexportPdf?: () => void;
 		onexit?: () => void;
 		ontoggleHome: () => void;
 		ononpenFileLocation: () => void;
 		ontoggleLiveMode: () => void;
-		onback?: () => void;
-		onforward?: () => void;
-		canGoBack?: boolean;
-		canGoForward?: boolean;
 
 		ontabclick?: () => void;
 		zoomLevel?: number;
@@ -88,12 +72,9 @@
 
 		oncloseTab?: (id: string) => void;
 
-		isFullWidth?: boolean;
-		ontoggleFullWidth?: () => void;
 		theme?: string;
 		onSetTheme?: (theme: string) => void;
 		onopenSettings?: () => void;
-		onfind?: () => void;
 	}>();
 
 	const appWindow = getCurrentWindow();
@@ -108,10 +89,7 @@
 	let isWin11 = $state(false);
 	const popovers = new TitleBarPopovers();
 
-	export function openTagEditor() {
-		popovers.openTagEditor();
-	}
-
+	
 	$effect(() => {
 		commands.isWin11()
 			.then((res) => {
@@ -259,6 +237,9 @@
 	}
 
 	$effect(() => popovers.listenForDismiss(window));
+	export function openTagEditor() {
+		popovers.openTagEditor();
+	}
 </script>
 
 <svelte:window bind:innerWidth />
@@ -406,30 +387,6 @@
 							<span class="menu-shortcut">{shortcutLabel('file-reload', modifier)}</span>
 						</button>
 					{/if}
-					{/if}
-					{#if canExportTab(tabManager.activeTab)}
-						<div class="home-menu-divider"></div>
-						<button
-						class="home-menu-item"
-						onclick={() => {
-							popovers.homeMenuOpen = false;
-							onexportHtml?.();
-						}}>
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-							><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-						{t('menu.exportHtml', currentLanguage)}
-					</button>
-					<button
-						class="home-menu-item"
-						onclick={() => {
-							popovers.homeMenuOpen = false;
-							onexportPdf?.();
-						}}>
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-							><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="9" y1="15" x2="15" y2="15"></line></svg>
-						{t('menu.exportPdf', currentLanguage)}
-						<span class="menu-shortcut">{shortcutLabel('file-export-pdf', modifier)}</span>
-					</button>
 					{/if}
 					<div class="home-menu-divider"></div>
 					<button
@@ -608,46 +565,6 @@
 						<span class="action-label">{t('menu.home', currentLanguage)}</span>
 						<span class="menu-shortcut">{shortcutLabel('app-home', modifier)}</span>
 					</button>
-				{:else if id === 'back'}
-					<button
-						class="title-action-btn"
-						disabled={!canGoBack}
-						onclick={() => {
-							hideTooltip();
-							popovers.kebabMenuOpen = false;
-							onback?.();
-						}}
-						aria-label={t('tooltip.back', currentLanguage)}
-						onmouseenter={(e) => showTooltip(e, t('tooltip.back', currentLanguage))}
-						onmousedown={(e) => e.preventDefault()}
-						onmouseleave={hideTooltip}
-						transition:fly={{ x: 10, duration: 200 }}>
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<polyline points="15 18 9 12 15 6"></polyline>
-						</svg>
-						<span class="action-label">{t('menu.back', currentLanguage)}</span>
-						<span class="menu-shortcut">{shortcutLabel('nav-back', modifier)}</span>
-					</button>
-				{:else if id === 'forward'}
-					<button
-						class="title-action-btn"
-						disabled={!canGoForward}
-						onclick={() => {
-							hideTooltip();
-							popovers.kebabMenuOpen = false;
-							onforward?.();
-						}}
-						aria-label={t('tooltip.forward', currentLanguage)}
-						onmouseenter={(e) => showTooltip(e, t('tooltip.forward', currentLanguage))}
-						onmousedown={(e) => e.preventDefault()}
-						onmouseleave={hideTooltip}
-						transition:fly={{ x: 10, duration: 200 }}>
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<polyline points="9 18 15 12 9 6"></polyline>
-						</svg>
-						<span class="action-label">{t('menu.forward', currentLanguage)}</span>
-						<span class="menu-shortcut">{shortcutLabel('nav-forward', modifier)}</span>
-					</button>
 				{:else if id === 'settings'}
 					<button
 						class="title-action-btn"
@@ -725,26 +642,6 @@
 						<span class="action-label">{t('menu.tabs', currentLanguage).replace('{{action}}', settings.showTabs ? t('menu.hide', currentLanguage) : t('menu.show', currentLanguage) )}</span>
 						<span class="menu-shortcut">{shortcutLabel('toggle-tabs', modifier)}</span>
 					</button>
-				{:else if id === 'find'}
-					<button
-						class="title-action-btn"
-						onclick={() => {
-							hideTooltip();
-							popovers.kebabMenuOpen = false;
-							onfind?.();
-						}}
-						aria-label={t('tooltip.find', currentLanguage)}
-											onmouseenter={(e) => showTooltip(e, t('tooltip.find', currentLanguage), shortcutLabel('app-find', modifier))}
-						onmousedown={(e) => e.preventDefault()}
-						onmouseleave={hideTooltip}
-						transition:fly={{ x: 10, duration: 200 }}>
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<circle cx="11" cy="11" r="7"></circle>
-							<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-						</svg>
-						<span class="action-label">{t('menu.find', currentLanguage)}</span>
-						<span class="menu-shortcut">{shortcutLabel('app-find', modifier)}</span>
-					</button>
 				{:else if id === 'open_loc'}
 					<button
 						class="title-action-btn"
@@ -762,20 +659,6 @@
 								y2="10"></line
 							></svg>
 						<span class="action-label">{t('menu.openFileLocation', currentLanguage)}</span>
-					</button>
-				{:else if id === 'fullWidth'}
-					<button
-						class="title-action-btn {isFullWidth ? 'active' : ''}"
-						onclick={() => ontoggleFullWidth?.()}
-						aria-label={t('tooltip.toggleFullWidth', currentLanguage)}
-											onmouseenter={(e) => showTooltip(e, t('tooltip.fullWidth', currentLanguage))}
-						onmousedown={(e) => e.preventDefault()}
-						onmouseleave={hideTooltip}
-						transition:fly={{ x: 10, duration: 200 }}>
-						<svg xmlns="http://www.w3.org/2000/svg" height="14" viewBox="0 -960 960 960" width="14" fill="currentColor"
-							><path
-								d="M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v480q0 33-23.5 56.5T800-160H160Zm640-560H160v480h640v-480Zm-640 0v480-480Zm200 360v-240L240-480l120 120Zm360-120L600-600v240l120-120Z" /></svg>
-						<span class="action-label">{t('menu.fullWidth', currentLanguage)}</span>
 					</button>
 				{:else if id === 'reload'}
 					<button

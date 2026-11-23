@@ -24,13 +24,8 @@ type ConfiguredTitlebarToolbarIds = {
 
 const TITLEBAR_TOOLBAR_ACTIONS: TitlebarToolbarAction[] = [
 	{ id: 'home', labelKey: 'menu.home', fallbackName: 'Home', sample: 'H', defaultPlacement: 'bar' },
-	{ id: 'back', labelKey: 'menu.back', fallbackName: 'Back', sample: '<', defaultPlacement: 'bar' },
-	{ id: 'forward', labelKey: 'menu.forward', fallbackName: 'Forward', sample: '>', defaultPlacement: 'bar' },
 	{ id: 'reload', labelKey: 'tooltip.reloadFromDisk', fallbackName: 'Reload from Disk', sample: 'R', defaultPlacement: 'bar', hintKey: 'settings.toolbarDiskFileOnly' },
-	{ id: 'toc', labelKey: 'settings.toolbarToc', fallbackName: 'Show/Hide Table of Contents', sample: 'T', defaultPlacement: 'menu' },
-	{ id: 'fullWidth', labelKey: 'menu.fullWidth', fallbackName: 'Full Width', sample: 'W', defaultPlacement: 'bar' },
 	{ id: 'live', labelKey: 'menu.autoReload', fallbackName: 'Auto-Reload', sample: 'L', defaultPlacement: 'bar', hintKey: 'settings.toolbarDiskFileOnly' },
-	{ id: 'find', labelKey: 'menu.find', fallbackName: 'Find', sample: 'F', defaultPlacement: 'menu' },
 	{ id: 'zen', labelKey: 'menu.zenMode', fallbackName: 'Zen Mode', sample: 'Z', defaultPlacement: 'menu' },
 	{ id: 'tabs', labelKey: 'settings.toolbarTabs', fallbackName: 'Show/Hide Tab Bar', sample: 'Tab', defaultPlacement: 'menu' },
 	{ id: 'zoom', labelKey: 'tooltip.resetZoom', fallbackName: 'Reset Zoom', sample: '%', defaultPlacement: 'menu', hintKey: 'settings.toolbarZoomedOnly' },
@@ -153,8 +148,6 @@ export function visibleTitlebarActionIds(context: TitlebarActionContext): string
 	if (context.hasActiveTab) list.push('home');
 
 	if (context.hasActiveTab && !context.showHome) {
-		list.push('back');
-		list.push('forward');
 		if (context.currentFile) list.push('reload');
 
 		// An unsaved buffer has no name to read an extension off, and is
@@ -164,14 +157,9 @@ export function visibleTitlebarActionIds(context: TitlebarActionContext): string
 			? hasMarkdownLinkExtension(context.currentFile)
 			: true;
 
-		if (isMarkdown) {
-			list.push('toc');
-			list.push('fullWidth');
+		if (isMarkdown && context.currentFile) {
 			// A file on disk is one an external writer can surprise.
-			if (context.currentFile) {
-				list.push('live');
-			}
-			list.push('find');
+			list.push('live');
 		}
 		list.push('zen');
 		list.push('tabs');
