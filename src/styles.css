@@ -38,6 +38,7 @@ body {
 	--color-border-muted: hsla(210, 18%, 87%, 1);
 	--color-neutral-muted: rgba(51, 54, 56, 0.05);
 	--color-accent-fg: #0969da;
+	--color-btn-fg: #ffffff;
 	--color-attention-fg: #9a6700;
 	--color-window-border-top: #B5B5B5;
 	--color-canvas-overlay: #FDFDFD;
@@ -56,6 +57,7 @@ body {
 	--color-border-muted: rgb(216, 222, 228);
 	--color-neutral-muted: rgba(51, 54, 56, 0.05);
 	--color-accent-fg: #0969da;
+	--color-btn-fg: #ffffff;
 	--color-attention-fg: #9a6700;
 	--color-window-border-top: #B5B5B5;
 	--color-canvas-overlay: #FDFDFD;

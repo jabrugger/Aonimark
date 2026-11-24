@@ -1,6 +1,6 @@
 {
 	"name": "aonimark",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "The WordPad of Markdown.",
 	"type": "module",
 	"imports": {
@@ -43,11 +43,5 @@
 		"typescript-eslint": "8.73.0",
 		"vite": "^8.3.5",
 		"vitest": "^4.1.12"
-	},
-	"overrides": {
-		"dompurify": "3.4.17",
-		"mermaid": {
-			"katex": "$katex"
-		}
 	}
 }

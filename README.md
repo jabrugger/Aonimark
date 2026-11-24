@@ -14,7 +14,7 @@
 
 - One document per window, edited in place (WYSIWYG, built on [Milkdown](https://milkdown.dev)).
 - Standard Markdown only: CommonMark plus GitHub tables, strikethrough and task lists.
-- One toolbar, light and dark themes, zoom and a Zen mode.
+- A formatting toolbar, light and dark themes, zoom and a Zen mode.
 - Auto-save, reload when the file changes on disk, and recovery of unsaved changes and of your last session.
 - Opens `.md`, `.markdown`, `.mdown`, `.mkd` and `.txt`, in several text encodings.
 - 26 interface languages. No telemetry. Free and open source.
@@ -41,4 +41,4 @@ Checks: `npm run check`, `npm run lint`, `npm test`, `npm run test:vitest`, and 
 
 Report bugs and ideas on the [issue tracker](https://github.com/jabrugger/Aonimark/issues). See [AGENTS.md](AGENTS.md) for the coding guidelines and [RELEASING.md](RELEASING.md) for how releases are made.
 
-Aonimark began as a fork of [Markpad](https://github.com/sftwrdotdev/Markpad) and keeps its MIT license.
+Aonimark began as a fork of [Markpad](https://github.com/sftwrdotdev/Markpad) and keeps its BSD 3-Clause license.

@@ -21,6 +21,7 @@ import { TitleBarPopovers, containClick } from '../stores/titleBarPopovers.svelt
 		liveMode,
 
 		windowTitle,
+		isDirty = false,
 		onnewFile,
 		onopenFile,
 		onsaveFile,
@@ -41,6 +42,7 @@ import { TitleBarPopovers, containClick } from '../stores/titleBarPopovers.svelt
 		liveMode: boolean;
 
 		windowTitle: string;
+		isDirty?: boolean;
 		onnewFile?: () => void;
 		onopenFile?: () => void;
 		onsaveFile?: () => void;
@@ -219,8 +221,7 @@ import { TitleBarPopovers, containClick } from '../stores/titleBarPopovers.svelt
 				<img
 					src={iconUrl}
 					alt="icon"
-					class="window-icon"
-					style:filter={theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'none' : 'invert(0.7)'} />
+					class="window-icon" />
 			</button>
 			{#if popovers.homeMenuOpen}
 				<div
@@ -306,7 +307,6 @@ import { TitleBarPopovers, containClick } from '../stores/titleBarPopovers.svelt
 					{/if}
 					{/if}
 					<div class="home-menu-divider"></div>
-					<div class="home-menu-divider"></div>
 					<button
 					class="home-menu-item"
 					onclick={() => {
@@ -337,6 +337,9 @@ import { TitleBarPopovers, containClick } from '../stores/titleBarPopovers.svelt
 				<span class="title-text" data-tauri-drag-region>
 					{windowTitle}
 				</span>
+				{#if isDirty}
+					<span class="dirty-dot" aria-hidden="true"></span>
+				{/if}
 			</div>
 		</div>
 
@@ -630,27 +633,6 @@ import { TitleBarPopovers, containClick } from '../stores/titleBarPopovers.svelt
 		pointer-events: none;
 	}
 
-
-	/*
-	 * What the window tag covers, drawn once for the whole strip.
-	 *
-	 * A window tag is a property of the window: `TabManager.windowTag` is one
-	 * nullable record and no tab carries membership of it. Every tab in the
-	 * window is under the tag, including the one opened a second from now.
-	 * A per-tab underline would say the opposite — that belonging is something
-	 * each tab has or lacks — and would then need a per-tab truth to read,
-	 * which does not exist and would have to be invented and kept in sync. One
-	 * line under the strip cannot disagree with the data, and a new tab lands
-	 * on it by construction rather than by remembering to mark it.
-	 *
-	 * The bottom edge is free: `.tab.active` in Tab.svelte marks the active tab
-	 * with `background-color`, so nothing else in the strip is using this
-	 * channel and the two readings do not compete.
-	 *
-	 * Above `.new-tab-btn` (21) in TabList, which would otherwise cover the
-	 * end of the line.
-	 */
-
 	.window-controls-left {
 		display: flex;
 		align-items: center;
@@ -847,10 +829,13 @@ import { TitleBarPopovers, containClick } from '../stores/titleBarPopovers.svelt
 		opacity: 0.8;
 	}
 
+	:global(:root[data-theme='light']) .window-icon {
+		filter: invert(0.7);
+	}
+
 	@media (prefers-color-scheme: light) {
-		.window-icon {
-			filter: grayscale(1) brightness(0.2);
-			opacity: 0.6;
+		:global(:root:not([data-theme='dark'])) .window-icon {
+			filter: invert(0.7);
 		}
 	}
 
@@ -892,8 +877,18 @@ import { TitleBarPopovers, containClick } from '../stores/titleBarPopovers.svelt
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		display: block;
+		display: flex;
+		align-items: center;
+		gap: 6px;
 		max-width: 100%;
+	}
+
+	.dirty-dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--color-accent-fg);
+		flex-shrink: 0;
 	}
 
 	.title-text {
@@ -1019,13 +1014,6 @@ import { TitleBarPopovers, containClick } from '../stores/titleBarPopovers.svelt
 		width: 120px;
 		z-index: 10005;
 		gap: 1px;
-	}
-
-	.theme-menu-divider {
-		height: 1px;
-		background-color: var(--color-border-default);
-		margin: 4px 0;
-		transform: scaleY(0.5);
 	}
 
 	.theme-option {

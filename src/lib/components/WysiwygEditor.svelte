@@ -79,6 +79,46 @@
 	let wholeWord = $state(false);
 	let status = $state<FindStatus>({ total: 0, current: 0 });
 	let editor = $state<Editor | null>(null);
+	let activeTools = $state<Set<string>>(new Set());
+
+	function computeActiveTools(state: EditorView['state']): Set<string> {
+		const active = new Set<string>();
+		const sel = state.selection;
+		const { from, to, empty } = sel;
+		const anchorPos = sel.$from;
+		const markMap: [string, string][] = [
+			['strong', 'bold'],
+			['emphasis', 'italic'],
+			['strike_through', 'strikethrough'],
+			['inlineCode', 'inline-code'],
+		];
+		const activeMarks = empty ? (state.storedMarks ?? anchorPos.marks()) : null;
+		for (const [markName, toolId] of markMap) {
+			const markType = state.schema.marks[markName];
+			if (!markType) continue;
+			const has = activeMarks
+				? activeMarks.some((m) => m.type === markType)
+				: state.doc.rangeHasMark(from, to, markType);
+			if (has) active.add(toolId);
+		}
+		for (let d = anchorPos.depth; d >= 1; d--) {
+			const node = anchorPos.node(d);
+			const name = node.type.name;
+			if (name === 'heading') {
+				const level = node.attrs?.level;
+				if (level === 1 || level === 2 || level === 3) active.add(`heading-${level}`);
+			} else if (name === 'blockquote') {
+				active.add('quote');
+			} else if (name === 'code_block') {
+				active.add('code-block');
+			} else if (name === 'bullet_list') {
+				active.add('bullet-list');
+			} else if (name === 'ordered_list') {
+				active.add('numbered-list');
+			}
+		}
+		return active;
+	}
 
 	// The Milkdown callbacks are registered once, before Svelte has settled, so
 	// they reach the latest props through this holder rather than a captured
@@ -151,6 +191,7 @@
 						const next = this.state.apply(tr);
 						this.updateState(next);
 						status = findStatus(next);
+						activeTools = computeActiveTools(next);
 						if (tr.docChanged) {
 							changed = true;
 							const markdown = frontMatter + withLineEnding(ctx.get(serializerCtx)(next.doc), lineEnding);
@@ -303,24 +344,34 @@
 		}
 	}
 
-	const tools = $derived(
+	const toolGroups = $derived(
 		[
-			{ id: 'undo', label: t('menu.undo', language), run: () => runCmd(undoCommand) },
-			{ id: 'redo', label: t('menu.redo', language), run: () => runCmd(redoCommand) },
-			{ id: 'bold', label: t('menu.bold', language), run: () => runCmd(toggleStrongCommand) },
-			{ id: 'italic', label: t('menu.italic', language), run: () => runCmd(toggleEmphasisCommand) },
-			{ id: 'strikethrough', label: t('menu.strikethrough', language), run: () => runCmd(toggleStrikethroughCommand) },
-			{ id: 'inline-code', label: t('menu.inlineCode', language), run: () => runCmd(toggleInlineCodeCommand) },
-			{ id: 'code-block', label: t('menu.codeBlock', language), run: () => runCmd(createCodeBlockCommand) },
-			{ id: 'quote', label: t('menu.quote', language), run: () => runCmd(wrapInBlockquoteCommand) },
-			{ id: 'heading-1', label: t('menu.heading1', language), run: () => runCmd(wrapInHeadingCommand, 1) },
-			{ id: 'heading-2', label: t('menu.heading2', language), run: () => runCmd(wrapInHeadingCommand, 2) },
-			{ id: 'heading-3', label: t('menu.heading3', language), run: () => runCmd(wrapInHeadingCommand, 3) },
-			{ id: 'bullet-list', label: t('menu.bulletList', language), run: () => runCmd(wrapInBulletListCommand) },
-			{ id: 'numbered-list', label: t('menu.numberedList', language), run: () => runCmd(wrapInOrderedListCommand) },
-			{ id: 'hr', label: t('menu.horizontalRule', language), run: () => runCmd(insertHrCommand) },
-			{ id: 'link', label: t('menu.link', language), run: () => void insertLink() },
-			{ id: 'table', label: t('menu.insertTable', language), run: () => runCmd(insertTableCommand, { row: 3, col: 3 }) },
+			[
+				{ id: 'undo', label: t('menu.undo', language), toggle: false, run: () => runCmd(undoCommand) },
+				{ id: 'redo', label: t('menu.redo', language), toggle: false, run: () => runCmd(redoCommand) },
+			],
+			[
+				{ id: 'heading-1', label: t('menu.heading1', language), toggle: true, run: () => runCmd(wrapInHeadingCommand, 1) },
+				{ id: 'heading-2', label: t('menu.heading2', language), toggle: true, run: () => runCmd(wrapInHeadingCommand, 2) },
+				{ id: 'heading-3', label: t('menu.heading3', language), toggle: true, run: () => runCmd(wrapInHeadingCommand, 3) },
+			],
+			[
+				{ id: 'bold', label: t('menu.bold', language), toggle: true, run: () => runCmd(toggleStrongCommand) },
+				{ id: 'italic', label: t('menu.italic', language), toggle: true, run: () => runCmd(toggleEmphasisCommand) },
+				{ id: 'strikethrough', label: t('menu.strikethrough', language), toggle: true, run: () => runCmd(toggleStrikethroughCommand) },
+				{ id: 'inline-code', label: t('menu.inlineCode', language), toggle: true, run: () => runCmd(toggleInlineCodeCommand) },
+			],
+			[
+				{ id: 'bullet-list', label: t('menu.bulletList', language), toggle: true, run: () => runCmd(wrapInBulletListCommand) },
+				{ id: 'numbered-list', label: t('menu.numberedList', language), toggle: true, run: () => runCmd(wrapInOrderedListCommand) },
+				{ id: 'quote', label: t('menu.quote', language), toggle: true, run: () => runCmd(wrapInBlockquoteCommand) },
+				{ id: 'code-block', label: t('menu.codeBlock', language), toggle: true, run: () => runCmd(createCodeBlockCommand) },
+			],
+			[
+				{ id: 'link', label: t('menu.link', language), toggle: false, run: () => void insertLink() },
+				{ id: 'table', label: t('menu.insertTable', language), toggle: false, run: () => runCmd(insertTableCommand, { row: 3, col: 3 }) },
+				{ id: 'hr', label: t('menu.horizontalRule', language), toggle: false, run: () => runCmd(insertHrCommand) },
+			],
 		] as const,
 	);
 </script>
@@ -328,16 +379,23 @@
 <div class="wysiwyg-root" role="presentation" onkeydown={onrootkeydown}>
 	<div class="wysiwyg-toolbar" role="toolbar" aria-label={t('menu.editor', language)} bind:clientHeight={toolbarHeight}>
 		<div class="wysiwyg-tools">
-			{#each tools as tool (tool.id)}
-				<button
-					type="button"
-					class="wysiwyg-btn"
-					aria-label={tool.label}
-					title={tool.label}
-					onmousedown={(e) => e.preventDefault()}
-					onclick={tool.run}>
-					{@render renderToolIcon(tool.id)}
-				</button>
+			{#each toolGroups as group, groupIndex (groupIndex)}
+				{#if groupIndex > 0}
+					<span class="wysiwyg-sep" aria-hidden="true"></span>
+				{/if}
+				{#each group as tool (tool.id)}
+					<button
+						type="button"
+						class="wysiwyg-btn"
+						class:active={activeTools.has(tool.id)}
+						aria-label={tool.label}
+						aria-pressed={tool.toggle ? activeTools.has(tool.id) : undefined}
+						title={tool.label}
+						onmousedown={(e) => e.preventDefault()}
+						onclick={tool.run}>
+						{@render renderToolIcon(tool.id)}
+					</button>
+				{/each}
 			{/each}
 		</div>
 	</div>
@@ -451,6 +509,20 @@
 		border-color: var(--color-border-muted);
 	}
 
+	.wysiwyg-btn.active {
+		background: color-mix(in srgb, var(--color-accent-fg) 14%, transparent);
+		color: var(--color-accent-fg);
+		border-color: color-mix(in srgb, var(--color-accent-fg) 30%, transparent);
+	}
+
+	.wysiwyg-sep {
+		width: 1px;
+		height: 16px;
+		background: var(--color-border-muted);
+		margin: 0 3px;
+		flex-shrink: 0;
+	}
+
 	.wysiwyg-btn:focus-visible {
 		outline: 2px solid var(--color-accent-fg);
 		outline-offset: 1px;
@@ -479,7 +551,9 @@
 	.wysiwyg-surface :global(.milkdown) {
 		box-sizing: border-box;
 		min-height: 100%;
-		padding: 20px max(24px, 10%);
+		max-width: 820px;
+		margin: 0 auto;
+		padding: 24px 32px;
 		color: var(--color-fg-default);
 		font-size: calc(16px * var(--editor-zoom, 1));
 		line-height: 1.6;

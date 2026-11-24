@@ -77,7 +77,7 @@ pub(crate) fn atomic_write(target: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let file_name = target
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "markpad".to_string());
+        .unwrap_or_else(|| "aonimark".to_string());
 
     // Claim a temp file nobody else holds. The name must be unique or two
     // concurrent writers of the same target collide, and a collision is not a
@@ -98,7 +98,7 @@ pub(crate) fn atomic_write(target: &Path, bytes: &[u8]) -> std::io::Result<()> {
                 .unwrap_or(0);
             let seq = TEMP_FILE_SEQ.fetch_add(1, Ordering::Relaxed);
             let mut candidate = parent_path.clone();
-            candidate.push(format!(".{file_name}.markpad-tmp-{pid}-{nanos}-{seq}"));
+            candidate.push(format!(".{file_name}.aonimark-tmp-{pid}-{nanos}-{seq}"));
             match fs::OpenOptions::new()
                 .write(true)
                 .create_new(true)

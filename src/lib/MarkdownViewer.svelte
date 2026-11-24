@@ -566,24 +566,16 @@ import { followTheme } from './utils/themeEffect.svelte.js';
 	}
 
 	/** The URL the WYSIWYG link button asks for, through the app's own modal. */
-	function requestLinkUrl(defaultText: string): Promise<string | null> {
-		return promptCustom(t('menu.link', settings.language), {
+	async function requestLinkUrl(defaultText: string): Promise<string | null> {
+		const raw = await promptCustom(t('menu.link', settings.language), {
 			title: t('menu.link', settings.language),
 			initial: defaultText.startsWith('http') ? defaultText : 'https://',
 		});
+		const trimmed = raw?.trim() ?? '';
+		if (!trimmed || trimmed === 'https://' || trimmed === 'http://') return null;
+		return trimmed;
 	}
 
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
 	function handleWheel(e: WheelEvent) {
 		if (e.ctrlKey || e.metaKey) {
 			settings.zoomBy(wheelZoomFactor(e.deltaY));
@@ -664,15 +656,6 @@ import { followTheme } from './utils/themeEffect.svelte.js';
 		dispatchViewerKey(e, keyContext(), runViewerCommand);
 	}
 
-	
-	
-	
-	
-	
-	
-	
-	
-	
 	onMount(() => {
 		isDisposed = false;
 
@@ -773,49 +756,33 @@ import { followTheme } from './utils/themeEffect.svelte.js';
 
 <svelte:document onkeydown={handleKeyDown} />
 
+<TitleBar
+	{isFocused}
+	currentFile={mode === 'loading' ? '' : currentFile}
+	{liveMode}
+	windowTitle={mode === 'loading' ? 'Aonimark' : windowTitle}
+	isDirty={mode !== 'loading' && Boolean(tabManager.activeTab?.isDirty)}
+	zoomLevel={settings.zoomLevel}
+	onnewFile={handleNewFile}
+	onopenFile={selectFile}
+	onsaveFile={saveContent}
+	onsaveFileAs={saveContentAs}
+	onreloadFromDisk={reloadFromDisk}
+	onexit={appExit}
+	ononpenFileLocation={openFileLocation}
+	ontoggleLiveMode={toggleLiveMode}
+	onresetZoom={() => settings.resetZoom()}
+	theme={settings.theme}
+	onSetTheme={(t: string) => (settings.theme = resolveTheme(t))}
+	onopenSettings={() => (showSettings = true)} />
+
 {#if mode === 'loading'}
-	<TitleBar
-		{isFocused}
-		currentFile={''}
-		{liveMode}
-		windowTitle="Aonimark"
-		zoomLevel={settings.zoomLevel}
-		onnewFile={handleNewFile}
-		onopenFile={selectFile}
-		onsaveFile={saveContent}
-		onsaveFileAs={saveContentAs}
-		onreloadFromDisk={reloadFromDisk}
-		onexit={appExit}
-		ononpenFileLocation={openFileLocation}
-		ontoggleLiveMode={toggleLiveMode}
-		onresetZoom={() => settings.resetZoom()}
-		theme={settings.theme}
-		onSetTheme={(t: string) => (settings.theme = resolveTheme(t))}
-		onopenSettings={() => (showSettings = true)} />
 	<div class="loading-screen">
 		<svg class="spinner" viewBox="0 0 50 50">
 			<circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="4"></circle>
 		</svg>
 	</div>
 {:else}
-	<TitleBar
-		{isFocused}
-		{currentFile}
-		{liveMode}
-		{windowTitle}
-		zoomLevel={settings.zoomLevel}
-		onnewFile={handleNewFile}
-		onopenFile={selectFile}
-		onsaveFile={saveContent}
-		onsaveFileAs={saveContentAs}
-		onreloadFromDisk={reloadFromDisk}
-		onexit={appExit}
-		ononpenFileLocation={openFileLocation}
-		ontoggleLiveMode={toggleLiveMode}
-		onresetZoom={() => settings.resetZoom()}
-		theme={settings.theme}
-		onSetTheme={(t: string) => (settings.theme = resolveTheme(t))}
-		onopenSettings={() => (showSettings = true)} />
 
 	<Settings show={showSettings} theme={settings.theme} onSetTheme={(t) => (settings.theme = t)} onclose={() => (showSettings = false)} />
 
@@ -1040,13 +1007,6 @@ import { followTheme } from './utils/themeEffect.svelte.js';
 		overflow: hidden;
 	}
 
-	/* View Mode */
-	.layout-container:not(.split):not(.editing) .editor-pane {
-		width: 0 !important;
-		flex: 0 !important;
-		opacity: 0;
-	}
-
 	@keyframes fadeIn {
 		from { opacity: 0; }
 		to { opacity: 1; }
@@ -1107,17 +1067,4 @@ import { followTheme } from './utils/themeEffect.svelte.js';
 		align-items: flex-end;
 		pointer-events: none;
 	}
-	
-
-	/**
-	 * Expanded, the button floats over the OUTLINE, which has no editor toolbar
-	 * on it — so the offset that clears one has nothing to clear and pushes the
-	 * button down onto the outline's first entry instead. 48px puts it back in
-	 * the panel's own header band, whose buttons sit at the far end (right when
-	 * the outline is on the left, left when it is on the right), leaving this
-	 * end of that band empty.
-	 *
-	 * Collapsed it keeps the offset, because there it really is floating over
-	 * the editor pane and the toolbar really is above it.
-	 */
 </style>

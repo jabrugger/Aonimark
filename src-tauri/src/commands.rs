@@ -103,9 +103,6 @@ pub async fn open_file_folder(path: String) -> Result<(), String> {
     blocking(move || opener::reveal(path).map_err(|e| e.to_string())).await
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
-const LAUNCHABLE_EXTENSIONS: &[&str] = &["desktop", "appimage", "run", "sh", "jar"];
-
 /// Async because a rename is a round trip to whatever holds the path — on a
 /// network or removable volume, seconds of blocking I/O for a metadata
 /// operation that looks instant on a local disk.
