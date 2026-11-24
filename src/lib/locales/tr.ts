@@ -147,5 +147,19 @@ export default {
     },
     dragAndDrop: {
         open: 'Açmak için Bırakın'
+    },
+    find: {
+        placeholder: 'Bul',
+        next: 'Sonraki eşleşme',
+        previous: 'Önceki eşleşme',
+        close: 'Kapat',
+        matchCount: '{{current}} / {{total}}',
+        noMatches: 'Sonuç yok',
+        caseSensitive: 'Büyük/küçük harf eşleştir',
+        wholeWord: 'Tam sözcük eşleştir',
+        replacePlaceholder: 'Şununla değiştir',
+        replace: 'Değiştir',
+        replaceAll: 'Tümünü değiştir',
+        toggleReplace: 'Değiştirmeyi göster veya gizle'
     }
 } satisfies LocaleTable;

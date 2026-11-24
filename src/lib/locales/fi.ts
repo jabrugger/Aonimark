@@ -147,5 +147,19 @@ export default {
     },
     dragAndDrop: {
         open: 'Pudota avataksesi'
+    },
+    find: {
+        placeholder: 'Etsi',
+        next: 'Seuraava osuma',
+        previous: 'Edellinen osuma',
+        close: 'Sulje',
+        matchCount: '{{current}}/{{total}}',
+        noMatches: 'Ei tuloksia',
+        caseSensitive: 'Huomioi kirjainkoko',
+        wholeWord: 'Vain kokonaiset sanat',
+        replacePlaceholder: 'Korvaa tekstillä',
+        replace: 'Korvaa',
+        replaceAll: 'Korvaa kaikki',
+        toggleReplace: 'Näytä tai piilota korvaus'
     }
 } satisfies LocaleTable;

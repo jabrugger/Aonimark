@@ -147,5 +147,19 @@ export default {
         minimize: '最小化',
         maximize: '最大化',
         restore: '还原',
+    },
+    find: {
+        placeholder: '查找',
+        next: '下一个匹配项',
+        previous: '上一个匹配项',
+        close: '关闭',
+        matchCount: '第 {{current}} 项，共 {{total}} 项',
+        noMatches: '没有结果',
+        caseSensitive: '区分大小写',
+        wholeWord: '全词匹配',
+        replacePlaceholder: '替换为',
+        replace: '替换',
+        replaceAll: '全部替换',
+        toggleReplace: '显示或隐藏替换'
     }
 } satisfies LocaleTable;

@@ -147,5 +147,19 @@ export default {
     },
     dragAndDrop: {
         open: 'Plasați pentru deschidere'
+    },
+    find: {
+        placeholder: 'Căutare',
+        next: 'Potrivirea următoare',
+        previous: 'Potrivirea anterioară',
+        close: 'Închidere',
+        matchCount: '{{current}} din {{total}}',
+        noMatches: 'Niciun rezultat',
+        caseSensitive: 'Potrivire majuscule/minuscule',
+        wholeWord: 'Potrivire cuvânt întreg',
+        replacePlaceholder: 'Înlocuiește cu',
+        replace: 'Înlocuiește',
+        replaceAll: 'Înlocuiește tot',
+        toggleReplace: 'Afișează sau ascunde înlocuirea'
     }
 } satisfies LocaleTable;

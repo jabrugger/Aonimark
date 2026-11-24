@@ -147,5 +147,19 @@ export default {
     },
     dragAndDrop: {
         open: 'Thả để mở'
+    },
+    find: {
+        placeholder: 'Tìm',
+        next: 'Kết quả tiếp theo',
+        previous: 'Kết quả trước',
+        close: 'Đóng',
+        matchCount: '{{current}} / {{total}}',
+        noMatches: 'Không có kết quả',
+        caseSensitive: 'Phân biệt hoa thường',
+        wholeWord: 'Khớp toàn bộ từ',
+        replacePlaceholder: 'Thay thế bằng',
+        replace: 'Thay thế',
+        replaceAll: 'Thay thế tất cả',
+        toggleReplace: 'Hiện hoặc ẩn thay thế'
     }
 } satisfies LocaleTable;

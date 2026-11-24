@@ -147,5 +147,19 @@ export default {
     },
     dragAndDrop: {
         open: 'Αφήστε για άνοιγμα'
+    },
+    find: {
+        placeholder: 'Εύρεση',
+        next: 'Επόμενη αντιστοιχία',
+        previous: 'Προηγούμενη αντιστοιχία',
+        close: 'Κλείσιμο',
+        matchCount: '{{current}} από {{total}}',
+        noMatches: 'Κανένα αποτέλεσμα',
+        caseSensitive: 'Διάκριση πεζών-κεφαλαίων',
+        wholeWord: 'Ολόκληρη λέξη',
+        replacePlaceholder: 'Αντικατάσταση με',
+        replace: 'Αντικατάσταση',
+        replaceAll: 'Αντικατάσταση όλων',
+        toggleReplace: 'Εμφάνιση ή απόκρυψη αντικατάστασης'
     }
 } satisfies LocaleTable;

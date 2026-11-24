@@ -147,5 +147,19 @@ export default {
         minimize: '최소화',
         maximize: '최대화',
         restore: '이전 크기로',
+    },
+    find: {
+        placeholder: '찾기',
+        next: '다음 일치 항목',
+        previous: '이전 일치 항목',
+        close: '닫기',
+        matchCount: '{{current}} / {{total}}',
+        noMatches: '결과 없음',
+        caseSensitive: '대소문자 구분',
+        wholeWord: '단어 단위로 찾기',
+        replacePlaceholder: '바꿀 내용',
+        replace: '바꾸기',
+        replaceAll: '모두 바꾸기',
+        toggleReplace: '바꾸기 표시/숨기기'
     }
 } satisfies LocaleTable;

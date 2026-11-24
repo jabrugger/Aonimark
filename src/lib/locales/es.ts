@@ -147,5 +147,19 @@ export default {
     },
     dragAndDrop: {
         open: 'Soltar para abrir'
+    },
+    find: {
+        placeholder: 'Buscar',
+        next: 'Siguiente coincidencia',
+        previous: 'Coincidencia anterior',
+        close: 'Cerrar',
+        matchCount: '{{current}} de {{total}}',
+        noMatches: 'Sin resultados',
+        caseSensitive: 'Distinguir mayúsculas',
+        wholeWord: 'Palabra completa',
+        replacePlaceholder: 'Reemplazar con',
+        replace: 'Reemplazar',
+        replaceAll: 'Reemplazar todo',
+        toggleReplace: 'Mostrar u ocultar reemplazo'
     }
 } satisfies LocaleTable;

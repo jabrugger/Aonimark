@@ -147,5 +147,19 @@ export default {
     },
     dragAndDrop: {
         open: 'Neerzetten om te openen'
+    },
+    find: {
+        placeholder: 'Zoeken',
+        next: 'Volgende overeenkomst',
+        previous: 'Vorige overeenkomst',
+        close: 'Sluiten',
+        matchCount: '{{current}} van {{total}}',
+        noMatches: 'Geen resultaten',
+        caseSensitive: 'Hoofdlettergevoelig',
+        wholeWord: 'Heel woord',
+        replacePlaceholder: 'Vervangen door',
+        replace: 'Vervangen',
+        replaceAll: 'Alles vervangen',
+        toggleReplace: 'Vervangen tonen of verbergen'
     }
 } satisfies LocaleTable;

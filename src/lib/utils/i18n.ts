@@ -215,6 +215,20 @@ const en = {
         minimize: 'Minimize',
         maximize: 'Maximize',
         restore: 'Restore',
+    },
+    find: {
+        placeholder: 'Find',
+        next: 'Next match',
+        previous: 'Previous match',
+        close: 'Close',
+        matchCount: '{{current}} of {{total}}',
+        noMatches: 'No results',
+        caseSensitive: 'Match case',
+        wholeWord: 'Match whole word',
+        replacePlaceholder: 'Replace with',
+        replace: 'Replace',
+        replaceAll: 'Replace all',
+        toggleReplace: 'Show or hide replace'
     }
 } satisfies Translation;
 

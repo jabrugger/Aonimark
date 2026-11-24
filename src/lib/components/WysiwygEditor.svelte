@@ -34,6 +34,19 @@
 	import { callCommand, getMarkdown, insert, replaceAll } from '@milkdown/kit/utils';
 	import type { EditorView } from '@milkdown/prose/view';
 	import { t, type LanguageCode } from '../utils/i18n.js';
+	import {
+		allMatches,
+		clearTransaction,
+		findPlugin,
+		currentMatch,
+		findStatus,
+		replaceAllMatches,
+		replaceMatch,
+		searchTransaction,
+		stepTransaction,
+		type FindStatus,
+	} from '../utils/documentFind.js';
+	import FindBar from './FindBar.svelte';
 	import { splitFrontMatter, withLineEnding, wysiwygStringifyOptions } from '../utils/wysiwygMarkdown.js';
 
 	import '@milkdown/prose/view/style/prosemirror.css';
@@ -54,6 +67,17 @@
 	}>();
 
 	let container = $state<HTMLDivElement>();
+	let findBar = $state<{ focus: () => void }>();
+
+	// The find bar. The matches themselves live in the editor state (see
+	// `documentFind.ts`); these are what the bar shows and sends.
+	let findOpen = $state(false);
+	let showReplace = $state(false);
+	let query = $state('');
+	let replacement = $state('');
+	let matchCase = $state(false);
+	let wholeWord = $state(false);
+	let status = $state<FindStatus>({ total: 0, current: 0 });
 	let editor = $state<Editor | null>(null);
 
 	// The Milkdown callbacks are registered once, before Svelte has settled, so
@@ -126,6 +150,7 @@
 					dispatchTransaction(this: EditorView, tr) {
 						const next = this.state.apply(tr);
 						this.updateState(next);
+						status = findStatus(next);
 						if (tr.docChanged) {
 							changed = true;
 							const markdown = frontMatter + withLineEnding(ctx.get(serializerCtx)(next.doc), lineEnding);
@@ -141,6 +166,7 @@
 			.use(clipboard)
 			.use(cursor)
 			.use(trailing)
+			.use(findPlugin)
 			.create()
 			.then((created) => {
 				editor = created;
@@ -208,6 +234,75 @@
 		focus();
 	}
 
+	function withView(action: (view: EditorView) => void) {
+		editor?.action((ctx) => action(ctx.get(editorViewCtx)));
+	}
+
+	const findOptions = () => ({ query, matchCase, wholeWord });
+
+	/** Search again with the bar's current text and options. */
+	function runFind() {
+		withView((view) => view.dispatch(searchTransaction(view.state, findOptions())));
+	}
+
+	function step(direction: 1 | -1) {
+		withView((view) => {
+			const tr = stepTransaction(view.state, direction);
+			if (tr) view.dispatch(tr);
+		});
+	}
+
+	function replaceCurrent() {
+		withView((view) => {
+			const match = currentMatch(view.state);
+			if (!match) return;
+			view.dispatch(replaceMatch(view.state, match, replacement));
+			// The cursor now sits after the replacement: land on the next match.
+			view.dispatch(searchTransaction(view.state, findOptions()));
+		});
+	}
+
+	function replaceEvery() {
+		withView((view) => view.dispatch(replaceAllMatches(view.state, allMatches(view.state), replacement)));
+	}
+
+	/** Opens the bar, starting from the selected text when it is a single line. */
+	function openFind(withReplace: boolean) {
+		withView((view) => {
+			const { from, to } = view.state.selection;
+			const selected = view.state.doc.textBetween(from, to, '\n');
+			if (selected && !selected.includes('\n')) query = selected;
+		});
+		findOpen = true;
+		if (withReplace) showReplace = true;
+		runFind();
+		// The bar mounts on the next tick.
+		queueMicrotask(() => findBar?.focus());
+	}
+
+	function closeFind() {
+		findOpen = false;
+		withView((view) => view.dispatch(clearTransaction(view.state)));
+		focus();
+	}
+
+	function onrootkeydown(e: KeyboardEvent) {
+		const mod = e.ctrlKey || e.metaKey;
+		if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'f') {
+			e.preventDefault();
+			openFind(false);
+		} else if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'h') {
+			e.preventDefault();
+			openFind(true);
+		} else if (findOpen && e.key === 'F3') {
+			e.preventDefault();
+			step(e.shiftKey ? -1 : 1);
+		} else if (findOpen && e.key === 'Escape') {
+			e.preventDefault();
+			closeFind();
+		}
+	}
+
 	const tools = $derived(
 		[
 			{ id: 'undo', label: t('menu.undo', language), run: () => runCmd(undoCommand) },
@@ -230,7 +325,7 @@
 	);
 </script>
 
-<div class="wysiwyg-root">
+<div class="wysiwyg-root" role="presentation" onkeydown={onrootkeydown}>
 	<div class="wysiwyg-toolbar" role="toolbar" aria-label={t('menu.editor', language)} bind:clientHeight={toolbarHeight}>
 		<div class="wysiwyg-tools">
 			{#each tools as tool (tool.id)}
@@ -246,6 +341,23 @@
 			{/each}
 		</div>
 	</div>
+	{#if findOpen}
+		<FindBar
+			bind:this={findBar}
+			bind:query
+			bind:replacement
+			bind:matchCase
+			bind:wholeWord
+			bind:showReplace
+			{status}
+			{language}
+			onchange={runFind}
+			onnext={() => step(1)}
+			onprevious={() => step(-1)}
+			onreplace={replaceCurrent}
+			onreplaceall={replaceEvery}
+			onclose={closeFind} />
+	{/if}
 	<div class="wysiwyg-surface" bind:this={container}></div>
 </div>
 
@@ -355,6 +467,15 @@
 	   styled through :global() selectors anchored to this component's root. The
 	   colours are the app's own CSS variables, so light and dark follow the
 	   resolved theme with no editor-specific work. */
+	.wysiwyg-surface :global(.find-match) {
+		background: color-mix(in srgb, var(--color-attention-fg) 28%, transparent);
+		border-radius: 2px;
+	}
+
+	.wysiwyg-surface :global(.find-match-current) {
+		background: color-mix(in srgb, var(--color-attention-fg) 55%, transparent);
+	}
+
 	.wysiwyg-surface :global(.milkdown) {
 		box-sizing: border-box;
 		min-height: 100%;

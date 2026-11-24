@@ -147,5 +147,19 @@ export default {
     },
     dragAndDrop: {
         open: 'Släpp för att öppna'
+    },
+    find: {
+        placeholder: 'Sök',
+        next: 'Nästa träff',
+        previous: 'Föregående träff',
+        close: 'Stäng',
+        matchCount: '{{current}} av {{total}}',
+        noMatches: 'Inga resultat',
+        caseSensitive: 'Matcha skiftläge',
+        wholeWord: 'Matcha hela ord',
+        replacePlaceholder: 'Ersätt med',
+        replace: 'Ersätt',
+        replaceAll: 'Ersätt alla',
+        toggleReplace: 'Visa eller dölj ersätt'
     }
 } satisfies LocaleTable;

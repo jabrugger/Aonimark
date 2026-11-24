@@ -147,5 +147,19 @@ export default {
     },
     dragAndDrop: {
         open: 'Engedje el a megnyitáshoz'
+    },
+    find: {
+        placeholder: 'Keresés',
+        next: 'Következő találat',
+        previous: 'Előző találat',
+        close: 'Bezárás',
+        matchCount: '{{current}} / {{total}}',
+        noMatches: 'Nincs találat',
+        caseSensitive: 'Kis- és nagybetűk megkülönböztetése',
+        wholeWord: 'Csak teljes szó',
+        replacePlaceholder: 'Csere erre',
+        replace: 'Csere',
+        replaceAll: 'Összes cseréje',
+        toggleReplace: 'Csere megjelenítése vagy elrejtése'
     }
 } satisfies LocaleTable;

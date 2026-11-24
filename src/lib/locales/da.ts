@@ -147,5 +147,19 @@ export default {
     },
     dragAndDrop: {
         open: 'Slip for at åbne'
+    },
+    find: {
+        placeholder: 'Find',
+        next: 'Næste resultat',
+        previous: 'Forrige resultat',
+        close: 'Luk',
+        matchCount: '{{current}} af {{total}}',
+        noMatches: 'Ingen resultater',
+        caseSensitive: 'Forskel på store og små bogstaver',
+        wholeWord: 'Kun hele ord',
+        replacePlaceholder: 'Erstat med',
+        replace: 'Erstat',
+        replaceAll: 'Erstat alle',
+        toggleReplace: 'Vis eller skjul erstat'
     }
 } satisfies LocaleTable;

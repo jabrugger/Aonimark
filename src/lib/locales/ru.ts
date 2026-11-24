@@ -147,5 +147,19 @@ export default {
     },
     dragAndDrop: {
         open: 'Отпустите, чтобы открыть'
+    },
+    find: {
+        placeholder: 'Найти',
+        next: 'Следующее совпадение',
+        previous: 'Предыдущее совпадение',
+        close: 'Закрыть',
+        matchCount: '{{current}} из {{total}}',
+        noMatches: 'Нет результатов',
+        caseSensitive: 'Учитывать регистр',
+        wholeWord: 'Слово целиком',
+        replacePlaceholder: 'Заменить на',
+        replace: 'Заменить',
+        replaceAll: 'Заменить все',
+        toggleReplace: 'Показать или скрыть замену'
     }
 } satisfies LocaleTable;

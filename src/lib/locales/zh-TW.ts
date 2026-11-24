@@ -147,5 +147,19 @@ export default {
         minimize: '最小化',
         maximize: '最大化',
         restore: '還原',
+    },
+    find: {
+        placeholder: '尋找',
+        next: '下一個符合項目',
+        previous: '上一個符合項目',
+        close: '關閉',
+        matchCount: '第 {{current}} / 共 {{total}}',
+        noMatches: '無符合結果',
+        caseSensitive: '區分大小寫',
+        wholeWord: '比對完整單字',
+        replacePlaceholder: '取代為',
+        replace: '取代',
+        replaceAll: '全部取代',
+        toggleReplace: '顯示或隱藏取代'
     }
 } satisfies LocaleTable;

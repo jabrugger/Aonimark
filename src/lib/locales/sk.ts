@@ -147,5 +147,19 @@ export default {
     },
     dragAndDrop: {
         open: 'Pustite na otvorenie'
+    },
+    find: {
+        placeholder: 'Hľadať',
+        next: 'Ďalšia zhoda',
+        previous: 'Predchádzajúca zhoda',
+        close: 'Zatvoriť',
+        matchCount: '{{current}} z {{total}}',
+        noMatches: 'Žiadne výsledky',
+        caseSensitive: 'Rozlišovať veľkosť písmen',
+        wholeWord: 'Celé slová',
+        replacePlaceholder: 'Nahradiť čím',
+        replace: 'Nahradiť',
+        replaceAll: 'Nahradiť všetko',
+        toggleReplace: 'Zobraziť alebo skryť nahradenie'
     }
 } satisfies LocaleTable;

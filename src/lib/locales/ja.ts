@@ -147,5 +147,19 @@ export default {
         minimize: '最小化',
         maximize: '最大化',
         restore: '元のサイズに戻す',
+    },
+    find: {
+        placeholder: '検索',
+        next: '次の一致',
+        previous: '前の一致',
+        close: '閉じる',
+        matchCount: '{{current}} / {{total}}',
+        noMatches: '結果なし',
+        caseSensitive: '大文字と小文字を区別',
+        wholeWord: '単語単位で検索',
+        replacePlaceholder: '置換後の文字列',
+        replace: '置換',
+        replaceAll: 'すべて置換',
+        toggleReplace: '置換の表示/非表示'
     }
 } satisfies LocaleTable;

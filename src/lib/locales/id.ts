@@ -147,5 +147,19 @@ export default {
     },
     dragAndDrop: {
         open: 'Lepas untuk Membuka'
+    },
+    find: {
+        placeholder: 'Cari',
+        next: 'Kecocokan berikutnya',
+        previous: 'Kecocokan sebelumnya',
+        close: 'Tutup',
+        matchCount: '{{current}} dari {{total}}',
+        noMatches: 'Tidak ada hasil',
+        caseSensitive: 'Cocokkan huruf besar/kecil',
+        wholeWord: 'Cocokkan seluruh kata',
+        replacePlaceholder: 'Ganti dengan',
+        replace: 'Ganti',
+        replaceAll: 'Ganti semua',
+        toggleReplace: 'Tampilkan atau sembunyikan ganti'
     }
 } satisfies LocaleTable;

@@ -147,5 +147,19 @@ export default {
     },
     dragAndDrop: {
         open: 'Slipp for å åpne'
+    },
+    find: {
+        placeholder: 'Søk',
+        next: 'Neste treff',
+        previous: 'Forrige treff',
+        close: 'Lukk',
+        matchCount: '{{current}} av {{total}}',
+        noMatches: 'Ingen resultater',
+        caseSensitive: 'Skill mellom store og små bokstaver',
+        wholeWord: 'Bare hele ord',
+        replacePlaceholder: 'Erstatt med',
+        replace: 'Erstatt',
+        replaceAll: 'Erstatt alle',
+        toggleReplace: 'Vis eller skjul erstatt'
     }
 } satisfies LocaleTable;
