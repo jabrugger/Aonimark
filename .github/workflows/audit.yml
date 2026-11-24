@@ -48,8 +48,12 @@ jobs:
           tool: cargo-audit
 
       - name: audit Rust dependencies
+        # zip 4.6.1 is pulled in by tauri-plugin-updater 2.13.1 (used only for signed updater archives).
         run: >-
           cargo audit --file src-tauri/Cargo.lock
           --ignore RUSTSEC-2026-0367
           --ignore RUSTSEC-2026-0368
           --ignore RUSTSEC-2026-0369
+          --ignore RUSTSEC-2026-0429
+          --ignore RUSTSEC-2026-0545
+          --ignore RUSTSEC-2026-0548
