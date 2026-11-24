@@ -281,35 +281,6 @@ pub fn get_os_type() -> String {
     .to_string()
 }
 
-/// Keep one `arboard::Clipboard` alive for the rest of the process, so that
-/// what we copy survives the command that copied it (#729).
-///
-/// On X11 there is no clipboard store: the copying process owns the CLIPBOARD
-/// selection and hands the bytes over when another app asks for them. arboard
-/// serves those requests from a background thread and an invisible window it
-/// destroys when the last `Clipboard` drops — which, with one built and
-/// dropped per command, is the moment `clipboard_write_text` returns. Its only
-/// parting move is to offer the data to a clipboard manager, so on a desktop
-/// that ships one (GNOME) copying appears to work and on one that does not
-/// (XFCE, the reporter's) everything Aonimark copies is gone before it can be
-/// pasted. Holding an instance keeps the window and the ownership; the
-/// per-command `Clipboard::new()`s below reuse arboard's global and their drop
-/// becomes a no-op.
-///
-/// Nowhere else needs this. On Wayland arboard uses the data-control protocol
-/// (wl-clipboard-rs) when `WAYLAND_DISPLAY` is set and the compositor offers
-/// it. Each copy is then served by a detached thread that no `Clipboard` owns,
-/// so the instance forgotten here is an empty struct. A compositor without the
-/// protocol falls back to X11 through XWayland, where the above applies. macOS
-/// and Windows write into a store the system owns.
-#[cfg(all(unix, not(target_os = "macos")))]
-fn retain_clipboard_ownership() {
-    use std::sync::atomic::AtomicBool;
-    static RETAINED: AtomicBool = AtomicBool::new(false);
-
-    retain_forever(&RETAINED, || arboard::Clipboard::new().ok());
-}
-
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
