@@ -826,17 +826,7 @@ import { TitleBarPopovers, containClick } from '../stores/titleBarPopovers.svelt
 	.window-icon {
 		width: 16px;
 		height: 16px;
-		opacity: 0.8;
-	}
-
-	:global(:root[data-theme='light']) .window-icon {
-		filter: invert(0.7);
-	}
-
-	@media (prefers-color-scheme: light) {
-		:global(:root:not([data-theme='dark'])) .window-icon {
-			filter: invert(0.7);
-		}
+		border-radius: 3px;
 	}
 
 	.icon-home-btn {
